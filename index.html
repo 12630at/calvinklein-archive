@@ -1,60 +1,113 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Calvin Klein Archive | Digital Collection</title>
-    <meta name="description" content="Digital archive of Calvin Klein's historical collections and advertisements. A UX-UI academic project for IUAD.">
+    <title>CK_ARCHIVE_v1.0</title>
+    <link rel="stylesheet" href="style.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@100;400;700&family=Inter:wght@300;400;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <nav class="minimal-nav">
-        <div class="logo">CK ARCHIVE</div>
-        <div class="links">
-            <a href="#collections" style="color: inherit; text-decoration: none; margin-left: 2rem;">COLLECTIONS</a>
-            <a href="#about" style="color: inherit; text-decoration: none; margin-left: 2rem;">ABOUT</a>
+    <!-- Flash 5 Style Preloader -->
+    <div id="preloader">
+        <div class="preloader-content">
+            <div class="logo-flash">CALVIN KLEIN</div>
+            <div id="loading-bar"></div>
+            <div id="loading-text">LOADING... 0%</div>
+            <div class="sys-info">ARCHIVE.SYS // EST. 1968 // FLASH_5_COMPATIBLE</div>
         </div>
-    </nav>
+    </div>
 
-    <main>
-        <section class="hero">
-            <h1 class="reveal">Eternity<br>Defined</h1>
-            <p class="reveal" style="max-width: 400px; margin-top: 2rem; font-size: 1.1rem; opacity: 0.8;">
-                Exploring the visual legacy of Calvin Klein through decades of minimalism, provocation, and pure aesthetic.
-            </p>
-            <div class="hero-image-container reveal">
-                <img src="hero.png" alt="Calvin Klein Aesthetic Hero Image">
-            </div>
-        </section>
+    <!-- Custom Cursor -->
+    <div id="cursor"></div>
 
-        <section id="collections" class="archive-grid">
-            <!-- Items will be populated or static for now -->
-            <div class="grid-item">
-                <img src="hero.png" alt="Collection 1" style="filter: brightness(0.8);">
-                <div class="grid-item-info">
-                    <h3>1994 Fall/Winter</h3>
-                    <p>Minimalist Semiotics</p>
+    <!-- Main Content -->
+    <div id="main-wrapper">
+        <header>
+            <div class="brand">CALVIN KLEIN</div>
+            <div class="nav-meta">
+                <span>DATABASE_VIEW</span>
+                <span id="clock">00:00:00</span>
+            </div>
+        </header>
+
+        <main class="archive-container">
+            <div class="sidebar">
+                <ul class="directory-list">
+                    <li class="active">[+] 1990s_CAMPAIGNS</li>
+                    <li>[-] 1980s_SEMIOTICS</li>
+                    <li>[-] 2000s_TRANSITION</li>
+                    <li>[-] RUNWAY_ARCHIVE</li>
+                </ul>
+                <div class="system-stats">
+                    <p>TOTAL_RECORDS: 1,492</p>
+                    <p>STATUS: ONLINE</p>
                 </div>
             </div>
-            <div class="grid-item">
-                <img src="hero.png" alt="Collection 2" style="filter: brightness(0.7);">
-                <div class="grid-item-info">
-                    <h3>1992 Campaign</h3>
-                    <p>The Kate Era</p>
+
+            <div class="data-view">
+                <table class="archive-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>YEAR</th>
+                            <th>COLLECTION</th>
+                            <th>PHOTOGRAPHER</th>
+                            <th>MODELS</th>
+                            <th>STATUS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="archive-body">
+                        <tr class="record" data-img="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=80&fm=jpg&crop=faces&fit=crop&h=1000&sat=-100">
+                            <td>001</td>
+                            <td>1992</td>
+                            <td>OBSESSION</td>
+                            <td>HERB RITTS</td>
+                            <td>KATE MOSS, MARK WAHLBERG</td>
+                            <td>[VIEW]</td>
+                        </tr>
+                        <tr class="record" data-img="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=800&q=80&fm=jpg&crop=faces&fit=crop&h=1000&sat=-100">
+                            <td>002</td>
+                            <td>1994</td>
+                            <td>CK ONE</td>
+                            <td>STEVEN MEISEL</td>
+                            <td>VARIOUS (ENSEMBLE)</td>
+                            <td>[VIEW]</td>
+                        </tr>
+                        <tr class="record" data-img="https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?w=800&q=80&fm=jpg&crop=faces&fit=crop&h=1000&sat=-100">
+                            <td>003</td>
+                            <td>1995</td>
+                            <td>UNDERWEAR</td>
+                            <td>PETER LINDBERGH</td>
+                            <td>CHRISTY TURLINGTON</td>
+                            <td>[VIEW]</td>
+                        </tr>
+                        <tr class="record" data-img="https://images.unsplash.com/photo-1469334031218-e382a71b716b?w=800&q=80&fm=jpg&crop=faces&fit=crop&h=1000&sat=-100">
+                            <td>004</td>
+                            <td>1996</td>
+                            <td>BE</td
+                            <td>DAVID SIMS</td>
+                            <td>KATE MOSS</td>
+                            <td>[VIEW]</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="image-preview-panel">
+                <div class="glitch-container">
+                    <img id="preview-img" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800&q=80&fm=jpg&crop=faces&fit=crop&h=1000&sat=-100" alt="Preview">
+                    <div class="scanlines"></div>
+                </div>
+                <div class="img-metadata">
+                    <p id="meta-id">FILE: CK_1992_OBSESSION.JPG</p>
+                    <p>RESOLUTION: 2400x3600</p>
                 </div>
             </div>
-            <div class="grid-item">
-                <img src="hero.png" alt="Collection 3" style="filter: brightness(0.6);">
-                <div class="grid-item-info">
-                    <h3>2000s Transition</h3>
-                    <p>Modern Lines</p>
-                </div>
-            </div>
-        </section>
-    </main>
+        </main>
+    </div>
 
     <script src="script.js"></script>
 </body>
