@@ -150,26 +150,38 @@ async function play() {
         spans.forEach(s => stage.appendChild(s));
         allSpans.push(...spans);
         
-        // Fast stagger animation for words
+        // Trigger the Flash-style entrance per word. The CSS @keyframes
+        // handles the scale + lift + motion-blur tween; this just stagger-
+        // fires them. Slightly slower than the previous 40ms so adjacent
+        // words overlap in flight and feel like a single timeline tween.
         for (let j = 0; j < spans.length; j++) {
-            spans[j].style.opacity = '1';
-            await sleep(40); // 40ms per word
+            spans[j].classList.add('flash-in');
+            await sleep(55);
         }
     }
     
     // Pause briefly so the fully scattered page can be seen
-    await sleep(800);
+    await sleep(900);
 
-    allSpans.forEach(s => {
-        s.style.transition = `opacity ${FINAL_FADE_MS}ms linear`;
-        s.style.opacity = '0';
+    // Flash-style exit — words drift up, scale slightly, motion-blur out.
+    // Tiny per-element stagger keeps it from feeling like a hard cut.
+    allSpans.forEach((s, i) => {
+        setTimeout(() => {
+            s.classList.remove('flash-in');
+            s.classList.add('flash-out');
+        }, i * 6);
     });
-    
-    // Also fade out the stage background
-    stage.style.transition = `opacity ${FINAL_FADE_MS}ms linear`;
-    stage.style.opacity = '0';
-    
-    await sleep(FINAL_FADE_MS);
+
+    // Fade the stage background a beat after the words start dissolving,
+    // so the white backdrop doesn't snap out from under them.
+    const exitStaggerTotal = allSpans.length * 6;
+    setTimeout(() => {
+        stage.style.transition = `opacity ${FINAL_FADE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+        stage.style.opacity = '0';
+    }, Math.min(exitStaggerTotal + 200, 600));
+
+    // Wait until the last word's exit animation has finished playing.
+    await sleep(exitStaggerTotal + 900);
 
     // End of animation -> reveal menu on the same page
     stage.style.display = 'none'; // remove stage
