@@ -1,0 +1,90 @@
+/* Font: Klein (local installation) */
+@font-face {
+    font-family: 'Klein';
+    src: local('Klein-Book');
+    font-weight: 350;
+    font-style: normal;
+}
+@font-face {
+    font-family: 'Klein';
+    src: local('Klein-Bold');
+    font-weight: 700;
+    font-style: normal;
+}
+
+/* Reset */
+*, *::before, *::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* Frame: home_prova_01 (201:88) — 1440×1024, white background, clipsContent:true */
+html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #ffffff;
+    font-family: 'Klein', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* Menu Component (201:418) — constraint: vertical CENTER, horizontal LEFT
+   Position relative to frame: left 36px, vertically centered
+   Layout: HORIZONTAL, itemSpacing: 16px, primaryAxisSizingMode: FIXED, width: 147px */
+.menu {
+    position: absolute;
+    top: 50%;
+    left: 36px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    gap: 16px; /* itemSpacing: 16 */
+    width: 147px;
+}
+
+/* Primary menu column (201:393) — VERTICAL layout, itemSpacing: 6px, width: FILL (147px) */
+.menu-primary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* itemSpacing: 6 */
+    flex: 1; /* layoutGrow: 1, FILL */
+}
+
+/* Secondary menu column (201:394) — VERTICAL layout, itemSpacing: 6px, visible:false in Default */
+.menu-secondary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px; /* itemSpacing: 6 */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 300ms ease-out, visibility 300ms ease-out;
+}
+
+/* When Archive is hovered, show secondary menu */
+.menu.hover-active .menu-secondary {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Menu items — Klein-Book, 12px, uppercase, letter-spacing: -0.36px
+   Default fill color: Gray #BBBDC0 (r:0.733, g:0.741, b:0.749) */
+.menu-item {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: -0.36px;
+    line-height: 15.52px; /* lineHeightPx: 15.515625 */
+    color: #bbbdc0; /* Gray style (76:64) */
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+    transition: color 300ms ease-out;
+}
+
+/* Hover state for Archive — fill changes to Gray-Hover #424242 (r:0.2596...) */
+.menu.hover-active .menu-primary #archive {
+    color: #424242; /* Gray - Hover style (116:451) */
+}
