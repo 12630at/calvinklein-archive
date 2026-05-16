@@ -44,28 +44,8 @@ function shuffleCopy(arr) {
     return a;
 }
 
-function estimateEntryDuration(entry) {
-    const wordCount = entry.replace(/\//g, '').split(/\s+/).filter(Boolean).length;
-    return wordCount * (APPEAR_MS + STAGGER_MS)
-         + PRE_COLLAPSE_BEAT_MS
-         + COLLAPSE_MS
-         + POST_COLLAPSE_BEAT_MS;
-}
-
-function selectEntries(pool, targetSeconds, shuffle) {
-    const candidates = shuffle ? shuffleCopy(pool) : [...pool];
-    const selected = [];
-    let budgetMs = targetSeconds * 1000;
-    budgetMs -= FINAL_FADE_MS; 
-
-    for (const entry of candidates) {
-        const cost = estimateEntryDuration(entry);
-        if (cost > budgetMs) break;
-        selected.push(entry);
-        budgetMs -= cost;
-    }
-    return selected;
-}
+// We don't need selectEntries or estimateEntryDuration anymore, 
+// because we will show ALL entries.
 
 function splitEntry(entry) {
     return entry.replace(/\//g, ' ').split(/\s+/).filter(Boolean);
@@ -94,34 +74,6 @@ function getViewport() {
     return { w: window.innerWidth, h: window.innerHeight };
 }
 
-function layoutEntry(words, viewport, startY) {
-    const leftMargin = viewport.w * (viewport.w < 600 ? 0.08 : 0.30);
-    const rightBound = viewport.w * (viewport.w < 600 ? 0.92 : 0.60);
-    let curX  = leftMargin;
-    let curY  = startY;
-    
-    // Base vertical step on fontSize to prevent vertical overlap
-    let yStep = fontSize * 1.4; 
-    
-    // Minimal horizontal jitter to prevent horizontal overlap
-    const jitter = () => (Math.random() * fontSize * 0.2);
-
-    const placed = [];
-    let lineIndex = 0;
-
-    for (const word of words) {
-        const w = measure(word);
-        if (curX + w > rightBound) {
-            curX = leftMargin;
-            lineIndex++;
-            curY += yStep;
-        }
-        placed.push({ word, x: curX, y: curY, lineIndex });
-        curX += w + measure(' ') + jitter();
-    }
-    return placed;
-}
-
 function createSpan(p) {
     const span = document.createElement('span');
     span.className = 'word';
@@ -131,72 +83,82 @@ function createSpan(p) {
     return span;
 }
 
-let collapsedStackBottomY;
-
-function initStack(viewport) {
-    collapsedStackBottomY = viewport.h * 0.25;
-}
-
-function computeCollapseTargets(placed) {
-    const targets = [];
-    for (const p of placed) {
-        targets.push(collapsedStackBottomY + p.lineIndex * (fontSize * 1.6));
-    }
-    return targets;
-}
-
-function advanceCollapsedStack(placed) {
-    const lineGroups = {};
-    placed.forEach(p => {
-        if (!lineGroups[p.lineIndex]) lineGroups[p.lineIndex] = [];
-        lineGroups[p.lineIndex].push(p);
-    });
-    const numLines = Object.keys(lineGroups).length;
-    collapsedStackBottomY += numLines * (fontSize * 1.6);
-}
-
-function currentScatterTopY() {
-    return collapsedStackBottomY + fontSize * 2;
-}
-
 let isPlaying = false;
 
 async function play() {
     if (isPlaying) return;
     isPlaying = true;
     
+    // 1. Slight delay like 1 second before the initial animation starts
+    await sleep(1000); 
+    
     const stage = document.getElementById('stage');
-
     const viewport = getViewport();
     fontSize = Math.max(11, Math.min(viewport.w * 0.011, 18));
-    initStack(viewport);
-
-    const entries = selectEntries(POOL, TARGET_DURATION, SHUFFLE);
+    
+    // We want ALL the names to appear and scatter them
+    const entries = shuffleCopy(POOL);
     const allSpans = [];
+    
+    // Divide the screen into a loose grid to scatter names without overlapping
+    // Minimum cell width ~300px
+    const cols = viewport.w < 600 ? 2 : Math.max(2, Math.floor(viewport.w / 300));
+    const rows = Math.ceil(entries.length / cols);
+    const cellW = viewport.w / cols;
+    const cellH = viewport.h / rows;
+    
+    const cells = [];
+    for(let r = 0; r < rows; r++) {
+        for(let c = 0; c < cols; c++) {
+            cells.push({r, c});
+        }
+    }
+    const shuffledCells = shuffleCopy(cells);
 
-    for (const entry of entries) {
-        const words   = splitEntry(entry);
-        const placed  = layoutEntry(words, viewport, currentScatterTopY());
-        const spans   = placed.map(createSpan);
+    // Display each name sequentially but very quickly
+    for (let i = 0; i < entries.length; i++) {
+        const entry = entries[i];
+        const cell = shuffledCells[i];
+        if (!cell) break; // safety
+        
+        const padX = cellW * 0.1;
+        const padY = cellH * 0.1;
+        
+        const startX = cell.c * cellW + padX + Math.random() * (cellW * 0.2);
+        const startY = cell.r * cellH + padY + Math.random() * (cellH * 0.3);
+        
+        const words = splitEntry(entry);
+        
+        let curX = startX;
+        let curY = startY;
+        let yStep = fontSize * 1.4;
+        const jitter = () => (Math.random() * fontSize * 0.2);
+        
+        const placed = [];
+        for (const word of words) {
+            const w = measure(word);
+            // Wrap to next line if word exceeds cell boundaries
+            if (curX + w > (cell.c + 1) * cellW - padX) {
+                curX = startX;
+                curY += yStep;
+            }
+            placed.push({ word, x: curX, y: curY });
+            curX += w + measure(' ') + jitter();
+        }
+        
+        const spans = placed.map(createSpan);
         spans.forEach(s => stage.appendChild(s));
         allSpans.push(...spans);
-
-        for (let i = 0; i < spans.length; i++) {
-            spans[i].style.opacity = '0.15';
-            await sleep(APPEAR_MS);
-            spans[i].style.opacity = '1';
-            await sleep(STAGGER_MS);
+        
+        // Fast stagger animation for words
+        for (let j = 0; j < spans.length; j++) {
+            spans[j].style.opacity = '1';
+            await sleep(40); // 40ms per word
         }
-
-        await sleep(PRE_COLLAPSE_BEAT_MS);
-
-        const targets = computeCollapseTargets(placed);
-        placed.forEach((p, i) => { spans[i].style.top = targets[i] + 'px'; });
-        await sleep(COLLAPSE_MS);
-
-        advanceCollapsedStack(placed);
-        await sleep(POST_COLLAPSE_BEAT_MS);
     }
+    
+    // Pause briefly so the fully scattered page can be seen
+    await sleep(800);
 
     allSpans.forEach(s => {
         s.style.transition = `opacity ${FINAL_FADE_MS}ms linear`;
