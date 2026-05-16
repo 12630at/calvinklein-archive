@@ -1,15 +1,36 @@
-/* Font: Klein (local installation) */
+/* Font: Klein
+   url() is listed BEFORE local() so the browser prefers the version
+   bundled in this repo over whatever older Klein is installed at the
+   OS level — they're often different files with different metrics,
+   which is what causes "looks different from Figma" gaps even when
+   the font name matches. local() remains as a last-resort fallback
+   for file:// usage where url() can't fetch. Requires serving over
+   http:// (e.g. python3 -m http.server) for the url() lines to load. */
 @font-face {
     font-family: 'Klein';
-    src: local('Klein-Book');
+    src: url('fonts/Klein-Book.woff2') format('woff2'),
+         url('fonts/Klein-Book.woff')  format('woff'),
+         url('fonts/Klein-Book.otf')   format('opentype'),
+         url('fonts/Klein-Book.ttf')   format('truetype'),
+         local('Klein Book'),
+         local('Klein-Book'),
+         local('KleinBook');
     font-weight: 350;
     font-style: normal;
+    font-display: swap;
 }
 @font-face {
     font-family: 'Klein';
-    src: local('Klein-Bold');
+    src: url('fonts/Klein-Bold.woff2') format('woff2'),
+         url('fonts/Klein-Bold.woff')  format('woff'),
+         url('fonts/Klein-Bold.otf')   format('opentype'),
+         url('fonts/Klein-Bold.ttf')   format('truetype'),
+         local('Klein Bold'),
+         local('Klein-Bold'),
+         local('KleinBold');
     font-weight: 700;
     font-style: normal;
+    font-display: swap;
 }
 
 /* Reset */
@@ -20,18 +41,20 @@
 }
 
 /* General body */
-/* Softer text rendering — Flash-era anti-aliasing felt fuzzier, not razor-sharp.
-   Antialiased + grayscale thin the strokes and make edges look cut-out; subpixel
-   rendering keeps them looking warm and slightly soft. */
+/* text-rendering: geometricPrecision tells the browser to draw text from
+   the font's outline geometry without aggressive hinting — same approach
+   Figma uses, and fixes Windows browsers thinning strokes at small sizes.
+   font-kerning explicit because some browsers skip kerning tables below
+   16px by default. font-feature-settings is belt-and-suspenders for both. */
 html, body {
     width: 100%;
     height: 100%;
     overflow: hidden;
     background-color: #ffffff;
     font-family: 'Klein', sans-serif;
-    -webkit-font-smoothing: subpixel-antialiased;
-    -moz-osx-font-smoothing: auto;
-    text-rendering: optimizeLegibility;
+    text-rendering: geometricPrecision;
+    font-kerning: normal;
+    font-feature-settings: "kern" 1, "liga" 1;
 }
 
 /* Stage: fullscreen fixed container */
@@ -44,23 +67,18 @@ html, body {
 }
 
 /* Each word — styled per Title_Book (76:30) from Figma.
-   Initial resting state mirrors the first frame of the Flash entrance:
-   slightly scaled down, lifted, and motion-blurred. The animation classes
-   below tween it into place. */
+   Rest state matches Figma exactly. The transform/blur in the initial
+   state are the first frame of the entrance tween — the @keyframes
+   below resolve them away into the crisp Figma look. */
 .word {
     position: absolute;
-    /* Slightly softer than pure black — less of a "laser-cut" feel */
-    color: #181818;
+    color: #000000;
     font-family: 'Klein', sans-serif;
     font-size: clamp(11px, 1.1vw, 18px);
     font-weight: 350;
     letter-spacing: -0.36px;
     text-transform: uppercase;
     white-space: nowrap;
-
-    /* Subtle halo — emulates Flash's bitmap-cached anti-aliasing. Very low
-       alpha so it just rounds the edges rather than glowing. */
-    text-shadow: 0 0 0.6px rgba(24, 24, 24, 0.45);
 
     opacity: 0;
     transform: translateY(8px) scale(0.92);
@@ -164,12 +182,9 @@ html, body {
     text-decoration: none;
     display: block;
     cursor: pointer;
-    transition: color 300ms ease-out, text-shadow 300ms ease-out;
-    /* Subtle halo matches the softened anti-aliasing on the intro words */
-    text-shadow: 0 0 0.5px rgba(187, 189, 192, 0.4);
+    transition: color 300ms ease-out;
 }
 
 .menu.hover-active .menu-primary #archive {
     color: #424242;
-    text-shadow: 0 0 0.5px rgba(66, 66, 66, 0.4);
 }
