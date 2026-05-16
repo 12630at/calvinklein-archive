@@ -79,7 +79,15 @@ function measure(text) {
         measureCtx = document.createElement('canvas').getContext('2d');
     }
     measureCtx.font = `350 ${fontSize}px Klein, sans-serif`;
-    return measureCtx.measureText(text).width;
+    
+    const upperText = text.toUpperCase();
+    let width = measureCtx.measureText(upperText).width;
+    
+    const letterSpacing = window.innerWidth <= 600 ? -0.24 : -0.36;
+    width += (upperText.length * letterSpacing);
+    
+    // Add a tiny buffer to prevent accidental touching
+    return width + 2;
 }
 
 function getViewport() {
@@ -91,9 +99,12 @@ function layoutEntry(words, viewport, startY) {
     const rightBound = viewport.w * (viewport.w < 600 ? 0.92 : 0.60);
     let curX  = leftMargin;
     let curY  = startY;
-    let yStep = viewport.h * 0.014;
-    const growth = 1.18;
-    const jitter = () => (Math.random() - 0.5) * fontSize * 0.5;
+    
+    // Base vertical step on fontSize to prevent vertical overlap
+    let yStep = fontSize * 1.4; 
+    
+    // Minimal horizontal jitter to prevent horizontal overlap
+    const jitter = () => (Math.random() * fontSize * 0.2);
 
     const placed = [];
     let lineIndex = 0;
@@ -103,11 +114,10 @@ function layoutEntry(words, viewport, startY) {
         if (curX + w > rightBound) {
             curX = leftMargin;
             lineIndex++;
+            curY += yStep;
         }
         placed.push({ word, x: curX, y: curY, lineIndex });
         curX += w + measure(' ') + jitter();
-        curY += yStep;
-        yStep *= growth;
     }
     return placed;
 }
@@ -210,14 +220,9 @@ async function play() {
 
 document.addEventListener('DOMContentLoaded', () => {
     
-    // 1. Setup Click to start animation
-    const stage = document.getElementById('stage');
-    stage.addEventListener('click', () => {
-        if (!isPlaying) {
-            document.fonts.ready.then(() => {
-                play();
-            });
-        }
+    // 1. Start animation on load automatically
+    document.fonts.ready.then(() => {
+        play();
     });
 
     // 2. Setup Menu Interactions
