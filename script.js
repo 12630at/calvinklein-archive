@@ -31,8 +31,15 @@ const ANIM_CONFIG = {
     lineFadeOutDelayMs: 600,       // Ritardo (overlap): la vecchia frase resta visibile mentre entra la nuova
 };
 
+let skipSignal      = false;
+let cancelCurrentSleep = null;
+
 function sleep(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve, reject) => {
+        if (skipSignal) { reject(new Error('skip')); return; }
+        const id = setTimeout(resolve, ms);
+        cancelCurrentSleep = () => { clearTimeout(id); reject(new Error('skip')); };
+    });
 }
 
 function splitEntry(entry) {
@@ -50,6 +57,7 @@ let isPlaying = false;
 async function play() {
     if (isPlaying) return;
     isPlaying = true;
+    try {
 
     await sleep(1000);
 
@@ -183,6 +191,53 @@ async function play() {
     const menu = document.getElementById('menu');
     menu.style.opacity = '1';
     menu.style.pointerEvents = 'all';
+    } catch(e) { /* interrupted by skip — skipToLogo() takes over */ }
+}
+
+// ===== SKIP INTRO =====
+
+async function skipToLogo() {
+    const stage = document.getElementById('stage');
+    const menu  = document.getElementById('menu');
+    const skipBtn = document.getElementById('skip-intro');
+    if (skipBtn) skipBtn.style.display = 'none';
+
+    // Cross-fade: fade out current state
+    stage.style.transition = 'opacity 350ms ease-out';
+    stage.style.opacity    = '0';
+    await new Promise(r => setTimeout(r, 380));
+
+    // Clear text animation debris
+    stage.innerHTML = '';
+
+    // Build logo (identical to end of play())
+    const finalLogo = document.createElement('img');
+    finalLogo.src = 'assets/logo_thearchive.svg';
+    finalLogo.style.cssText = [
+        'position:absolute', 'left:50%', 'top:50%',
+        'transform:translate(-50%,-50%)', 'width:320px',
+        'max-width:80%', 'height:auto', 'opacity:0',
+        'transition:opacity 1.2s ease-in-out'
+    ].join(';');
+    stage.appendChild(finalLogo);
+
+    // Fade stage back in
+    stage.style.transition = 'opacity 350ms ease-in';
+    stage.style.opacity    = '1';
+    await new Promise(r => setTimeout(r, 400));
+
+    // Reveal logo
+    finalLogo.style.opacity = '1';
+    await new Promise(r => setTimeout(r, 2400));
+
+    // Final fade out → show menu
+    stage.style.transition = `opacity ${FINAL_FADE_MS}ms cubic-bezier(0.4,0,0.2,1)`;
+    stage.style.opacity    = '0';
+    await new Promise(r => setTimeout(r, FINAL_FADE_MS));
+
+    stage.style.display      = 'none';
+    menu.style.opacity       = '1';
+    menu.style.pointerEvents = 'all';
 }
 
 // ===== INIT & MENU INTERACTIONS =====
@@ -192,6 +247,16 @@ document.addEventListener('DOMContentLoaded', () => {
     document.fonts.ready.then(() => {
         play();
     });
+
+    const skipBtn = document.getElementById('skip-intro');
+    if (skipBtn) {
+        skipBtn.addEventListener('click', () => {
+            if (skipSignal) return;
+            skipSignal = true;
+            if (cancelCurrentSleep) cancelCurrentSleep();
+            skipToLogo();
+        });
+    }
 
     const menu = document.getElementById('menu');
     const archive = document.getElementById('archive');
@@ -306,52 +371,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== PEOPLE CLICK — TRANSITION ANIMATION =====
 
-    // 36 names at 10° spacing
+    // 18 names at 20° spacing — chord 139 px at r=400, no text overlap
     const ORBIT_ENTRIES = [
-        { name: 'Kate Moss',          deg:   0 },
-        { name: 'Brooke Shields',     deg:  10 },
-        { name: 'Mark Wahlberg',      deg:  20 },
-        { name: 'Christy Turlington', deg:  30 },
-        { name: 'Naomi Campbell',     deg:  40 },
-        { name: 'Cindy Crawford',     deg:  50 },
-        { name: 'Bruce Weber',        deg:  60 },
-        { name: 'Steven Meisel',      deg:  70 },
-        { name: 'Richard Avedon',     deg:  80 },
-        { name: 'Fabien Baron',       deg:  90 },
-        { name: 'Mario Sorrenti',     deg: 100 },
-        { name: 'Glen Luchford',      deg: 110 },
-        { name: 'Raf Simons',         deg: 120 },
-        { name: 'Francisco Costa',    deg: 130 },
-        { name: 'Italo Zucchelli',    deg: 140 },
-        { name: 'Justin Bieber',      deg: 150 },
-        { name: 'Lara Stone',         deg: 160 },
-        { name: 'Solange',            deg: 170 },
-        { name: 'Eva Mendes',         deg: 180 },
-        { name: 'Jamie Dornan',       deg: 190 },
-        { name: 'Tom Hintnaus',       deg: 200 },
-        { name: 'Tyrone Lebon',       deg: 210 },
-        { name: 'Willy Vanderperre',  deg: 220 },
-        { name: 'Mert & Marcus',      deg: 230 },
-        { name: 'Patti Smith',        deg: 240 },
-        { name: 'Kaia Gerber',        deg: 250 },
-        { name: 'Pharrell Williams',  deg: 260 },
-        { name: 'Jacob Elordi',       deg: 270 },
-        { name: 'FKA Twigs',          deg: 280 },
-        { name: 'Bella Hadid',        deg: 290 },
-        { name: 'Jennie Kim',         deg: 300 },
-        { name: "A$AP Rocky",         deg: 310 },
-        { name: 'Jung Kook',          deg: 320 },
-        { name: 'Bad Bunny',          deg: 330 },
-        { name: 'Kendall Jenner',     deg: 340 },
-        { name: 'Jeremy Allen White', deg: 350 },
+        { name: 'Kate Moss',      deg:   0 },
+        { name: 'Naomi Campbell', deg:  20 },
+        { name: 'Cindy Crawford', deg:  40 },
+        { name: 'Bruce Weber',    deg:  60 },
+        { name: 'Steven Meisel',  deg:  80 },
+        { name: 'Richard Avedon', deg: 100 },
+        { name: 'Raf Simons',     deg: 120 },
+        { name: 'Fabien Baron',   deg: 140 },
+        { name: 'Mario Sorrenti', deg: 160 },
+        { name: 'Justin Bieber',  deg: 180 },
+        { name: 'Lara Stone',     deg: 200 },
+        { name: 'Eva Mendes',     deg: 220 },
+        { name: 'Patti Smith',    deg: 240 },
+        { name: 'Mert & Marcus',  deg: 260 },
+        { name: 'FKA Twigs',      deg: 280 },
+        { name: 'Bella Hadid',    deg: 300 },
+        { name: "A$AP Rocky",     deg: 320 },
+        { name: 'Kendall Jenner', deg: 340 },
     ];
 
-    const ORBIT_RADIUS    = 350;
-    const ORBIT_SPEED_DPS = 144;  // 2.5 s per rotation
+    const ORBIT_RADIUS    = 400;
+    const ORBIT_SPEED_DPS = 144;
     const ORBIT_TURNS     = 3;
     const ORBIT_TOTAL_DEG = 360 * ORBIT_TURNS;
-    const TRAIL_IN_DEG    = 8;    // degrees to reach full opacity
-    const TRAIL_SPAN_DEG  = 65;   // degrees until fully faded (~5-6 names visible at once)
+    const TRAIL_IN_DEG    = 8;
+    const TRAIL_SPAN_DEG  = 80;  // ~4 names visible simultaneously at 20° spacing
 
     function buildOrbitSlots(orbitEl) {
         const toRad = d => d * Math.PI / 180;

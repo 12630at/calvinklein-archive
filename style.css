@@ -207,6 +207,15 @@ body {
     color: #424242;
 }
 
+/* Skip Intro button */
+.skip-intro-btn {
+    position: absolute;
+    bottom: 36px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 1;
+}
+
 /* People hover — falling names */
 #people-fall {
     position: fixed;
