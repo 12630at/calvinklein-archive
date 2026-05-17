@@ -24,6 +24,67 @@ const TEXT_LINES = [
 
 const FINAL_FADE_MS = 1500;
 
+// ===== SEARCH DATA — all searchable content on the site =====
+const SEARCH_DATA = [
+    // People section
+    { text: 'Kate Moss',          type: 'people' },
+    { text: 'Brooke Shields',     type: 'people' },
+    { text: 'Mark Wahlberg',      type: 'people' },
+    { text: 'Christy Turlington', type: 'people' },
+    { text: 'Eva Mendes',         type: 'people' },
+    { text: 'Lara Stone',         type: 'people' },
+    { text: 'Bella Hadid',        type: 'people' },
+    { text: 'Kendall Jenner',     type: 'people' },
+    { text: 'FKA Twigs',          type: 'people' },
+    { text: 'Solange',            type: 'people' },
+    { text: 'Patti Smith',        type: 'people' },
+    { text: 'Jung Kook',          type: 'people' },
+    { text: 'Jeremy Allen White', type: 'people' },
+    { text: 'Justin Bieber',      type: 'people' },
+    { text: 'Bruce Weber',        type: 'people' },
+    { text: 'Steven Meisel',      type: 'people' },
+    { text: 'Richard Avedon',     type: 'people' },
+    { text: 'Fabien Baron',       type: 'people' },
+    { text: 'Tyrone Lebon',       type: 'people' },
+    { text: 'Willy Vanderperre',  type: 'people' },
+    { text: 'Mert & Marcus',      type: 'people' },
+    { text: 'Raf Simons',         type: 'people' },
+    { text: 'Francisco Costa',    type: 'people' },
+    { text: 'Italo Zucchelli',    type: 'people' },
+    { text: 'Jamie Dornan',       type: 'people' },
+    { text: "A\$AP Rocky",        type: 'people' },
+    { text: 'Pharrell Williams',  type: 'people' },
+    { text: 'Zack McCollum',      type: 'people' },
+    // Navigation
+    { text: 'Archive',     type: 'nav' },
+    { text: 'People',      type: 'nav' },
+    { text: 'Timeline',    type: 'nav' },
+    { text: 'Profile',     type: 'nav' },
+    { text: 'About',       type: 'nav' },
+    { text: 'Collections', type: 'nav' },
+    { text: 'Advertising', type: 'nav' },
+    { text: 'Editorials',  type: 'nav' },
+    { text: 'Invitations', type: 'nav' },
+    { text: 'Ephemera',    type: 'nav' },
+    // Intro narrative lines
+    { text: 'What began as a coat',      type: 'content' },
+    { text: 'became a mirror',           type: 'content' },
+    { text: 'of American desire',        type: 'content' },
+    { text: 'Over five decades',         type: 'content' },
+    { text: 'the body',                  type: 'content' },
+    { text: 'the moment',                type: 'content' },
+    { text: 'the culture',               type: 'content' },
+    { text: 'translated into image',     type: 'content' },
+    { text: 'spare',                     type: 'content' },
+    { text: 'direct',                    type: 'content' },
+    { text: 'impossible to ignore',      type: 'content' },
+    { text: 'Every campaign',            type: 'content' },
+    { text: 'Every collection',          type: 'content' },
+    { text: 'Every season',              type: 'content' },
+    { text: 'Every name',                type: 'content' },
+    { text: 'This is the archive',       type: 'content' },
+];
+
 // Configurazione semplice per gestire le velocità dell'animazione
 const ANIM_CONFIG = {
     wordEntranceDelayMs: 250,     // Velocità con cui compaiono le singole parole di una frase
@@ -457,6 +518,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function closePeopleStage() {
+        // Reset search immediately so it's hidden before people-stage fades out
+        resetSearch();
+
         const peopleStage = document.getElementById('people-stage');
         const contentEl   = document.getElementById('people-content');
 
@@ -479,44 +543,175 @@ document.addEventListener('DOMContentLoaded', () => {
         closePeopleStage();
     });
 
-    // ===== SEARCH CLICK — TRANSITION ANIMATION =====
+    // ===== SEARCH =====
 
     const searchEl    = document.getElementById('search');
     const searchStage = document.getElementById('search-stage');
     const searchPanel = document.getElementById('search-panel');
-    let searchActive  = false;
+    const searchResultsEl = document.getElementById('search-results');
+    let   searchActive = false;
+
+    // --- Helpers ---
+
+    function filterResults(query) {
+        const q = query.toLowerCase().trim();
+        if (!q) return [];
+        return SEARCH_DATA.filter(item =>
+            item.text.toLowerCase().includes(q)
+        ).slice(0, 6);
+    }
+
+    function showResults(query) {
+        searchResultsEl.innerHTML = '';
+        const matches = filterResults(query);
+        for (const item of matches) {
+            const el = document.createElement('span');
+            el.className    = 'search-result';
+            el.textContent  = item.text.toUpperCase();
+            el.dataset.type = item.type;
+            el.addEventListener('click', () => {
+                if (item.type === 'people') reverseSearchAndGoToPeople();
+            });
+            searchResultsEl.appendChild(el);
+        }
+    }
+
+    function activateSearchInput(rect) {
+        const PAD_V   = 5;
+        const HALF_W  = Math.round(window.innerWidth / 2);
+
+        // Hide the original label element so the input overlays it cleanly
+        searchEl.style.visibility = 'hidden';
+
+        const input = document.createElement('input');
+        input.id           = 'search-input';
+        input.type         = 'text';
+        input.autocomplete = 'off';
+        input.spellcheck   = false;
+        Object.assign(input.style, {
+            position:     'fixed',
+            left:         `${rect.left}px`,
+            top:          `${rect.top}px`,
+            width:        `${HALF_W - rect.left}px`,
+            height:       `${rect.height}px`,
+            background:   'transparent',
+            border:       'none',
+            outline:      'none',
+            fontFamily:   'Klein, sans-serif',
+            fontWeight:   '350',
+            fontSize:     '14px',
+            textTransform:'uppercase',
+            letterSpacing:'-0.35px',
+            color:        '#ffffff',
+            caretColor:   '#ffffff',
+            padding:      '0',
+            zIndex:       '100',
+            WebkitFontSmoothing: 'antialiased',
+        });
+        searchStage.appendChild(input);
+
+        // Position results container below the bar
+        const barBottom = rect.top + rect.height + PAD_V;
+        searchResultsEl.style.top  = `${barBottom + 10}px`;
+        searchResultsEl.style.left = `${rect.left}px`;
+
+        input.addEventListener('input', () => showResults(input.value));
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { resetSearch(); }
+            else if (e.key === 'Enter') {
+                const matches = filterResults(input.value);
+                if (matches.length && matches[0].type === 'people') reverseSearchAndGoToPeople();
+            }
+        });
+        requestAnimationFrame(() => input.focus());
+    }
+
+    // Instantly cleans up all search state — safe to call even if not active
+    function resetSearch() {
+        if (!searchActive) return;
+        searchActive = false;
+
+        const inp = document.getElementById('search-input');
+        if (inp) inp.remove();
+        searchResultsEl.innerHTML = '';
+
+        searchEl.style.visibility  = '';
+        searchEl.style.color       = '';
+        searchEl.style.textShadow  = '';
+        searchEl.style.transition  = '';
+        searchEl.style.transform   = '';
+
+        searchPanel.style.transition = '';
+        searchPanel.style.transform  = '';
+
+        menu.classList.remove('search-active');
+        searchStage.style.display = 'none';
+        searchStage.setAttribute('aria-hidden', 'true');
+    }
+
+    // Plays the animation in reverse then routes to the people page
+    async function reverseSearchAndGoToPeople() {
+        const SLIDE_MS   = 380;
+        const SLIDE_EASE = 'cubic-bezier(0.55, 0, 1, 0.5)';
+        const HALF_W     = Math.round(window.innerWidth / 2);
+
+        const inp = document.getElementById('search-input');
+        if (inp) inp.remove();
+        searchResultsEl.innerHTML = '';
+        searchEl.style.visibility = '';
+
+        const slideX = `-${HALF_W}px`;
+        searchEl.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}, color 200ms ease-out`;
+        searchEl.style.transform  = `translateX(${slideX})`;
+        searchEl.style.color      = '#bbbdc0';
+
+        searchPanel.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}`;
+        searchPanel.style.transform  = `translateX(${slideX})`;
+
+        await new Promise(r => setTimeout(r, SLIDE_MS + 60));
+
+        // Full state cleanup
+        searchActive = false;
+        menu.classList.remove('search-active');
+        searchStage.style.display = 'none';
+        searchStage.setAttribute('aria-hidden', 'true');
+        ['transition','transform','color','textShadow','visibility'].forEach(p => {
+            searchEl.style[p] = '';
+        });
+        searchPanel.style.transition = '';
+        searchPanel.style.transform  = '';
+
+        playPeopleTransition();
+    }
+
+    // --- Main animation ---
 
     async function playSearchTransition() {
         if (searchActive) return;
         searchActive = true;
 
-        const PAD_V   = 5;  // vertical padding inside the bar (above and below text)
-        const RISE_MS   = 580;
+        const PAD_V     = 5;
+        const HALF_W    = Math.round(window.innerWidth / 2);
+        const RISE_MS   = 600;
         const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
         // 1. Capture original position BEFORE any transform is applied
         const rect = searchEl.getBoundingClientRect();
 
-        // 2. Panel geometry:
-        //    - left edge: 0px (viewport left edge, extends off the menu margin)
-        //    - right edge: rect.right (ends exactly where "search" ends)
-        //    - width: rect.right (= distance from viewport left to text right edge)
-        //    - top: rect.top - PAD_V (vertical breathing room above text)
-        //    - height: rect.height + PAD_V * 2 (text height + padding above + below)
-        //    Slide-in: starts at translateX(-rect.right) — right edge at x=0, fully hidden
-        const panelW = rect.right;
+        // 2. Panel: left:0, width:50vw, height = text height + vertical padding
+        //    Start: translateX(-HALF_W) so right edge sits at x=0 (off-screen left)
         searchPanel.style.top        = `${rect.top - PAD_V}px`;
         searchPanel.style.left       = '0';
-        searchPanel.style.width      = `${panelW}px`;
+        searchPanel.style.width      = `${HALF_W}px`;
         searchPanel.style.height     = `${rect.height + PAD_V * 2}px`;
         searchPanel.style.bottom     = 'auto';
         searchPanel.style.transition = 'none';
-        searchPanel.style.transform  = `translateX(-${panelW}px)`;
+        searchPanel.style.transform  = `translateX(-${HALF_W}px)`;
 
-        // 3. Set fall distance for the text
+        // 3. Fall distance: right edge of text lands at x=0
         searchEl.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
 
-        // 4. Reveal search stage (panel positioned but off-screen)
+        // 4. Reveal stage (panel off-screen)
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
@@ -524,26 +719,32 @@ document.addEventListener('DOMContentLoaded', () => {
         searchEl.classList.add('search-falling');
         await new Promise(r => setTimeout(r, 480));
 
-        // 6. Invisible snap: teleport text below viewport
+        // 6. Snap text to same off-screen-left position as the panel
+        //    (body overflow:hidden, nothing visible during this jump)
         searchEl.classList.remove('search-falling');
         searchEl.style.transition = 'none';
-        searchEl.style.transform  = 'translateY(150vh)';
+        searchEl.style.transform  = `translateX(-${HALF_W}px)`;
         void searchEl.offsetWidth;
 
-        // 7. Phase 2 — text rises + panel slides in from left, in perfect sync
+        // 7. Phase 2 — text and panel slide in from left in perfect sync
+        //    Both travel HALF_W to the right at the same speed
         menu.classList.add('search-active');
 
         searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
-        searchEl.style.transform  = 'translateY(0)';
+        searchEl.style.transform  = 'translateX(0)';
 
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateX(0)';
 
-        // 8. Text turns white only once settled on the black base
+        // 8. Color turns white once text settles on the black base
         await new Promise(r => setTimeout(r, RISE_MS + 40));
         searchEl.style.transition = 'color 200ms ease-out';
         searchEl.style.color      = '#ffffff';
         searchEl.style.textShadow = 'none';
+
+        // 9. Activate the real search input
+        await new Promise(r => setTimeout(r, 220));
+        activateSearchInput(rect);
     }
 
     searchEl.addEventListener('click', (e) => {

@@ -435,3 +435,35 @@ body {
 .menu.search-active {
     z-index: 3;
 }
+
+/* Search results list */
+#search-results {
+    position: absolute;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.search-result {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    line-height: 12px;
+    color: #bbbdc0;
+    cursor: pointer;
+    white-space: nowrap;
+    user-select: none;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.search-result:hover {
+    color: #424242;
+}
+
+.search-result[data-type="people"]:hover {
+    color: #000;
+}
