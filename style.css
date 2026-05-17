@@ -200,7 +200,3 @@ body {
 .menu.hover-active .menu-primary #archive {
     color: #424242;
 }
-
-.menu-item:hover {
-    color: #000000;
-}

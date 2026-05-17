@@ -4,12 +4,22 @@
    ============================================================ */
 
 const TEXT_LINES = [
-    "Questo archivio digitale nasce da una necessità visiva",
-    "preservare l'estetica pura e radicale di Calvin Klein.",
-    "Un viaggio attraverso decenni di minimalismo,",
-    "campagne iconiche e visioni rivoluzionarie.",
-    "Custodire con cura la memoria di un brand",
-    "che ha ridefinito la nostra cultura contemporanea."
+    "What began as a coat",
+    "became a mirror",
+    "of American desire",
+    "Over five decades",
+    "the body",
+    "the moment",
+    "the culture",
+    "translated into image",
+    "spare",
+    "direct",
+    "impossible to ignore",
+    "Every campaign",
+    "Every collection",
+    "Every season",
+    "Every name",
+    "This is the archive"
 ];
 
 const FINAL_FADE_MS = 1500;
