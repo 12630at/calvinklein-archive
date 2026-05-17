@@ -205,7 +205,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     document.querySelectorAll('.menu-item').forEach(item => {
-        if (item.id !== 'archive') {
+        if (item.id !== 'archive' && item.id !== 'people') {
             item.addEventListener('click', (e) => {
                 e.preventDefault();
             });
@@ -303,4 +303,101 @@ document.addEventListener('DOMContentLoaded', () => {
 
     peopleEl.addEventListener('mouseenter', startCascade);
     peopleEl.addEventListener('mouseleave', stopCascade);
+
+    // ===== PEOPLE CLICK — TRANSITION ANIMATION =====
+
+    const ORBIT_NAMES = [
+        'Kate Moss', 'Brooke Shields', 'Mark Wahlberg', 'Christy Turlington',
+        'Bruce Weber', 'Steven Meisel', 'Fabien Baron', 'Raf Simons'
+    ];
+    const ORBIT_RADIUS = 230;
+
+    async function playPeopleTransition() {
+        const peopleStage = document.getElementById('people-stage');
+        const bottle     = document.getElementById('people-bottle');
+        const orbitEl    = document.getElementById('people-orbit');
+        const contentEl  = document.getElementById('people-content');
+
+        peopleStage.removeAttribute('aria-hidden');
+        peopleStage.style.display = 'block';
+        void peopleStage.offsetWidth;
+        peopleStage.style.opacity = '1';
+
+        await sleep(500);
+
+        bottle.style.opacity = '1';
+        bottle.classList.add('rotating');
+
+        await sleep(900);
+
+        // Spawn names in orbit, one by one
+        const nameEls = [];
+        for (let i = 0; i < ORBIT_NAMES.length; i++) {
+            const angle = (i / ORBIT_NAMES.length) * 2 * Math.PI - Math.PI / 2;
+            const x = Math.round(Math.cos(angle) * ORBIT_RADIUS);
+            const y = Math.round(Math.sin(angle) * ORBIT_RADIUS);
+
+            const slot = document.createElement('div');
+            slot.className = 'orbit-slot';
+            slot.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'orbit-name';
+            nameEl.textContent = ORBIT_NAMES[i].toUpperCase();
+
+            slot.appendChild(nameEl);
+            orbitEl.appendChild(slot);
+            nameEls.push(nameEl);
+
+            void nameEl.offsetWidth;
+            nameEl.classList.add('flash-in');
+
+            await sleep(300);
+        }
+
+        await sleep(1800);
+
+        // Flash out all orbit names simultaneously
+        for (const el of nameEls) {
+            el.classList.remove('flash-in');
+            el.classList.add('flash-out');
+        }
+
+        await sleep(900);
+
+        bottle.style.opacity = '0';
+
+        await sleep(600);
+
+        // Clean up orbit
+        orbitEl.querySelectorAll('.orbit-slot').forEach(s => s.remove());
+        bottle.classList.remove('rotating');
+
+        // Reveal people page content
+        contentEl.classList.add('visible');
+    }
+
+    async function closePeopleStage() {
+        const peopleStage = document.getElementById('people-stage');
+        const contentEl  = document.getElementById('people-content');
+
+        contentEl.classList.remove('visible');
+        await sleep(400);
+
+        peopleStage.style.opacity = '0';
+        await sleep(650);
+
+        peopleStage.style.display = 'none';
+        peopleStage.setAttribute('aria-hidden', 'true');
+    }
+
+    peopleEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        stopCascade();
+        playPeopleTransition();
+    });
+
+    document.getElementById('people-close').addEventListener('click', () => {
+        closePeopleStage();
+    });
 });
