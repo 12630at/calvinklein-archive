@@ -1,0 +1,198 @@
+/* Font: Klein
+   url() is listed BEFORE local() so the browser prefers the version
+   bundled in this repo over whatever older Klein is installed at the
+   OS level — they're often different files with different metrics,
+   which is what causes "looks different from Figma" gaps even when
+   the font name matches. local() remains as a last-resort fallback
+   for file:// usage where url() can't fetch. Requires serving over
+   http:// (e.g. python3 -m http.server) for the url() lines to load. */
+@font-face {
+    font-family: 'Klein';
+    src: url('fonts/Klein-Book.woff2') format('woff2'),
+        url('fonts/Klein-Book.woff') format('woff'),
+        url('fonts/Klein-Book.otf') format('opentype'),
+        url('fonts/Klein-Book.ttf') format('truetype'),
+        local('Klein Book'),
+        local('Klein-Book'),
+        local('KleinBook');
+    font-weight: 350;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: 'Klein';
+    src: url('fonts/Klein-Bold.woff2') format('woff2'),
+        url('fonts/Klein-Bold.woff') format('woff'),
+        url('fonts/Klein-Bold.otf') format('opentype'),
+        url('fonts/Klein-Bold.ttf') format('truetype'),
+        local('Klein Bold'),
+        local('Klein-Bold'),
+        local('KleinBold');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+/* General body */
+/* text-rendering: geometricPrecision tells the browser to draw text from
+   the font's outline geometry without aggressive hinting — same approach
+   Figma uses, and fixes Windows browsers thinning strokes at small sizes.
+   font-kerning explicit because some browsers skip kerning tables below
+   16px by default. font-feature-settings is belt-and-suspenders for both. */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background-color: #ffffff;
+    font-family: 'Klein', sans-serif;
+    text-rendering: geometricPrecision;
+    font-kerning: normal;
+    font-feature-settings: "kern" 1, "liga" 1;
+}
+
+/* Stage: fullscreen fixed container */
+#stage {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    overflow: hidden;
+    z-index: 10;
+}
+
+/* Each word — styled per Title_Book (76:30) from Figma.
+   Rest state matches Figma exactly. The transform/blur in the initial
+   state are the first frame of the entrance tween — the @keyframes
+   below resolve them away into the crisp Figma look. */
+.word {
+    position: absolute;
+    color: #000000;
+    font-family: 'Klein', sans-serif;
+    font-size: 0.8vw;
+    font-weight: 350;
+    letter-spacing: -0.36px;
+    text-transform: uppercase;
+    white-space: nowrap;
+
+    opacity: 0;
+    transform: translateY(8px) scale(0.92);
+    filter: blur(4px);
+    transform-origin: 50% 50%;
+    will-change: opacity, transform, filter;
+}
+
+/* Flash-style entrance: strong ease-out "vector tween" — fast at the start,
+   gently settles. Motion blur clears as the word resolves into place. */
+.word.flash-in {
+    animation: flashIn 760ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* Flash-style exit: opposite curve. The word drifts up, scales out
+   slightly, and dissolves under a motion blur — classic timeline tween. */
+.word.flash-out {
+    animation: flashOut 900ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+}
+
+@keyframes flashIn {
+    0% {
+        opacity: 0;
+        transform: translateY(8px) scale(0.92);
+        filter: blur(4px);
+    }
+
+    55% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+}
+
+@keyframes flashOut {
+    0% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+        filter: blur(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: translateY(-5px) scale(1.04);
+        filter: blur(6px);
+    }
+}
+
+@media (max-width: 600px) {
+    .word {
+        letter-spacing: -0.24px;
+    }
+}
+
+/* Menu Component */
+.menu {
+    position: absolute;
+    top: 50%;
+    left: 36px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    gap: 16px;
+    width: 147px;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 1s ease;
+    z-index: 1;
+}
+
+.menu-primary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;
+}
+
+.menu-secondary {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 300ms ease-out, visibility 300ms ease-out;
+}
+
+.menu.hover-active .menu-secondary {
+    opacity: 1;
+    visibility: visible;
+}
+
+.menu-item {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    text-rendering: geometricPrecision;
+    letter-spacing: -0.35px;
+    line-height: 12px;
+    color: #bbbdc0;
+    text-decoration: none;
+    display: block;
+    cursor: pointer;
+    transition: color 300ms ease-out;
+}
+
+.menu.hover-active .menu-primary #archive {
+    color: #424242;
+}
