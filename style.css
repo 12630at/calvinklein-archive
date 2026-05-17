@@ -78,15 +78,17 @@ body {
    below resolve them away into the crisp Figma look. */
 .word {
     display: inline-block; /* Changed from absolute to flow inside a paragraph */
-    color: #000000;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
     letter-spacing: -0.36px;
     text-transform: uppercase;
     white-space: nowrap;
     
-    /* Adobe Flash 2000s soft anti-aliasing effect, reduced */
-    text-shadow: 0 0 1px rgba(0,0,0,0.15);
+    /* 2000s soft text aesthetic */
+    color: rgba(40, 40, 40, 0.85);
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 
     opacity: 0;
     transform: translateY(8px) scale(0.92);
@@ -195,6 +197,10 @@ body {
     display: block;
     cursor: pointer;
     transition: color 300ms ease-out;
+    /* 2000s soft text aesthetic */
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
 }
 
 .menu.hover-active .menu-primary #archive {

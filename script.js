@@ -97,6 +97,13 @@ async function play() {
             span.style.fontSize = `${fontSize}px`;
             span.style.letterSpacing = window.innerWidth <= 600 ? '-0.02em' : '-0.04em';
 
+            // --- 2000s SOFT TEXT AESTHETIC INTEGRATION ---
+            span.style.color = 'rgba(40, 40, 40, 0.85)';
+            span.style.textShadow = '0px 0px 1px rgba(40, 40, 40, 0.3)';
+            span.style.WebkitFontSmoothing = 'antialiased';
+            span.style.MozOsxFontSmoothing = 'grayscale';
+            // ---------------------------------------------
+
             p.appendChild(span);
             // Spazio testuale
             p.appendChild(document.createTextNode(' '));
