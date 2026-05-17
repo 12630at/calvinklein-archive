@@ -545,13 +545,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== SEARCH =====
 
-    const searchEl    = document.getElementById('search');
-    const searchStage = document.getElementById('search-stage');
-    const searchPanel = document.getElementById('search-panel');
+    const searchEl       = document.getElementById('search');
+    const searchStage    = document.getElementById('search-stage');
+    const searchPanel    = document.getElementById('search-panel');
     const searchResultsEl = document.getElementById('search-results');
-    let   searchActive = false;
+    const menuPrimary    = menu.querySelector('.menu-primary');
+    let   searchActive   = false;
 
-    // --- Helpers ---
+    // --- Filtering and results rendering ---
 
     function filterResults(query) {
         const q = query.toLowerCase().trim();
@@ -576,71 +577,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function activateSearchInput(rect) {
-        const PAD_V   = 5;
-        const HALF_W  = Math.round(window.innerWidth / 2);
+    // --- State management ---
 
-        // Hide the original label element so the input overlays it cleanly
-        searchEl.style.visibility = 'hidden';
-
-        const input = document.createElement('input');
-        input.id           = 'search-input';
-        input.type         = 'text';
-        input.autocomplete = 'off';
-        input.spellcheck   = false;
-        Object.assign(input.style, {
-            position:     'fixed',
-            left:         `${rect.left}px`,
-            top:          `${rect.top}px`,
-            width:        `${HALF_W - rect.left}px`,
-            height:       `${rect.height}px`,
-            background:   'transparent',
-            border:       'none',
-            outline:      'none',
-            fontFamily:   'Klein, sans-serif',
-            fontWeight:   '350',
-            fontSize:     '14px',
-            textTransform:'uppercase',
-            letterSpacing:'-0.35px',
-            color:        '#ffffff',
-            caretColor:   '#ffffff',
-            padding:      '0',
-            zIndex:       '100',
-            WebkitFontSmoothing: 'antialiased',
-        });
-        searchStage.appendChild(input);
-
-        // Position results container below the bar
-        const barBottom = rect.top + rect.height + PAD_V;
-        searchResultsEl.style.top  = `${barBottom + 10}px`;
-        searchResultsEl.style.left = `${rect.left}px`;
-
-        input.addEventListener('input', () => showResults(input.value));
-        input.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') { resetSearch(); }
-            else if (e.key === 'Enter') {
-                const matches = filterResults(input.value);
-                if (matches.length && matches[0].type === 'people') reverseSearchAndGoToPeople();
-            }
-        });
-        requestAnimationFrame(() => input.focus());
-    }
-
-    // Instantly cleans up all search state — safe to call even if not active
+    // Instant teardown: no animation — used when navigating away (closePeopleStage)
     function resetSearch() {
         if (!searchActive) return;
         searchActive = false;
 
-        const inp = document.getElementById('search-input');
-        if (inp) inp.remove();
+        document.getElementById('search-input')?.remove();
+        document.getElementById('search-back')?.remove();
         searchResultsEl.innerHTML = '';
 
-        searchEl.style.visibility  = '';
-        searchEl.style.color       = '';
-        searchEl.style.textShadow  = '';
-        searchEl.style.transition  = '';
-        searchEl.style.transform   = '';
-
+        ['visibility','pointerEvents','color','textShadow','transition','transform']
+            .forEach(p => { searchEl.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
 
@@ -649,16 +598,20 @@ document.addEventListener('DOMContentLoaded', () => {
         searchStage.setAttribute('aria-hidden', 'true');
     }
 
-    // Plays the animation in reverse then routes to the people page
-    async function reverseSearchAndGoToPeople() {
+    // Animated teardown: slides everything back left, then calls onComplete
+    async function reverseSearch(onComplete) {
         const SLIDE_MS   = 380;
         const SLIDE_EASE = 'cubic-bezier(0.55, 0, 1, 0.5)';
         const HALF_W     = Math.round(window.innerWidth / 2);
 
-        const inp = document.getElementById('search-input');
-        if (inp) inp.remove();
+        // Remove interactive UI immediately so nothing intercepts during slide-out
+        document.getElementById('search-input')?.remove();
+        document.getElementById('search-back')?.remove();
         searchResultsEl.innerHTML = '';
-        searchEl.style.visibility = '';
+
+        // Restore searchEl visibility before sliding (it's white, will slide out)
+        searchEl.style.visibility    = '';
+        searchEl.style.pointerEvents = '';
 
         const slideX = `-${HALF_W}px`;
         searchEl.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}, color 200ms ease-out`;
@@ -675,13 +628,82 @@ document.addEventListener('DOMContentLoaded', () => {
         menu.classList.remove('search-active');
         searchStage.style.display = 'none';
         searchStage.setAttribute('aria-hidden', 'true');
-        ['transition','transform','color','textShadow','visibility'].forEach(p => {
-            searchEl.style[p] = '';
-        });
+        ['transition','transform','color','textShadow','visibility','pointerEvents']
+            .forEach(p => { searchEl.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
 
-        playPeopleTransition();
+        if (onComplete) onComplete();
+    }
+
+    function reverseSearchAndGoToPeople() {
+        reverseSearch(() => playPeopleTransition());
+    }
+
+    // --- Input + back button activation ---
+
+    function activateSearchInput(rect) {
+        const PAD_V  = 5;
+        const HALF_W = Math.round(window.innerWidth / 2);
+
+        // Hide the original label AND disable its pointer events.
+        // visibility:hidden keeps layout intact but still receives pointer events
+        // by default — pointer-events:none passes clicks through to the input below.
+        searchEl.style.visibility    = 'hidden';
+        searchEl.style.pointerEvents = 'none';
+
+        // Back button — appended to the menu column, below the hidden items
+        const backBtn = document.createElement('button');
+        backBtn.id        = 'search-back';
+        backBtn.textContent = '← back';
+        backBtn.className = 'people-close'; // reuses Klein font + grey + hover style
+        backBtn.addEventListener('click', () => reverseSearch());
+        menuPrimary.appendChild(backBtn);
+
+        // Input overlay at the exact position of the search label
+        const input = document.createElement('input');
+        input.id           = 'search-input';
+        input.type         = 'text';
+        input.autocomplete = 'off';
+        input.spellcheck   = false;
+        Object.assign(input.style, {
+            position:      'fixed',
+            left:          `${rect.left}px`,
+            top:           `${rect.top}px`,
+            width:         `${HALF_W - rect.left}px`,
+            height:        `${rect.height}px`,
+            background:    'transparent',
+            border:        'none',
+            outline:       'none',
+            fontFamily:    'Klein, sans-serif',
+            fontWeight:    '350',
+            fontSize:      '14px',
+            textTransform: 'uppercase',
+            letterSpacing: '-0.35px',
+            color:         '#ffffff',
+            caretColor:    '#ffffff',
+            padding:       '0',
+            zIndex:        '100',
+            WebkitFontSmoothing: 'antialiased',
+        });
+
+        input.addEventListener('input', () => showResults(input.value));
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') { reverseSearch(); }
+            else if (e.key === 'Enter') {
+                const matches = filterResults(input.value);
+                if (matches.length && matches[0].type === 'people') reverseSearchAndGoToPeople();
+            }
+        });
+
+        searchStage.appendChild(input);
+
+        // Position results below the bar
+        const barBottom = rect.top + rect.height + PAD_V;
+        searchResultsEl.style.top  = `${barBottom + 10}px`;
+        searchResultsEl.style.left = `${rect.left}px`;
+
+        requestAnimationFrame(() => input.focus());
     }
 
     // --- Main animation ---
@@ -698,8 +720,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Capture original position BEFORE any transform is applied
         const rect = searchEl.getBoundingClientRect();
 
-        // 2. Panel: left:0, width:50vw, height = text height + vertical padding
-        //    Start: translateX(-HALF_W) so right edge sits at x=0 (off-screen left)
+        // 2. Panel: left:0, width:50vw — starts off-screen left at translateX(-HALF_W)
         searchPanel.style.top        = `${rect.top - PAD_V}px`;
         searchPanel.style.left       = '0';
         searchPanel.style.width      = `${HALF_W}px`;
@@ -711,7 +732,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Fall distance: right edge of text lands at x=0
         searchEl.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
 
-        // 4. Reveal stage (panel off-screen)
+        // 4. Reveal stage (panel still off-screen)
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
@@ -719,15 +740,14 @@ document.addEventListener('DOMContentLoaded', () => {
         searchEl.classList.add('search-falling');
         await new Promise(r => setTimeout(r, 480));
 
-        // 6. Snap text to same off-screen-left position as the panel
-        //    (body overflow:hidden, nothing visible during this jump)
+        // 6. Invisible snap: text moves to the same off-screen-left position as the panel
         searchEl.classList.remove('search-falling');
         searchEl.style.transition = 'none';
         searchEl.style.transform  = `translateX(-${HALF_W}px)`;
         void searchEl.offsetWidth;
 
         // 7. Phase 2 — text and panel slide in from left in perfect sync
-        //    Both travel HALF_W to the right at the same speed
+        //    Adding search-active NOW hides other menu items in sync with the slide-in
         menu.classList.add('search-active');
 
         searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
@@ -736,13 +756,13 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateX(0)';
 
-        // 8. Color turns white once text settles on the black base
+        // 8. Text turns white once settled
         await new Promise(r => setTimeout(r, RISE_MS + 40));
         searchEl.style.transition = 'color 200ms ease-out';
         searchEl.style.color      = '#ffffff';
         searchEl.style.textShadow = 'none';
 
-        // 9. Activate the real search input
+        // 9. Activate the real input
         await new Promise(r => setTimeout(r, 220));
         activateSearchInput(rect);
     }
