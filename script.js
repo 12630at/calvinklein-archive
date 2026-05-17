@@ -587,6 +587,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- State management ---
 
+    function _cleanupSearchPanel() {
+        if (searchPanel._focusInput) {
+            searchPanel.removeEventListener('click', searchPanel._focusInput);
+            delete searchPanel._focusInput;
+        }
+        searchPanel.style.pointerEvents = '';
+        searchPanel.style.cursor        = '';
+    }
+
     // Instant teardown: no animation — used when navigating away (closePeopleStage)
     function resetSearch() {
         if (!searchActive) return;
@@ -596,6 +605,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('search-back')?.remove();
         searchResultsEl.innerHTML = '';
 
+        _cleanupSearchPanel();
         ['visibility','pointerEvents','color','textShadow','transition','transform']
             .forEach(p => { searchEl.style[p] = ''; });
         searchPanel.style.transition = '';
@@ -616,6 +626,8 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('search-input')?.remove();
         document.getElementById('search-back')?.remove();
         searchResultsEl.innerHTML = '';
+
+        _cleanupSearchPanel();
 
         // Restore searchEl visibility before sliding (it's white, will slide out)
         searchEl.style.visibility    = '';
@@ -697,6 +709,13 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         searchStage.appendChild(input);
+
+        // Clicking anywhere on the black panel re-focuses the input.
+        // The panel covers the full left half; the input only covers the text area.
+        searchPanel.style.pointerEvents = 'auto';
+        searchPanel.style.cursor        = 'text';
+        searchPanel._focusInput = () => document.getElementById('search-input')?.focus();
+        searchPanel.addEventListener('click', searchPanel._focusInput);
 
         // Position the results container just below the bar.
         // The back button lives INSIDE this container as the last child,
