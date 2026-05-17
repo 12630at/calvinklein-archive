@@ -1,0 +1,3 @@
+# Istruzioni per Claude
+
+Se devi modificare codice esistente, dimmi esattamente cosa sostituire e con cosa, fornendomi il blocco di codice preciso e non frammenti vaghi. Mantieni le spiegazioni tecniche estremamente concise e chiare. Se hai bisogno del file interessato per avere il giusto contesto sul bug dell'hover, chiedimelo prima di procedere. Se qualche dettaglio risulta ambiguo, fammi una domanda prima di scrivere codice. Non aggiungere alcuna funzionalità non richiesta e indicami sempre un modo pratico per verificare che le modifiche funzionino. Infine, se qualcosa non dovesse funzionare al primo colpo, chiedimi cosa succede a schermo prima di riscrivere tutto.
