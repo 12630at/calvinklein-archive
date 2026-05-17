@@ -78,7 +78,7 @@ body {
     position: absolute;
     color: #000000;
     font-family: 'Klein', sans-serif;
-    font-size: clamp(11px, 1.1vw, 18px);
+    font-size: 0.8vw;
     font-weight: 350;
     letter-spacing: -0.36px;
     text-transform: uppercase;
@@ -183,6 +183,7 @@ body {
     font-weight: 350;
     font-size: 14px;
     text-transform: uppercase;
+    text-rendering: geometricPrecision;
     letter-spacing: -0.35px;
     line-height: 12px;
     color: #bbbdc0;

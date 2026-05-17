@@ -1,54 +1,25 @@
 /* ============================================================
    KINETIC STAIRCASE TYPOGRAPHY + MENU INTERACTION
-   Single Page App Integration
+   Single Page App Integration - Sequential Narrative & Logo
    ============================================================ */
 
-// ===== 1. THE POOL =====
-const POOL = [
-    "Calvin Klein", "Barry Schwartz", "Kelly Klein",
-    "Richard Avedon", "Brooke Shields",
-    "Bruce Weber", "Tom Hintnaus", "Carré Otis",
-    "Kate Moss", "Mark Wahlberg", "Mario Sorrenti",
-    "Fabien Baron", "Sam Shahid", "Neville Brody",
-    "Steven Meisel", "Steven Klein", "Arthur Elgort",
-    "David Sims", "Patrick Demarchelier", "Herb Ritts",
-    "Mert and Marcus", "Inez and Vinoodh",
-    "Christy Turlington", "Carolyn Bessette Kennedy",
-    "Linda Evangelista", "Amber Valletta", "Shalom Harlow",
-    "Gisele Bündchen", "Natalia Vodianova", "Lara Stone",
-    "Iman", "Beverly Johnson",
-    "Francisco Costa", "Italo Zucchelli", "Raf Simons",
+const TEXT_LINES = [
+    "Questo archivio digitale nasce da una necessità visiva",
+    "preservare l'estetica pura e radicale di Calvin Klein.",
+    "Un viaggio attraverso decenni di minimalismo,",
+    "campagne iconiche e visioni rivoluzionarie.",
+    "Custodire con cura la memoria di un brand",
+    "che ha ridefinito la nostra cultura contemporanea."
 ];
 
-const TARGET_DURATION = 10;
-const SHUFFLE = true;
-
-const APPEAR_MS             = 50;
-const DARKEN_MS             = 200;
-const STAGGER_MS            = 200;
-const PRE_COLLAPSE_BEAT_MS  = 100;
-const COLLAPSE_MS           = 300;
-const POST_COLLAPSE_BEAT_MS = 150;
-const FINAL_FADE_MS         = 800;
+const FINAL_FADE_MS = 800;
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-function shuffleCopy(arr) {
-    const a = [...arr];
-    for (let i = a.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [a[i], a[j]] = [a[j], a[i]];
-    }
-    return a;
-}
-
-// We don't need selectEntries or estimateEntryDuration anymore, 
-// because we will show ALL entries.
-
 function splitEntry(entry) {
-    return entry.replace(/\//g, ' ').split(/\s+/).filter(Boolean);
+    return entry.split(/\s+/).filter(Boolean);
 }
 
 let measureCtx = null;
@@ -59,14 +30,13 @@ function measure(text) {
         measureCtx = document.createElement('canvas').getContext('2d');
     }
     measureCtx.font = `350 ${fontSize}px Klein, sans-serif`;
-    
+
     const upperText = text.toUpperCase();
     let width = measureCtx.measureText(upperText).width;
-    
+
     const letterSpacing = window.innerWidth <= 600 ? -0.24 : -0.36;
     width += (upperText.length * letterSpacing);
-    
-    // Add a tiny buffer to prevent accidental touching
+
     return width + 2;
 }
 
@@ -79,7 +49,9 @@ function createSpan(p) {
     span.className = 'word';
     span.textContent = p.word;
     span.style.left = p.x + 'px';
-    span.style.top  = p.y + 'px';
+    span.style.top = p.y + 'px';
+    span.style.letterSpacing = window.innerWidth <= 600 ? '-0.02em' : '-0.04em';
+    span.style.fontSize = `${fontSize}px`;
     return span;
 }
 
@@ -88,103 +60,108 @@ let isPlaying = false;
 async function play() {
     if (isPlaying) return;
     isPlaying = true;
-    
-    // 1. Slight delay like 1 second before the initial animation starts
-    await sleep(1000); 
-    
+
+    await sleep(1000);
+
     const stage = document.getElementById('stage');
     const viewport = getViewport();
-    fontSize = Math.max(11, Math.min(viewport.w * 0.011, 18));
-    
-    // We want ALL the names to appear and scatter them
-    const entries = shuffleCopy(POOL);
-    const allSpans = [];
-    
-    // Divide the screen into a loose grid to scatter names without overlapping
-    // Minimum cell width ~300px
-    const cols = viewport.w < 600 ? 2 : Math.max(2, Math.floor(viewport.w / 300));
-    const rows = Math.ceil(entries.length / cols);
-    const cellW = viewport.w / cols;
-    const cellH = viewport.h / rows;
-    
-    const cells = [];
-    for(let r = 0; r < rows; r++) {
-        for(let c = 0; c < cols; c++) {
-            cells.push({r, c});
-        }
-    }
-    const shuffledCells = shuffleCopy(cells);
 
-    // Display each name sequentially but very quickly
-    for (let i = 0; i < entries.length; i++) {
-        const entry = entries[i];
-        const cell = shuffledCells[i];
-        if (!cell) break; // safety
-        
-        const padX = cellW * 0.1;
-        const padY = cellH * 0.1;
-        
-        const startX = cell.c * cellW + padX + Math.random() * (cellW * 0.2);
-        const startY = cell.r * cellH + padY + Math.random() * (cellH * 0.3);
-        
-        const words = splitEntry(entry);
-        
-        let curX = startX;
-        let curY = startY;
-        let yStep = fontSize * 1.4;
-        const jitter = () => (Math.random() * fontSize * 0.2);
-        
-        const placed = [];
+    const lh = 1.6;
+
+    // Calcola una dimensione del carattere leggibile che si adatti agli schermi
+    fontSize = Math.max(14, Math.min(viewport.w * 0.025, 14));
+
+    // Calcola l'altezza totale per centrare in blocco il paragrafo verticalmente
+    let totalHeight = TEXT_LINES.length * (fontSize * lh);
+    let currentY = (viewport.h - totalHeight) / 2;
+    if (currentY < viewport.h * 0.05) currentY = viewport.h * 0.05;
+
+    let previousSpans = [];
+
+    for (let i = 0; i < TEXT_LINES.length; i++) {
+        const line = TEXT_LINES[i];
+        const words = splitEntry(line);
+        const spaceW = measure(' ');
+
+        let lineWidth = 0;
+        const wordWidths = [];
         for (const word of words) {
-            const w = measure(word);
-            // Wrap to next line if word exceeds cell boundaries
-            if (curX + w > (cell.c + 1) * cellW - padX) {
-                curX = startX;
-                curY += yStep;
-            }
-            placed.push({ word, x: curX, y: curY });
-            curX += w + measure(' ') + jitter();
+            const w = measure(word.toUpperCase()); // Misuriamo sul maiuscolo come da stile
+            wordWidths.push(w);
+            lineWidth += w;
         }
-        
-        const spans = placed.map(createSpan);
-        spans.forEach(s => stage.appendChild(s));
-        allSpans.push(...spans);
-        
-        // Trigger the Flash-style entrance per word. The CSS @keyframes
-        // handles the scale + lift + motion-blur tween; this just stagger-
-        // fires them. Slightly slower than the previous 40ms so adjacent
-        // words overlap in flight and feel like a single timeline tween.
-        for (let j = 0; j < spans.length; j++) {
-            spans[j].classList.add('flash-in');
-            await sleep(55);
+        lineWidth += spaceW * (words.length - 1);
+
+        // Centratura orizzontale perfetta per ciascun rigo
+        let curX = (viewport.w - lineWidth) / 2;
+
+        const placed = [];
+        for (let j = 0; j < words.length; j++) {
+            placed.push({ word: words[j].toUpperCase(), x: curX, y: currentY });
+            curX += wordWidths[j] + spaceW;
+        }
+
+        const currentSpans = placed.map(createSpan);
+        currentSpans.forEach(s => stage.appendChild(s));
+
+        // Fade out della riga precedente
+        if (previousSpans.length > 0) {
+            for (let j = 0; j < previousSpans.length; j++) {
+                previousSpans[j].classList.remove('flash-in');
+                previousSpans[j].classList.add('flash-out');
+            }
+        }
+
+        // Fade in parola per parola della riga corrente
+        for (let j = 0; j < currentSpans.length; j++) {
+            currentSpans[j].classList.add('flash-in');
+            await sleep(35); // Entrata veloce
+        }
+
+        // Tempo di lettura del verso
+        await sleep(1200);
+
+        previousSpans = currentSpans;
+        currentY += (fontSize * lh);
+    }
+
+    // Scomparsa dell'ultimo rigo
+    if (previousSpans.length > 0) {
+        for (let j = 0; j < previousSpans.length; j++) {
+            previousSpans[j].classList.remove('flash-in');
+            previousSpans[j].classList.add('flash-out');
         }
     }
-    
-    // Pause briefly so the fully scattered page can be seen
-    await sleep(900);
 
-    // Flash-style exit — words drift up, scale slightly, motion-blur out.
-    // Tiny per-element stagger keeps it from feeling like a hard cut.
-    allSpans.forEach((s, i) => {
-        setTimeout(() => {
-            s.classList.remove('flash-in');
-            s.classList.add('flash-out');
-        }, i * 6);
-    });
+    await sleep(600);
 
-    // Fade the stage background a beat after the words start dissolving,
-    // so the white backdrop doesn't snap out from under them.
-    const exitStaggerTotal = allSpans.length * 6;
-    setTimeout(() => {
-        stage.style.transition = `opacity ${FINAL_FADE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
-        stage.style.opacity = '0';
-    }, Math.min(exitStaggerTotal + 200, 600));
+    // Apparizione del logo SVG finale
+    const finalLogo = document.createElement('img');
+    finalLogo.src = 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Calvin_klein_logo_web23.svg';
+    finalLogo.style.position = 'absolute';
+    finalLogo.style.left = '50%';
+    finalLogo.style.top = '50%';
+    finalLogo.style.transform = 'translate(-50%, -50%)';
+    finalLogo.style.width = '320px';
+    finalLogo.style.maxWidth = '80%';
+    finalLogo.style.height = 'auto';
+    finalLogo.style.opacity = '0';
+    finalLogo.style.transition = 'opacity 1.5s ease-in-out';
 
-    // Wait until the last word's exit animation has finished playing.
-    await sleep(exitStaggerTotal + 900);
+    stage.appendChild(finalLogo);
 
-    // End of animation -> reveal menu on the same page
-    stage.style.display = 'none'; // remove stage
+    void finalLogo.offsetWidth;
+    finalLogo.style.opacity = '1';
+
+    await sleep(3000);
+
+    // Dissolvenza finale e chiusura dello stage
+    stage.style.transition = `opacity ${FINAL_FADE_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`;
+    stage.style.opacity = '0';
+
+    await sleep(FINAL_FADE_MS);
+
+    stage.style.display = 'none';
     const menu = document.getElementById('menu');
     menu.style.opacity = '1';
     menu.style.pointerEvents = 'all';
@@ -193,13 +170,11 @@ async function play() {
 // ===== INIT & MENU INTERACTIONS =====
 
 document.addEventListener('DOMContentLoaded', () => {
-    
-    // 1. Start animation on load automatically
+
     document.fonts.ready.then(() => {
         play();
     });
 
-    // 2. Setup Menu Interactions
     const menu = document.getElementById('menu');
     const archive = document.getElementById('archive');
 
