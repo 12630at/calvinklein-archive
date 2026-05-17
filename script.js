@@ -484,37 +484,39 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchEl    = document.getElementById('search');
     const searchStage = document.getElementById('search-stage');
     const searchPanel = document.getElementById('search-panel');
-    const searchBg    = document.getElementById('search-bg');
     let searchActive  = false;
 
     async function playSearchTransition() {
         if (searchActive) return;
         searchActive = true;
 
-        const PADDING_R = 10; // right padding added to panel width
+        const PAD_V   = 5;  // vertical padding inside the bar (above and below text)
         const RISE_MS   = 580;
         const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
-        // 1. Capture original position BEFORE any transform is applied to the element
+        // 1. Capture original position BEFORE any transform is applied
         const rect = searchEl.getBoundingClientRect();
 
-        // 2. Size and position the panel to match the text exactly
-        //    — same top, same left, exact text height, text width + right padding
-        //    — start translateX so its right edge sits just past x=0 (off-screen left)
-        const panelW   = rect.width + PADDING_R;
-        const offLeft  = rect.left + panelW; // distance to push it fully off-screen left
-        searchPanel.style.top       = `${rect.top}px`;
-        searchPanel.style.left      = `${rect.left}px`;
-        searchPanel.style.width     = `${panelW}px`;
-        searchPanel.style.height    = `${rect.height}px`;
-        searchPanel.style.bottom    = 'auto';
+        // 2. Panel geometry:
+        //    - left edge: 0px (viewport left edge, extends off the menu margin)
+        //    - right edge: rect.right (ends exactly where "search" ends)
+        //    - width: rect.right (= distance from viewport left to text right edge)
+        //    - top: rect.top - PAD_V (vertical breathing room above text)
+        //    - height: rect.height + PAD_V * 2 (text height + padding above + below)
+        //    Slide-in: starts at translateX(-rect.right) — right edge at x=0, fully hidden
+        const panelW = rect.right;
+        searchPanel.style.top        = `${rect.top - PAD_V}px`;
+        searchPanel.style.left       = '0';
+        searchPanel.style.width      = `${panelW}px`;
+        searchPanel.style.height     = `${rect.height + PAD_V * 2}px`;
+        searchPanel.style.bottom     = 'auto';
         searchPanel.style.transition = 'none';
-        searchPanel.style.transform  = `translateX(-${offLeft}px)`;
+        searchPanel.style.transform  = `translateX(-${panelW}px)`;
 
-        // 3. Set fall distance for the text (right edge lands at x≈0 with slight overshoot)
+        // 3. Set fall distance for the text
         searchEl.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
 
-        // 4. Reveal the search stage (panel is already positioned but off-screen)
+        // 4. Reveal search stage (panel positioned but off-screen)
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
@@ -522,14 +524,13 @@ document.addEventListener('DOMContentLoaded', () => {
         searchEl.classList.add('search-falling');
         await new Promise(r => setTimeout(r, 480));
 
-        // 6. Invisible snap: teleport text to below viewport
-        //    Body is overflow:hidden — not visible during this jump.
+        // 6. Invisible snap: teleport text below viewport
         searchEl.classList.remove('search-falling');
         searchEl.style.transition = 'none';
         searchEl.style.transform  = 'translateY(150vh)';
-        void searchEl.offsetWidth; // flush reflow before triggering transitions
+        void searchEl.offsetWidth;
 
-        // 7. Phase 2 — text rises from below + panel slides in from left, in perfect sync
+        // 7. Phase 2 — text rises + panel slides in from left, in perfect sync
         menu.classList.add('search-active');
 
         searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
@@ -538,9 +539,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateX(0)';
 
-        searchBg.style.animation = `searchBgBounce 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`;
-
-        // 8. Text turns white only after settling on the black base
+        // 8. Text turns white only once settled on the black base
         await new Promise(r => setTimeout(r, RISE_MS + 40));
         searchEl.style.transition = 'color 200ms ease-out';
         searchEl.style.color      = '#ffffff';

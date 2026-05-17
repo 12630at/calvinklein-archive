@@ -166,14 +166,14 @@ body {
 .menu-primary {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 10px;
     flex: 1;
 }
 
 .menu-secondary {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 10px;
     opacity: 0;
     visibility: hidden;
     transition: opacity 300ms ease-out, visibility 300ms ease-out;
@@ -417,22 +417,6 @@ body {
     pointer-events: none;
 }
 
-#search-bg {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    max-height: 100vh;
-    width: auto;
-    transform: translateY(110%);
-    will-change: transform;
-}
-
-@keyframes searchBgBounce {
-    0%   { transform: translateY(110%); }
-    64%  { transform: translateY(-3%); }
-    82%  { transform: translateY(1.5%); }
-    100% { transform: translateY(0); }
-}
 
 /* Fall-to-wall physics: --search-fall-x set by JS at click time */
 @keyframes searchFall {
