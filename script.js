@@ -652,13 +652,19 @@ document.addEventListener('DOMContentLoaded', () => {
         searchEl.style.visibility    = 'hidden';
         searchEl.style.pointerEvents = 'none';
 
-        // Back button — appended to the menu column, below the hidden items
+        // Back button — appended to the menu column, below the hidden items.
+        // Must be in the DOM BEFORE we measure its position for the results container.
         const backBtn = document.createElement('button');
         backBtn.id        = 'search-back';
         backBtn.textContent = '← back';
         backBtn.className = 'people-close'; // reuses Klein font + grey + hover style
         backBtn.addEventListener('click', () => reverseSearch());
         menuPrimary.appendChild(backBtn);
+
+        // Measure the rendered back button position synchronously.
+        // getBoundingClientRect() forces layout and returns the actual painted rect,
+        // so results can be anchored reliably below it regardless of menu height.
+        const backRect = backBtn.getBoundingClientRect();
 
         // Input overlay at the exact position of the search label
         const input = document.createElement('input');
@@ -698,9 +704,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         searchStage.appendChild(input);
 
-        // Position results below the bar
-        const barBottom = rect.top + rect.height + PAD_V;
-        searchResultsEl.style.top  = `${barBottom + 10}px`;
+        // Position results below the back button, not below the bar.
+        // This guarantees no visual overlap regardless of menu height or viewport size.
+        searchResultsEl.style.top  = `${backRect.bottom + 12}px`;
         searchResultsEl.style.left = `${rect.left}px`;
 
         requestAnimationFrame(() => input.focus());
