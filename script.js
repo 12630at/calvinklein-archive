@@ -33,6 +33,20 @@ const ANIM_CONFIG = {
 
 let skipSignal      = false;
 let cancelCurrentSleep = null;
+let introAudio      = null;
+
+function playIntroAudio() {
+    introAudio = new Audio('assets/calvinklein_intro.mp3');
+    introAudio.play().catch(() => {});
+}
+
+function stopIntroAudio() {
+    if (introAudio) {
+        introAudio.pause();
+        introAudio.currentTime = 0;
+        introAudio = null;
+    }
+}
 
 function sleep(ms) {
     return new Promise((resolve, reject) => {
@@ -181,6 +195,7 @@ async function play() {
 
     void finalLogo.offsetWidth;
     finalLogo.style.opacity = '1';
+    playIntroAudio();
 
     await sleep(3000);
 
@@ -190,6 +205,7 @@ async function play() {
 
     await sleep(FINAL_FADE_MS);
 
+    stopIntroAudio();
     stage.style.display = 'none';
     const menu = document.getElementById('menu');
     menu.style.opacity = '1';
@@ -231,6 +247,7 @@ async function skipToLogo() {
 
     // Reveal logo
     finalLogo.style.opacity = '1';
+    playIntroAudio();
     await new Promise(r => setTimeout(r, 2400));
 
     // Final fade out → show menu
@@ -238,6 +255,7 @@ async function skipToLogo() {
     stage.style.opacity    = '0';
     await new Promise(r => setTimeout(r, FINAL_FADE_MS));
 
+    stopIntroAudio();
     stage.style.display      = 'none';
     menu.style.opacity       = '1';
     menu.style.pointerEvents = 'all';
