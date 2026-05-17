@@ -271,8 +271,13 @@ document.addEventListener('DOMContentLoaded', () => {
         menu.classList.add('hover-active');
     });
 
-    archive.addEventListener('mouseleave', () => {
-        menu.classList.remove('hover-active');
+    // Remove hover-active when entering any other primary item (not archive)
+    // so the submenu closes when the cursor moves to people/timeline/etc.
+    // menu.mouseleave handles the case of leaving the menu entirely.
+    document.querySelectorAll('.menu-primary .menu-item:not(#archive)').forEach(item => {
+        item.addEventListener('mouseenter', () => {
+            menu.classList.remove('hover-active');
+        });
     });
 
     menu.addEventListener('mouseleave', () => {

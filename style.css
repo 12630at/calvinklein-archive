@@ -219,6 +219,10 @@ body {
     opacity: 0;
 }
 
+.skip-intro-btn.flash-in {
+    animation: flashIn 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
 #people:hover {
     color: #424242;
 }
