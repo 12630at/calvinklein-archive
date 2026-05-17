@@ -392,3 +392,45 @@ body {
 .people-entry:hover {
     color: #424242;
 }
+
+/* ===== SEARCH TRANSITION ===== */
+#search-stage {
+    position: fixed;
+    inset: 0;
+    z-index: 12;
+    pointer-events: none;
+    display: none;
+}
+
+#search-panel {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    background: #000;
+    transform: translateY(110%);
+    will-change: transform;
+}
+
+#search-bg {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    max-height: 100vh;
+    width: auto;
+    transform: translateY(110%);
+    will-change: transform;
+}
+
+@keyframes searchBgBounce {
+    0%   { transform: translateY(110%); }
+    64%  { transform: translateY(-3%); }
+    82%  { transform: translateY(1.5%); }
+    100% { transform: translateY(0); }
+}
+
+/* Elevate menu above search panel during search state */
+.menu.search-active {
+    z-index: 20;
+}

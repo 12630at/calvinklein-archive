@@ -478,4 +478,56 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('people-close').addEventListener('click', () => {
         closePeopleStage();
     });
+
+    // ===== SEARCH CLICK — TRANSITION ANIMATION =====
+
+    const searchEl    = document.getElementById('search');
+    const searchStage = document.getElementById('search-stage');
+    const searchPanel = document.getElementById('search-panel');
+    const searchBg    = document.getElementById('search-bg');
+    let searchActive  = false;
+
+    async function playSearchTransition() {
+        if (searchActive) return;
+        searchActive = true;
+
+        // Show the search stage container (panel + bg are still off-screen)
+        searchStage.removeAttribute('aria-hidden');
+        searchStage.style.display = 'block';
+
+        // Phase 1 — search text slides left off screen; color turns white instantly
+        // Inline transition overrides the class-level "transition: color 300ms" so
+        // the color snap is immediate while only transform is eased.
+        searchEl.style.transition = 'transform 320ms cubic-bezier(0.55, 0, 0.45, 1)';
+        searchEl.style.color      = '#ffffff';
+        searchEl.style.textShadow = 'none';
+        searchEl.style.transform  = 'translateX(-200px)';
+
+        await new Promise(r => setTimeout(r, 340));
+
+        // Invisible snap: move the element below the viewport with no animation.
+        // Body is overflow:hidden so the element is not visible during this jump.
+        searchEl.style.transition = 'none';
+        searchEl.style.transform  = 'translateY(150vh)';
+        void searchEl.offsetWidth; // force reflow to commit the above before next frame
+
+        // Phase 2 — search text, panel and bg all rise in perfect sync
+        menu.classList.add('search-active'); // elevate menu above the panel
+
+        const riseDuration = '620ms';
+        const riseEase     = 'cubic-bezier(0.19, 1, 0.22, 1)';
+
+        searchEl.style.transition = `transform ${riseDuration} ${riseEase}`;
+        searchEl.style.transform  = 'translateY(0)';
+
+        searchPanel.style.transition = `transform ${riseDuration} ${riseEase}`;
+        searchPanel.style.transform  = 'translateY(0)';
+
+        searchBg.style.animation = `searchBgBounce 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`;
+    }
+
+    searchEl.addEventListener('click', (e) => {
+        e.preventDefault();
+        playSearchTransition();
+    });
 });
