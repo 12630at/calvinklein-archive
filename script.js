@@ -484,46 +484,65 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchEl    = document.getElementById('search');
     const searchStage = document.getElementById('search-stage');
     const searchPanel = document.getElementById('search-panel');
+    const searchBg    = document.getElementById('search-bg');
     let searchActive  = false;
 
     async function playSearchTransition() {
         if (searchActive) return;
         searchActive = true;
 
-        // Measure exact distance so the right edge of "search" lands at x=0 (left border)
-        const rect   = searchEl.getBoundingClientRect();
-        const fallX  = -(rect.right + 6); // 6px past edge for clean wall contact
-        searchEl.style.setProperty('--search-fall-x', `${fallX}px`);
+        const PADDING_R = 10; // right padding added to panel width
+        const RISE_MS   = 580;
+        const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
-        // Show search stage — panel is still translateY(110%), hidden below screen
+        // 1. Capture original position BEFORE any transform is applied to the element
+        const rect = searchEl.getBoundingClientRect();
+
+        // 2. Size and position the panel to match the text exactly
+        //    — same top, same left, exact text height, text width + right padding
+        //    — start translateX so its right edge sits just past x=0 (off-screen left)
+        const panelW   = rect.width + PADDING_R;
+        const offLeft  = rect.left + panelW; // distance to push it fully off-screen left
+        searchPanel.style.top       = `${rect.top}px`;
+        searchPanel.style.left      = `${rect.left}px`;
+        searchPanel.style.width     = `${panelW}px`;
+        searchPanel.style.height    = `${rect.height}px`;
+        searchPanel.style.bottom    = 'auto';
+        searchPanel.style.transition = 'none';
+        searchPanel.style.transform  = `translateX(-${offLeft}px)`;
+
+        // 3. Set fall distance for the text (right edge lands at x≈0 with slight overshoot)
+        searchEl.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
+
+        // 4. Reveal the search stage (panel is already positioned but off-screen)
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
-        // Phase 1 — fall left with physics: acceleration, wall contact, micro-bounce
+        // 5. Phase 1 — text falls left with wall-bounce physics
         searchEl.classList.add('search-falling');
         await new Promise(r => setTimeout(r, 480));
 
-        // Invisible snap to below viewport (body overflow:hidden keeps it unseen)
+        // 6. Invisible snap: teleport text to below viewport
+        //    Body is overflow:hidden — not visible during this jump.
         searchEl.classList.remove('search-falling');
         searchEl.style.transition = 'none';
         searchEl.style.transform  = 'translateY(150vh)';
-        void searchEl.offsetWidth; // flush reflow before next frame
+        void searchEl.offsetWidth; // flush reflow before triggering transitions
 
-        // Phase 2 — search text and black panel rise in perfect sync
+        // 7. Phase 2 — text rises from below + panel slides in from left, in perfect sync
         menu.classList.add('search-active');
-
-        const RISE_MS   = 580;
-        const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
         searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchEl.style.transform  = 'translateY(0)';
 
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
-        searchPanel.style.transform  = 'translateY(0)';
+        searchPanel.style.transform  = 'translateX(0)';
 
-        // Color turns white only once the element has settled at its final position
+        searchBg.style.animation = `searchBgBounce 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`;
+
+        // 8. Text turns white only after settling on the black base
         await new Promise(r => setTimeout(r, RISE_MS + 40));
-        searchEl.style.transition = 'color 220ms ease-out';
+        searchEl.style.transition = 'color 200ms ease-out';
         searchEl.style.color      = '#ffffff';
         searchEl.style.textShadow = 'none';
     }

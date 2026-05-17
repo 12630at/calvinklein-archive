@@ -403,29 +403,38 @@ body {
 #search-stage {
     position: fixed;
     inset: 0;
-    /* z-index 2: above menu (1) so the panel sits behind menu text.
-       menu.search-active (3) keeps menu text above the panel.
-       #people-stage (15) stays well above both — no conflict. */
     z-index: 2;
     pointer-events: none;
     display: none;
 }
 
+/* Dimensions and position are set entirely by JS at click time,
+   calculated from searchEl.getBoundingClientRect(). */
 #search-panel {
     position: absolute;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 320px;
     background: #000;
-    transform: translateY(110%);
     will-change: transform;
     pointer-events: none;
 }
 
-/* Fall-to-wall physics: element accelerates left, overshoots the edge,
-   micro-bounces, settles. --search-fall-x is set by JS at click time
-   to the exact distance needed to push the right edge past 0px. */
+#search-bg {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    max-height: 100vh;
+    width: auto;
+    transform: translateY(110%);
+    will-change: transform;
+}
+
+@keyframes searchBgBounce {
+    0%   { transform: translateY(110%); }
+    64%  { transform: translateY(-3%); }
+    82%  { transform: translateY(1.5%); }
+    100% { transform: translateY(0); }
+}
+
+/* Fall-to-wall physics: --search-fall-x set by JS at click time */
 @keyframes searchFall {
     0%   { transform: translateX(0); }
     60%  { transform: translateX(var(--search-fall-x)); }
