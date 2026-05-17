@@ -434,6 +434,7 @@ body {
 /* Elevate menu text above the black panel, but below people-stage (15) */
 .menu.search-active {
     z-index: 3;
+    pointer-events: none;
 }
 
 /* Hide all menu items except #search when search is active */
