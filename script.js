@@ -549,7 +549,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchStage    = document.getElementById('search-stage');
     const searchPanel    = document.getElementById('search-panel');
     const searchResultsEl = document.getElementById('search-results');
-    const menuPrimary    = menu.querySelector('.menu-primary');
     let   searchActive   = false;
 
     // --- Filtering and results rendering ---
@@ -575,6 +574,15 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             searchResultsEl.appendChild(el);
         }
+        // Back button is always the last child of the results container:
+        // - no results  → only item, appears just below the bar (beside input)
+        // - with results → appears after the full list
+        const backBtn = document.createElement('button');
+        backBtn.id        = 'search-back';
+        backBtn.textContent = '← back';
+        backBtn.className = 'people-close';
+        backBtn.addEventListener('click', () => reverseSearch());
+        searchResultsEl.appendChild(backBtn);
     }
 
     // --- State management ---
@@ -652,20 +660,6 @@ document.addEventListener('DOMContentLoaded', () => {
         searchEl.style.visibility    = 'hidden';
         searchEl.style.pointerEvents = 'none';
 
-        // Back button — appended to the menu column, below the hidden items.
-        // Must be in the DOM BEFORE we measure its position for the results container.
-        const backBtn = document.createElement('button');
-        backBtn.id        = 'search-back';
-        backBtn.textContent = '← back';
-        backBtn.className = 'people-close'; // reuses Klein font + grey + hover style
-        backBtn.addEventListener('click', () => reverseSearch());
-        menuPrimary.appendChild(backBtn);
-
-        // Measure the rendered back button position synchronously.
-        // getBoundingClientRect() forces layout and returns the actual painted rect,
-        // so results can be anchored reliably below it regardless of menu height.
-        const backRect = backBtn.getBoundingClientRect();
-
         // Input overlay at the exact position of the search label
         const input = document.createElement('input');
         input.id           = 'search-input';
@@ -704,10 +698,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         searchStage.appendChild(input);
 
-        // Position results below the back button, not below the bar.
-        // This guarantees no visual overlap regardless of menu height or viewport size.
-        searchResultsEl.style.top  = `${backRect.bottom + 12}px`;
+        // Position the results container just below the bar.
+        // The back button lives INSIDE this container as the last child,
+        // so it flows naturally: alone when no results, after the list when results exist.
+        const barBottom = rect.top + rect.height + PAD_V;
+        searchResultsEl.style.top  = `${barBottom + 12}px`;
         searchResultsEl.style.left = `${rect.left}px`;
+
+        // Initialise: render just the back button (query is empty at activation)
+        showResults('');
 
         requestAnimationFrame(() => input.focus());
     }
