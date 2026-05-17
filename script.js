@@ -61,6 +61,9 @@ async function play() {
 
     await sleep(1000);
 
+    const skipBtn = document.getElementById('skip-intro');
+    if (skipBtn) skipBtn.classList.add('flash-in');
+
     const stage = document.getElementById('stage');
     const viewport = getViewport();
 
@@ -266,6 +269,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     archive.addEventListener('mouseenter', () => {
         menu.classList.add('hover-active');
+    });
+
+    archive.addEventListener('mouseleave', () => {
+        menu.classList.remove('hover-active');
     });
 
     menu.addEventListener('mouseleave', () => {

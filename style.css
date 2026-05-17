@@ -211,9 +211,12 @@ body {
 .skip-intro-btn {
     position: absolute;
     bottom: 36px;
-    left: 50%;
-    transform: translateX(-50%);
+    left: 0;
+    right: 0;
+    margin: 0 auto;
+    width: fit-content;
     z-index: 1;
+    opacity: 0;
 }
 
 #people:hover {
