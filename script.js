@@ -484,46 +484,48 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchEl    = document.getElementById('search');
     const searchStage = document.getElementById('search-stage');
     const searchPanel = document.getElementById('search-panel');
-    const searchBg    = document.getElementById('search-bg');
     let searchActive  = false;
 
     async function playSearchTransition() {
         if (searchActive) return;
         searchActive = true;
 
-        // Show the search stage container (panel + bg are still off-screen)
+        // Measure exact distance so the right edge of "search" lands at x=0 (left border)
+        const rect   = searchEl.getBoundingClientRect();
+        const fallX  = -(rect.right + 6); // 6px past edge for clean wall contact
+        searchEl.style.setProperty('--search-fall-x', `${fallX}px`);
+
+        // Show search stage — panel is still translateY(110%), hidden below screen
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
-        // Phase 1 — search text slides left off screen; color turns white instantly
-        // Inline transition overrides the class-level "transition: color 300ms" so
-        // the color snap is immediate while only transform is eased.
-        searchEl.style.transition = 'transform 320ms cubic-bezier(0.55, 0, 0.45, 1)';
-        searchEl.style.color      = '#ffffff';
-        searchEl.style.textShadow = 'none';
-        searchEl.style.transform  = 'translateX(-200px)';
+        // Phase 1 — fall left with physics: acceleration, wall contact, micro-bounce
+        searchEl.classList.add('search-falling');
+        await new Promise(r => setTimeout(r, 480));
 
-        await new Promise(r => setTimeout(r, 340));
-
-        // Invisible snap: move the element below the viewport with no animation.
-        // Body is overflow:hidden so the element is not visible during this jump.
+        // Invisible snap to below viewport (body overflow:hidden keeps it unseen)
+        searchEl.classList.remove('search-falling');
         searchEl.style.transition = 'none';
         searchEl.style.transform  = 'translateY(150vh)';
-        void searchEl.offsetWidth; // force reflow to commit the above before next frame
+        void searchEl.offsetWidth; // flush reflow before next frame
 
-        // Phase 2 — search text, panel and bg all rise in perfect sync
-        menu.classList.add('search-active'); // elevate menu above the panel
+        // Phase 2 — search text and black panel rise in perfect sync
+        menu.classList.add('search-active');
 
-        const riseDuration = '620ms';
-        const riseEase     = 'cubic-bezier(0.19, 1, 0.22, 1)';
+        const RISE_MS   = 580;
+        const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
-        searchEl.style.transition = `transform ${riseDuration} ${riseEase}`;
+        searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchEl.style.transform  = 'translateY(0)';
 
-        searchPanel.style.transition = `transform ${riseDuration} ${riseEase}`;
+        searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateY(0)';
 
-        searchBg.style.animation = `searchBgBounce 800ms cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards`;
+        // Color turns white only once the element has settled at its final position
+        await new Promise(r => setTimeout(r, RISE_MS + 40));
+        searchEl.style.transition = 'color 220ms ease-out';
+        searchEl.style.color      = '#ffffff';
+        searchEl.style.textShadow = 'none';
     }
 
     searchEl.addEventListener('click', (e) => {

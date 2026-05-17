@@ -394,10 +394,19 @@ body {
 }
 
 /* ===== SEARCH TRANSITION ===== */
+
+/* Hover state for search item */
+#search:hover {
+    color: #424242;
+}
+
 #search-stage {
     position: fixed;
     inset: 0;
-    z-index: 12;
+    /* z-index 2: above menu (1) so the panel sits behind menu text.
+       menu.search-active (3) keeps menu text above the panel.
+       #people-stage (15) stays well above both — no conflict. */
+    z-index: 2;
     pointer-events: none;
     display: none;
 }
@@ -411,26 +420,25 @@ body {
     background: #000;
     transform: translateY(110%);
     will-change: transform;
+    pointer-events: none;
 }
 
-#search-bg {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    max-height: 100vh;
-    width: auto;
-    transform: translateY(110%);
-    will-change: transform;
+/* Fall-to-wall physics: element accelerates left, overshoots the edge,
+   micro-bounces, settles. --search-fall-x is set by JS at click time
+   to the exact distance needed to push the right edge past 0px. */
+@keyframes searchFall {
+    0%   { transform: translateX(0); }
+    60%  { transform: translateX(var(--search-fall-x)); }
+    76%  { transform: translateX(calc(var(--search-fall-x) + 14px)); }
+    90%  { transform: translateX(calc(var(--search-fall-x) - 3px)); }
+    100% { transform: translateX(var(--search-fall-x)); }
 }
 
-@keyframes searchBgBounce {
-    0%   { transform: translateY(110%); }
-    64%  { transform: translateY(-3%); }
-    82%  { transform: translateY(1.5%); }
-    100% { transform: translateY(0); }
+.search-falling {
+    animation: searchFall 460ms cubic-bezier(0.4, 0, 0.85, 0.3) forwards;
 }
 
-/* Elevate menu above search panel during search state */
+/* Elevate menu text above the black panel, but below people-stage (15) */
 .menu.search-active {
-    z-index: 20;
+    z-index: 3;
 }
