@@ -206,3 +206,25 @@ body {
 .menu.hover-active .menu-primary #archive {
     color: #424242;
 }
+
+/* People hover — falling names */
+#people-fall {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+    z-index: 9999;
+}
+
+.falling-name {
+    position: absolute;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    white-space: nowrap;
+    will-change: transform, opacity;
+    transform: translate3d(0, 0, 0);
+}

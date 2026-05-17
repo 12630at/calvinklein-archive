@@ -211,4 +211,96 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
+
+    // ===== PEOPLE HOVER — FALLING NAMES =====
+    const PEOPLE_NAMES = [
+        'Kate Moss', 'Brooke Shields', 'Mark Wahlberg', 'Christy Turlington',
+        'Bruce Weber', 'Steven Meisel', 'Richard Avedon', 'Fabien Baron',
+        'Raf Simons', 'Francisco Costa', 'Italo Zucchelli', 'Zack McCollum',
+        'Justin Bieber', 'Lara Stone', 'Eva Mendes', 'Jamie Dornan',
+        'Tyrone Lebon', 'Willy Vanderperre', 'Mert & Marcus', 'Patti Smith',
+        'Pharrell Williams', 'FKA Twigs', 'Solange', 'Bella Hadid',
+        'Kendall Jenner', 'A$AP Rocky', 'Jeremy Allen White', 'Jung Kook'
+    ];
+
+    const peopleEl = document.getElementById('people');
+    const fallLayer = document.getElementById('people-fall');
+    const GRAVITY = 1500;
+    const SPAWN_INTERVAL_MS = 80;
+    const FADE_DISTANCE = 600;
+    let spawnTimer = null;
+    let activeParticles = [];
+    let rafId = null;
+    let lastTs = 0;
+
+    function spawnName(name) {
+        const el = document.createElement('span');
+        el.className = 'falling-name';
+        el.textContent = name;
+        fallLayer.appendChild(el);
+
+        const rect = peopleEl.getBoundingClientRect();
+        const startX = rect.left + Math.random() * rect.width;
+        const startY = rect.bottom;
+        el.style.left = '0px';
+        el.style.top = '0px';
+
+        activeParticles.push({
+            el,
+            x: startX,
+            y: startY,
+            vy: 50 + Math.random() * 80,
+            vx: (Math.random() - 0.5) * 40,
+            startY
+        });
+    }
+
+    function tick(ts) {
+        if (!lastTs) lastTs = ts;
+        const dt = Math.min((ts - lastTs) / 1000, 0.05);
+        lastTs = ts;
+
+        const viewportH = window.innerHeight;
+        for (let i = activeParticles.length - 1; i >= 0; i--) {
+            const p = activeParticles[i];
+            p.vy += GRAVITY * dt;
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            const fallen = p.y - p.startY;
+            const opacity = Math.max(0, 1 - fallen / FADE_DISTANCE);
+            p.el.style.transform = `translate3d(${p.x}px, ${p.y}px, 0)`;
+            p.el.style.opacity = opacity.toFixed(3);
+            if (opacity <= 0 || p.y > viewportH + 50) {
+                p.el.remove();
+                activeParticles.splice(i, 1);
+            }
+        }
+
+        if (activeParticles.length > 0 || spawnTimer) {
+            rafId = requestAnimationFrame(tick);
+        } else {
+            rafId = null;
+            lastTs = 0;
+        }
+    }
+
+    function startCascade() {
+        if (spawnTimer) return;
+        let i = 0;
+        spawnName(PEOPLE_NAMES[i++ % PEOPLE_NAMES.length]);
+        spawnTimer = setInterval(() => {
+            spawnName(PEOPLE_NAMES[i++ % PEOPLE_NAMES.length]);
+        }, SPAWN_INTERVAL_MS);
+        if (!rafId) rafId = requestAnimationFrame(tick);
+    }
+
+    function stopCascade() {
+        if (spawnTimer) {
+            clearInterval(spawnTimer);
+            spawnTimer = null;
+        }
+    }
+
+    peopleEl.addEventListener('mouseenter', startCascade);
+    peopleEl.addEventListener('mouseleave', stopCascade);
 });
