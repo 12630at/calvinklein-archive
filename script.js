@@ -306,44 +306,57 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== PEOPLE CLICK — TRANSITION ANIMATION =====
 
-    // 24 names at 15° spacing — each appears when the bottle top sweeps past its angle
+    // 36 names at 10° spacing
     const ORBIT_ENTRIES = [
         { name: 'Kate Moss',          deg:   0 },
-        { name: 'Brooke Shields',     deg:  15 },
-        { name: 'Mark Wahlberg',      deg:  30 },
-        { name: 'Christy Turlington', deg:  45 },
+        { name: 'Brooke Shields',     deg:  10 },
+        { name: 'Mark Wahlberg',      deg:  20 },
+        { name: 'Christy Turlington', deg:  30 },
+        { name: 'Naomi Campbell',     deg:  40 },
+        { name: 'Cindy Crawford',     deg:  50 },
         { name: 'Bruce Weber',        deg:  60 },
-        { name: 'Steven Meisel',      deg:  75 },
-        { name: 'Richard Avedon',     deg:  90 },
-        { name: 'Fabien Baron',       deg: 105 },
+        { name: 'Steven Meisel',      deg:  70 },
+        { name: 'Richard Avedon',     deg:  80 },
+        { name: 'Fabien Baron',       deg:  90 },
+        { name: 'Mario Sorrenti',     deg: 100 },
+        { name: 'Glen Luchford',      deg: 110 },
         { name: 'Raf Simons',         deg: 120 },
-        { name: 'Francisco Costa',    deg: 135 },
-        { name: 'Italo Zucchelli',    deg: 150 },
-        { name: 'Justin Bieber',      deg: 165 },
-        { name: 'Lara Stone',         deg: 180 },
-        { name: 'Eva Mendes',         deg: 195 },
-        { name: 'Jamie Dornan',       deg: 210 },
-        { name: 'Tyrone Lebon',       deg: 225 },
-        { name: 'Willy Vanderperre',  deg: 240 },
-        { name: 'Mert & Marcus',      deg: 255 },
-        { name: 'Patti Smith',        deg: 270 },
-        { name: 'Pharrell Williams',  deg: 285 },
-        { name: 'FKA Twigs',          deg: 300 },
-        { name: 'Bella Hadid',        deg: 315 },
-        { name: "A$AP Rocky",         deg: 330 },
-        { name: 'Jeremy Allen White', deg: 345 },
+        { name: 'Francisco Costa',    deg: 130 },
+        { name: 'Italo Zucchelli',    deg: 140 },
+        { name: 'Justin Bieber',      deg: 150 },
+        { name: 'Lara Stone',         deg: 160 },
+        { name: 'Solange',            deg: 170 },
+        { name: 'Eva Mendes',         deg: 180 },
+        { name: 'Jamie Dornan',       deg: 190 },
+        { name: 'Tom Hintnaus',       deg: 200 },
+        { name: 'Tyrone Lebon',       deg: 210 },
+        { name: 'Willy Vanderperre',  deg: 220 },
+        { name: 'Mert & Marcus',      deg: 230 },
+        { name: 'Patti Smith',        deg: 240 },
+        { name: 'Kaia Gerber',        deg: 250 },
+        { name: 'Pharrell Williams',  deg: 260 },
+        { name: 'Jacob Elordi',       deg: 270 },
+        { name: 'FKA Twigs',          deg: 280 },
+        { name: 'Bella Hadid',        deg: 290 },
+        { name: 'Jennie Kim',         deg: 300 },
+        { name: "A$AP Rocky",         deg: 310 },
+        { name: 'Jung Kook',          deg: 320 },
+        { name: 'Bad Bunny',          deg: 330 },
+        { name: 'Kendall Jenner',     deg: 340 },
+        { name: 'Jeremy Allen White', deg: 350 },
     ];
 
-    const ORBIT_RADIUS    = 350;  // px — expanded ring around bottle
-    const ORBIT_SPEED_DPS = 144;  // degrees/second = 2.5 s per full rotation
-    const ORBIT_TURNS     = 3;    // animation stops only after this many complete rotations
+    const ORBIT_RADIUS    = 350;
+    const ORBIT_SPEED_DPS = 144;  // 2.5 s per rotation
+    const ORBIT_TURNS     = 3;
     const ORBIT_TOTAL_DEG = 360 * ORBIT_TURNS;
+    const TRAIL_IN_DEG    = 8;    // degrees to reach full opacity
+    const TRAIL_SPAN_DEG  = 65;   // degrees until fully faded (~5-6 names visible at once)
 
     function buildOrbitSlots(orbitEl) {
         const toRad = d => d * Math.PI / 180;
         return ORBIT_ENTRIES.map(entry => {
             const r = toRad(entry.deg);
-            // 0° = top, clockwise: x = sin, y = –cos
             const x = Math.round(Math.sin(r) * ORBIT_RADIUS);
             const y = Math.round(-Math.cos(r) * ORBIT_RADIUS);
 
@@ -354,6 +367,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const nameEl = document.createElement('span');
             nameEl.className = 'orbit-name';
             nameEl.textContent = entry.name.toUpperCase();
+            nameEl.style.opacity = '0';
+            nameEl.style.filter  = 'blur(4px)';
 
             slot.appendChild(nameEl);
             orbitEl.appendChild(slot);
@@ -361,36 +376,41 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Drives the bottle rotation via rAF.
-    // Resolves only when totalDeg reaches exactly ORBIT_TOTAL_DEG (multiple of 360 → back to 0°).
-    // Triggers each orbit name the instant the bottle top sweeps past its angle.
     function runOrbitRotation(bottle, nameEls) {
         return new Promise(resolve => {
-            let totalDeg = 0;
-            let prevTs   = null;
-            // nextTrigger[i] = soglia totalDeg a cui il nome i scatta la volta successiva
-        const nextTrigger = ORBIT_ENTRIES.map(e => e.deg);
+            let totalDeg  = 0;
+            let prevTs    = null;
+            // lastTrigger[i]: totalDeg when name i was last swept — init far past so age >> TRAIL_SPAN → opacity 0
+            const lastTrigger = ORBIT_ENTRIES.map(() => -9999);
+            const nextTrigger = ORBIT_ENTRIES.map(e => e.deg);
 
             function frame(ts) {
-                // Skip first frame to get a clean dt on subsequent frames
                 if (prevTs === null) { prevTs = ts; requestAnimationFrame(frame); return; }
 
                 const dt = Math.min((ts - prevTs) / 1000, 0.05);
                 prevTs = ts;
                 totalDeg += ORBIT_SPEED_DPS * dt;
 
-                // Re-trigger ogni nome a ogni giro, sincronizzato con la cima del flacone
                 for (let i = 0; i < ORBIT_ENTRIES.length; i++) {
                     if (totalDeg >= nextTrigger[i]) {
+                        lastTrigger[i] = nextTrigger[i];
                         nextTrigger[i] += 360;
-                        const el = nameEls[i];
-                        el.classList.remove('flash-in');
-                        void el.offsetWidth;
-                        el.classList.add('flash-in');
                     }
+
+                    // Trail curve: quick rise, linear fade
+                    const age = totalDeg - lastTrigger[i];
+                    let opacity;
+                    if (age <= 0 || age >= TRAIL_SPAN_DEG) {
+                        opacity = 0;
+                    } else if (age < TRAIL_IN_DEG) {
+                        opacity = age / TRAIL_IN_DEG;
+                    } else {
+                        opacity = 1 - (age - TRAIL_IN_DEG) / (TRAIL_SPAN_DEG - TRAIL_IN_DEG);
+                    }
+                    nameEls[i].style.opacity = opacity.toFixed(3);
+                    nameEls[i].style.filter  = `blur(${((1 - opacity) * 3).toFixed(1)}px)`;
                 }
 
-                // Display angle: clamp to 0° on the final frame so it lands exactly
                 const displayDeg = totalDeg >= ORBIT_TOTAL_DEG ? 0 : totalDeg % 360;
                 bottle.style.transform = `rotate(${displayDeg}deg)`;
 
@@ -417,27 +437,24 @@ document.addEventListener('DOMContentLoaded', () => {
         peopleStage.style.opacity = '1';
 
         await sleep(500);
-
         bottle.style.opacity = '1';
-
         await sleep(600);
 
-        // Position all name slots (invisible until swept by the bottle top)
         const nameEls = buildOrbitSlots(orbitEl);
 
-        // Rotate — resolves only after ORBIT_TURNS complete rotations, at exactly 0°
+        // Drives rotation + trail opacity per frame; resolves at exactly 0° after ORBIT_TURNS rotations
         await runOrbitRotation(bottle, nameEls);
 
-        // Bottle is back at 0° — flash out all names simultaneously
+        // Trail has naturally faded; ensure all names are invisible before cleanup
         for (const el of nameEls) {
-            el.classList.remove('flash-in');
-            el.classList.add('flash-out');
+            el.style.opacity = '0';
+            el.style.filter  = 'blur(4px)';
         }
 
-        await sleep(900);
+        await sleep(300);
 
         bottle.style.transition = 'opacity 600ms ease-in-out';
-        bottle.style.opacity = '0';
+        bottle.style.opacity    = '0';
 
         await sleep(700);
 
