@@ -12,7 +12,14 @@ const TEXT_LINES = [
     "che ha ridefinito la nostra cultura contemporanea."
 ];
 
-const FINAL_FADE_MS = 800;
+const FINAL_FADE_MS = 1500;
+
+// Configurazione semplice per gestire le velocità dell'animazione
+const ANIM_CONFIG = {
+    wordEntranceDelayMs: 250,     // Velocità con cui compaiono le singole parole di una frase
+    lineReadDurationMs: 800,      // Tempo di permanenza della frase intera
+    lineFadeOutDelayMs: 600,       // Ritardo (overlap): la vecchia frase resta visibile mentre entra la nuova
+};
 
 function sleep(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
@@ -22,37 +29,10 @@ function splitEntry(entry) {
     return entry.split(/\s+/).filter(Boolean);
 }
 
-let measureCtx = null;
 let fontSize = 0;
-
-function measure(text) {
-    if (!measureCtx) {
-        measureCtx = document.createElement('canvas').getContext('2d');
-    }
-    measureCtx.font = `350 ${fontSize}px Klein, sans-serif`;
-
-    const upperText = text.toUpperCase();
-    let width = measureCtx.measureText(upperText).width;
-
-    const letterSpacing = window.innerWidth <= 600 ? -0.24 : -0.36;
-    width += (upperText.length * letterSpacing);
-
-    return width + 2;
-}
 
 function getViewport() {
     return { w: window.innerWidth, h: window.innerHeight };
-}
-
-function createSpan(p) {
-    const span = document.createElement('span');
-    span.className = 'word';
-    span.textContent = p.word;
-    span.style.left = p.x + 'px';
-    span.style.top = p.y + 'px';
-    span.style.letterSpacing = window.innerWidth <= 600 ? '-0.02em' : '-0.04em';
-    span.style.fontSize = `${fontSize}px`;
-    return span;
 }
 
 let isPlaying = false;
@@ -66,78 +46,99 @@ async function play() {
     const stage = document.getElementById('stage');
     const viewport = getViewport();
 
-    const lh = 1.6;
-
-    // Calcola una dimensione del carattere leggibile che si adatti agli schermi
+    // Dimensione del testo come all'inizio
     fontSize = Math.max(14, Math.min(viewport.w * 0.025, 14));
 
-    // Calcola l'altezza totale per centrare in blocco il paragrafo verticalmente
-    let totalHeight = TEXT_LINES.length * (fontSize * lh);
-    let currentY = (viewport.h - totalHeight) / 2;
-    if (currentY < viewport.h * 0.05) currentY = viewport.h * 0.05;
+    const lh = 1.6;
 
-    let previousSpans = [];
+    // Creiamo il contenitore del paragrafo
+    const p = document.createElement('p');
+    p.style.position = 'absolute';
+    p.style.left = '50%';
+    // Allineando il fondo del paragrafo al centro dello schermo e spingendolo in giù
+    // di mezza altezza-riga, l'ultima riga atterrerà ESATTAMENTE al centro verticale.
+    p.style.bottom = '50%';
+    p.style.transform = `translate(-50%, ${(fontSize * lh) / 2}px)`;
+    p.style.width = '50%';
+    p.style.maxWidth = '400px';
+    p.style.textAlign = 'center'; // Questo garantisce l'allineamento orizzontale centrale
+    p.style.margin = '0';
+    p.style.lineHeight = lh;
 
+    stage.appendChild(p);
+
+    const allSentencesSpans = [];
+
+    // Inseriamo tutte le parole nel paragrafo invisibile
     for (let i = 0; i < TEXT_LINES.length; i++) {
         const line = TEXT_LINES[i];
         const words = splitEntry(line);
-        const spaceW = measure(' ');
+        const sentenceSpans = [];
 
-        let lineWidth = 0;
-        const wordWidths = [];
-        for (const word of words) {
-            const w = measure(word.toUpperCase()); // Misuriamo sul maiuscolo come da stile
-            wordWidths.push(w);
-            lineWidth += w;
+        // Forziamo l'ultima frase ad andare a capo da sola, per isolarla come vera "ultima riga"
+        if (i === TEXT_LINES.length - 1) {
+            p.appendChild(document.createElement('br'));
         }
-        lineWidth += spaceW * (words.length - 1);
 
-        // Centratura orizzontale perfetta per ciascun rigo
-        let curX = (viewport.w - lineWidth) / 2;
-
-        const placed = [];
         for (let j = 0; j < words.length; j++) {
-            placed.push({ word: words[j].toUpperCase(), x: curX, y: currentY });
-            curX += wordWidths[j] + spaceW;
+            const span = document.createElement('span');
+            span.className = 'word';
+            span.textContent = words[j].toUpperCase();
+            span.style.fontSize = `${fontSize}px`;
+            span.style.letterSpacing = window.innerWidth <= 600 ? '-0.02em' : '-0.04em';
+
+            p.appendChild(span);
+            // Spazio testuale
+            p.appendChild(document.createTextNode(' '));
+
+            sentenceSpans.push(span);
         }
-
-        const currentSpans = placed.map(createSpan);
-        currentSpans.forEach(s => stage.appendChild(s));
-
-        // Fade out della riga precedente
-        if (previousSpans.length > 0) {
-            for (let j = 0; j < previousSpans.length; j++) {
-                previousSpans[j].classList.remove('flash-in');
-                previousSpans[j].classList.add('flash-out');
-            }
-        }
-
-        // Fade in parola per parola della riga corrente
-        for (let j = 0; j < currentSpans.length; j++) {
-            currentSpans[j].classList.add('flash-in');
-            await sleep(35); // Entrata veloce
-        }
-
-        // Tempo di lettura del verso
-        await sleep(1200);
-
-        previousSpans = currentSpans;
-        currentY += (fontSize * lh);
+        allSentencesSpans.push(sentenceSpans);
     }
 
-    // Scomparsa dell'ultimo rigo
-    if (previousSpans.length > 0) {
-        for (let j = 0; j < previousSpans.length; j++) {
-            previousSpans[j].classList.remove('flash-in');
-            previousSpans[j].classList.add('flash-out');
+    let previousSentenceSpans = null;
+
+    // Animazione per singola frase
+    for (let i = 0; i < allSentencesSpans.length; i++) {
+        const currentSentenceSpans = allSentencesSpans[i];
+
+        // Fade out della frase precedente con ritardo (overlap)
+        if (previousSentenceSpans) {
+            const spansToFade = previousSentenceSpans;
+            setTimeout(() => {
+                for (let span of spansToFade) {
+                    span.classList.remove('flash-in');
+                    span.classList.add('flash-out');
+                }
+            }, ANIM_CONFIG.lineFadeOutDelayMs);
+        }
+
+        // L'animazione in entrata avviene però su singola parola, una dopo l'altra
+        for (let j = 0; j < currentSentenceSpans.length; j++) {
+            currentSentenceSpans[j].classList.add('flash-in');
+            await sleep(ANIM_CONFIG.wordEntranceDelayMs);
+        }
+
+        // Intervallo di lettura dell'intera frase
+        await sleep(ANIM_CONFIG.lineReadDurationMs);
+
+        previousSentenceSpans = currentSentenceSpans;
+    }
+
+    // Scomparsa dell'ultima frase
+    if (previousSentenceSpans) {
+        for (let span of previousSentenceSpans) {
+            span.classList.remove('flash-in');
+            span.classList.add('flash-out');
         }
     }
 
-    await sleep(600);
+    await sleep(900);
+    p.remove();
 
     // Apparizione del logo SVG finale
     const finalLogo = document.createElement('img');
-    finalLogo.src = 'https://upload.wikimedia.org/wikipedia/commons/a/a6/Calvin_klein_logo_web23.svg';
+    finalLogo.src = 'assets/logo_thearchive.svg';
     finalLogo.style.position = 'absolute';
     finalLogo.style.left = '50%';
     finalLogo.style.top = '50%';

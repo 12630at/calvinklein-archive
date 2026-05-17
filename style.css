@@ -56,7 +56,9 @@ body {
     overflow: hidden;
     background-color: #ffffff;
     font-family: 'Klein', sans-serif;
-    text-rendering: geometricPrecision;
+    text-rendering: auto; /* Changed for a softer, Flash-like look */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     font-kerning: normal;
     font-feature-settings: "kern" 1, "liga" 1;
 }
@@ -75,14 +77,16 @@ body {
    state are the first frame of the entrance tween — the @keyframes
    below resolve them away into the crisp Figma look. */
 .word {
-    position: absolute;
+    display: inline-block; /* Changed from absolute to flow inside a paragraph */
     color: #000000;
     font-family: 'Klein', sans-serif;
-    font-size: 0.8vw;
     font-weight: 350;
     letter-spacing: -0.36px;
     text-transform: uppercase;
     white-space: nowrap;
+    
+    /* Adobe Flash 2000s soft anti-aliasing effect, reduced */
+    text-shadow: 0 0 1px rgba(0,0,0,0.15);
 
     opacity: 0;
     transform: translateY(8px) scale(0.92);
@@ -94,20 +98,20 @@ body {
 /* Flash-style entrance: strong ease-out "vector tween" — fast at the start,
    gently settles. Motion blur clears as the word resolves into place. */
 .word.flash-in {
-    animation: flashIn 760ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+    animation: flashIn 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
 }
 
 /* Flash-style exit: opposite curve. The word drifts up, scales out
    slightly, and dissolves under a motion blur — classic timeline tween. */
 .word.flash-out {
-    animation: flashOut 900ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+    animation: flashOut 1500ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
 }
 
 @keyframes flashIn {
     0% {
         opacity: 0;
-        transform: translateY(8px) scale(0.92);
-        filter: blur(4px);
+        transform: translateY(35vh) scale(0.92); /* Fluttua dal basso dello schermo */
+        filter: blur(8px);
     }
 
     55% {
@@ -195,4 +199,8 @@ body {
 
 .menu.hover-active .menu-primary #archive {
     color: #424242;
+}
+
+.menu-item:hover {
+    color: #000000;
 }
