@@ -258,15 +258,7 @@ body {
     position: relative;
     z-index: 1;
     transform-origin: center center;
-}
-
-#people-bottle.rotating {
-    animation: bottleRotate 10s linear infinite;
-}
-
-@keyframes bottleRotate {
-    from { transform: rotate(0deg); }
-    to   { transform: rotate(360deg); }
+    /* rotation driven by requestAnimationFrame in script.js */
 }
 
 .orbit-slot {

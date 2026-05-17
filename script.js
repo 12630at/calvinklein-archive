@@ -306,17 +306,107 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ===== PEOPLE CLICK — TRANSITION ANIMATION =====
 
-    const ORBIT_NAMES = [
-        'Kate Moss', 'Brooke Shields', 'Mark Wahlberg', 'Christy Turlington',
-        'Bruce Weber', 'Steven Meisel', 'Fabien Baron', 'Raf Simons'
+    // 24 names at 15° spacing — each appears when the bottle top sweeps past its angle
+    const ORBIT_ENTRIES = [
+        { name: 'Kate Moss',          deg:   0 },
+        { name: 'Brooke Shields',     deg:  15 },
+        { name: 'Mark Wahlberg',      deg:  30 },
+        { name: 'Christy Turlington', deg:  45 },
+        { name: 'Bruce Weber',        deg:  60 },
+        { name: 'Steven Meisel',      deg:  75 },
+        { name: 'Richard Avedon',     deg:  90 },
+        { name: 'Fabien Baron',       deg: 105 },
+        { name: 'Raf Simons',         deg: 120 },
+        { name: 'Francisco Costa',    deg: 135 },
+        { name: 'Italo Zucchelli',    deg: 150 },
+        { name: 'Justin Bieber',      deg: 165 },
+        { name: 'Lara Stone',         deg: 180 },
+        { name: 'Eva Mendes',         deg: 195 },
+        { name: 'Jamie Dornan',       deg: 210 },
+        { name: 'Tyrone Lebon',       deg: 225 },
+        { name: 'Willy Vanderperre',  deg: 240 },
+        { name: 'Mert & Marcus',      deg: 255 },
+        { name: 'Patti Smith',        deg: 270 },
+        { name: 'Pharrell Williams',  deg: 285 },
+        { name: 'FKA Twigs',          deg: 300 },
+        { name: 'Bella Hadid',        deg: 315 },
+        { name: "A$AP Rocky",         deg: 330 },
+        { name: 'Jeremy Allen White', deg: 345 },
     ];
-    const ORBIT_RADIUS = 230;
+
+    const ORBIT_RADIUS    = 350;  // px — expanded ring around bottle
+    const ORBIT_SPEED_DPS = 144;  // degrees/second = 2.5 s per full rotation
+    const ORBIT_TURNS     = 3;    // animation stops only after this many complete rotations
+    const ORBIT_TOTAL_DEG = 360 * ORBIT_TURNS;
+
+    function buildOrbitSlots(orbitEl) {
+        const toRad = d => d * Math.PI / 180;
+        return ORBIT_ENTRIES.map(entry => {
+            const r = toRad(entry.deg);
+            // 0° = top, clockwise: x = sin, y = –cos
+            const x = Math.round(Math.sin(r) * ORBIT_RADIUS);
+            const y = Math.round(-Math.cos(r) * ORBIT_RADIUS);
+
+            const slot = document.createElement('div');
+            slot.className = 'orbit-slot';
+            slot.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+
+            const nameEl = document.createElement('span');
+            nameEl.className = 'orbit-name';
+            nameEl.textContent = entry.name.toUpperCase();
+
+            slot.appendChild(nameEl);
+            orbitEl.appendChild(slot);
+            return nameEl;
+        });
+    }
+
+    // Drives the bottle rotation via rAF.
+    // Resolves only when totalDeg reaches exactly ORBIT_TOTAL_DEG (multiple of 360 → back to 0°).
+    // Triggers each orbit name the instant the bottle top sweeps past its angle.
+    function runOrbitRotation(bottle, nameEls) {
+        return new Promise(resolve => {
+            let totalDeg = 0;
+            let prevTs   = null;
+            const triggered = new Set();
+
+            function frame(ts) {
+                // Skip first frame to get a clean dt on subsequent frames
+                if (prevTs === null) { prevTs = ts; requestAnimationFrame(frame); return; }
+
+                const dt = Math.min((ts - prevTs) / 1000, 0.05);
+                prevTs = ts;
+                totalDeg += ORBIT_SPEED_DPS * dt;
+
+                // Trigger each name exactly once, when bottle top first sweeps past its angle
+                for (let i = 0; i < ORBIT_ENTRIES.length; i++) {
+                    if (!triggered.has(i) && totalDeg >= ORBIT_ENTRIES[i].deg) {
+                        triggered.add(i);
+                        void nameEls[i].offsetWidth;
+                        nameEls[i].classList.add('flash-in');
+                    }
+                }
+
+                // Display angle: clamp to 0° on the final frame so it lands exactly
+                const displayDeg = totalDeg >= ORBIT_TOTAL_DEG ? 0 : totalDeg % 360;
+                bottle.style.transform = `rotate(${displayDeg}deg)`;
+
+                if (totalDeg < ORBIT_TOTAL_DEG) {
+                    requestAnimationFrame(frame);
+                } else {
+                    resolve();
+                }
+            }
+
+            requestAnimationFrame(frame);
+        });
+    }
 
     async function playPeopleTransition() {
         const peopleStage = document.getElementById('people-stage');
-        const bottle     = document.getElementById('people-bottle');
-        const orbitEl    = document.getElementById('people-orbit');
-        const contentEl  = document.getElementById('people-content');
+        const bottle      = document.getElementById('people-bottle');
+        const orbitEl     = document.getElementById('people-orbit');
+        const contentEl   = document.getElementById('people-content');
 
         peopleStage.removeAttribute('aria-hidden');
         peopleStage.style.display = 'block';
@@ -326,38 +416,16 @@ document.addEventListener('DOMContentLoaded', () => {
         await sleep(500);
 
         bottle.style.opacity = '1';
-        bottle.classList.add('rotating');
 
-        await sleep(900);
+        await sleep(600);
 
-        // Spawn names in orbit, one by one
-        const nameEls = [];
-        for (let i = 0; i < ORBIT_NAMES.length; i++) {
-            const angle = (i / ORBIT_NAMES.length) * 2 * Math.PI - Math.PI / 2;
-            const x = Math.round(Math.cos(angle) * ORBIT_RADIUS);
-            const y = Math.round(Math.sin(angle) * ORBIT_RADIUS);
+        // Position all name slots (invisible until swept by the bottle top)
+        const nameEls = buildOrbitSlots(orbitEl);
 
-            const slot = document.createElement('div');
-            slot.className = 'orbit-slot';
-            slot.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+        // Rotate — resolves only after ORBIT_TURNS complete rotations, at exactly 0°
+        await runOrbitRotation(bottle, nameEls);
 
-            const nameEl = document.createElement('span');
-            nameEl.className = 'orbit-name';
-            nameEl.textContent = ORBIT_NAMES[i].toUpperCase();
-
-            slot.appendChild(nameEl);
-            orbitEl.appendChild(slot);
-            nameEls.push(nameEl);
-
-            void nameEl.offsetWidth;
-            nameEl.classList.add('flash-in');
-
-            await sleep(300);
-        }
-
-        await sleep(1800);
-
-        // Flash out all orbit names simultaneously
+        // Bottle is back at 0° — flash out all names simultaneously
         for (const el of nameEls) {
             el.classList.remove('flash-in');
             el.classList.add('flash-out');
@@ -365,21 +433,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await sleep(900);
 
+        bottle.style.transition = 'opacity 600ms ease-in-out';
         bottle.style.opacity = '0';
 
-        await sleep(600);
+        await sleep(700);
 
-        // Clean up orbit
         orbitEl.querySelectorAll('.orbit-slot').forEach(s => s.remove());
-        bottle.classList.remove('rotating');
+        bottle.style.transform  = '';
+        bottle.style.transition = '';
+        bottle.style.opacity    = '0';
 
-        // Reveal people page content
         contentEl.classList.add('visible');
     }
 
     async function closePeopleStage() {
         const peopleStage = document.getElementById('people-stage');
-        const contentEl  = document.getElementById('people-content');
+        const contentEl   = document.getElementById('people-content');
 
         contentEl.classList.remove('visible');
         await sleep(400);
