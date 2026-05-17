@@ -368,7 +368,8 @@ document.addEventListener('DOMContentLoaded', () => {
         return new Promise(resolve => {
             let totalDeg = 0;
             let prevTs   = null;
-            const triggered = new Set();
+            // nextTrigger[i] = soglia totalDeg a cui il nome i scatta la volta successiva
+        const nextTrigger = ORBIT_ENTRIES.map(e => e.deg);
 
             function frame(ts) {
                 // Skip first frame to get a clean dt on subsequent frames
@@ -378,12 +379,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 prevTs = ts;
                 totalDeg += ORBIT_SPEED_DPS * dt;
 
-                // Trigger each name exactly once, when bottle top first sweeps past its angle
+                // Re-trigger ogni nome a ogni giro, sincronizzato con la cima del flacone
                 for (let i = 0; i < ORBIT_ENTRIES.length; i++) {
-                    if (!triggered.has(i) && totalDeg >= ORBIT_ENTRIES[i].deg) {
-                        triggered.add(i);
-                        void nameEls[i].offsetWidth;
-                        nameEls[i].classList.add('flash-in');
+                    if (totalDeg >= nextTrigger[i]) {
+                        nextTrigger[i] += 360;
+                        const el = nameEls[i];
+                        el.classList.remove('flash-in');
+                        void el.offsetWidth;
+                        el.classList.add('flash-in');
                     }
                 }
 
