@@ -194,7 +194,7 @@ body {
     text-transform: uppercase;
     text-rendering: geometricPrecision;
     letter-spacing: -0.35px;
-    line-height: 1;
+    line-height: 8px;
     color: #bbbdc0;
     text-decoration: none;
     display: block;
@@ -496,7 +496,8 @@ body {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: -0.35px;
-    line-height: 1;
+    line-height: 8px;
+    padding: 4px 0;
     color: #bbbdc0;
     cursor: pointer;
     white-space: nowrap;
