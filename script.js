@@ -663,16 +663,15 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Input + back button activation ---
 
     function activateSearchInput(rect) {
-        const PAD_V  = 5;
-        const HALF_W = Math.round(window.innerWidth / 2);
+        const PAD_V     = 5;
+        const INPUT_PAD = 8;
+        const HALF_W    = Math.round(window.innerWidth / 2);
 
         // Hide the original label AND disable its pointer events.
-        // visibility:hidden keeps layout intact but still receives pointer events
-        // by default — pointer-events:none passes clicks through to the input below.
         searchEl.style.visibility    = 'hidden';
         searchEl.style.pointerEvents = 'none';
 
-        // Input overlay at the exact position of the search label
+        // Input overlay centered on the search label, with extra vertical hit area
         const input = document.createElement('input');
         input.id           = 'search-input';
         input.type         = 'text';
@@ -681,9 +680,9 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.assign(input.style, {
             position:      'fixed',
             left:          `${rect.left}px`,
-            top:           `${rect.top}px`,
+            top:           `${rect.top - INPUT_PAD}px`,
             width:         `${HALF_W - rect.left}px`,
-            height:        `${rect.height}px`,
+            height:        `${rect.height + INPUT_PAD * 2}px`,
             background:    'transparent',
             border:        'none',
             outline:       'none',
@@ -694,7 +693,8 @@ document.addEventListener('DOMContentLoaded', () => {
             letterSpacing: '-0.35px',
             color:         '#ffffff',
             caretColor:    '#ffffff',
-            padding:       '0',
+            padding:       `${INPUT_PAD}px 0`,
+            boxSizing:     'border-box',
             zIndex:        '100',
             WebkitFontSmoothing: 'antialiased',
         });
@@ -711,20 +711,16 @@ document.addEventListener('DOMContentLoaded', () => {
         searchStage.appendChild(input);
 
         // Clicking anywhere on the black panel re-focuses the input.
-        // The panel covers the full left half; the input only covers the text area.
         searchPanel.style.pointerEvents = 'auto';
         searchPanel.style.cursor        = 'text';
         searchPanel._focusInput = () => document.getElementById('search-input')?.focus();
         searchPanel.addEventListener('click', searchPanel._focusInput);
 
         // Position the results container just below the bar.
-        // The back button lives INSIDE this container as the last child,
-        // so it flows naturally: alone when no results, after the list when results exist.
         const barBottom = rect.top + rect.height + PAD_V;
         searchResultsEl.style.top  = `${barBottom + 12}px`;
         searchResultsEl.style.left = `${rect.left}px`;
 
-        // Initialise: render just the back button (query is empty at activation)
         showResults('');
 
         requestAnimationFrame(() => input.focus());
