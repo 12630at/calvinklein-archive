@@ -56,7 +56,8 @@ body {
     overflow: hidden;
     background-color: #ffffff;
     font-family: 'Klein', sans-serif;
-    text-rendering: auto; /* Changed for a softer, Flash-like look */
+    text-rendering: auto;
+    /* Changed for a softer, Flash-like look */
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-kerning: normal;
@@ -77,13 +78,14 @@ body {
    state are the first frame of the entrance tween — the @keyframes
    below resolve them away into the crisp Figma look. */
 .word {
-    display: inline-block; /* Changed from absolute to flow inside a paragraph */
+    display: inline-block;
+    /* Changed from absolute to flow inside a paragraph */
     font-family: 'Klein', sans-serif;
     font-weight: 350;
     letter-spacing: -0.36px;
     text-transform: uppercase;
     white-space: nowrap;
-    
+
     /* 2000s soft text aesthetic */
     color: rgba(40, 40, 40, 0.85);
     text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
@@ -112,7 +114,8 @@ body {
 @keyframes flashIn {
     0% {
         opacity: 0;
-        transform: translateY(35vh) scale(0.92); /* Fluttua dal basso dello schermo */
+        transform: translateY(35vh) scale(0.92);
+        /* Fluttua dal basso dello schermo */
         filter: blur(8px);
     }
 
@@ -191,7 +194,7 @@ body {
     text-transform: uppercase;
     text-rendering: geometricPrecision;
     letter-spacing: -0.35px;
-    line-height: 12px;
+    line-height: 10px;
     color: #bbbdc0;
     text-decoration: none;
     display: block;
@@ -289,14 +292,35 @@ body {
 }
 
 @keyframes orbitIn {
-    0%   { opacity: 0; transform: scale(0.88); filter: blur(8px); }
-    55%  { opacity: 1; }
-    100% { opacity: 1; transform: scale(1);    filter: blur(0); }
+    0% {
+        opacity: 0;
+        transform: scale(0.88);
+        filter: blur(8px);
+    }
+
+    55% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+    }
 }
 
 @keyframes orbitOut {
-    0%   { opacity: 1; transform: scale(1);    filter: blur(0); }
-    100% { opacity: 0; transform: scale(1.05); filter: blur(6px); }
+    0% {
+        opacity: 1;
+        transform: scale(1);
+        filter: blur(0);
+    }
+
+    100% {
+        opacity: 0;
+        transform: scale(1.05);
+        filter: blur(6px);
+    }
 }
 
 /* People page content */
@@ -420,11 +444,25 @@ body {
 
 /* Fall-to-wall physics: --search-fall-x set by JS at click time */
 @keyframes searchFall {
-    0%   { transform: translateX(0); }
-    60%  { transform: translateX(var(--search-fall-x)); }
-    76%  { transform: translateX(calc(var(--search-fall-x) + 14px)); }
-    90%  { transform: translateX(calc(var(--search-fall-x) - 3px)); }
-    100% { transform: translateX(var(--search-fall-x)); }
+    0% {
+        transform: translateX(0);
+    }
+
+    60% {
+        transform: translateX(var(--search-fall-x));
+    }
+
+    76% {
+        transform: translateX(calc(var(--search-fall-x) + 14px));
+    }
+
+    90% {
+        transform: translateX(calc(var(--search-fall-x) - 3px));
+    }
+
+    100% {
+        transform: translateX(var(--search-fall-x));
+    }
 }
 
 .search-falling {
@@ -455,7 +493,7 @@ body {
 .search-result {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
     letter-spacing: -0.35px;
     line-height: 12px;
