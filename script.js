@@ -997,7 +997,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Pseudo-random deterministic order → mixes portrait/landscape in every row
-        const ordered = images.slice().sort((a, b) => _hash(a.path + 's') - _hash(b.path + 's'));
+        const ordered = images.slice().sort(() => Math.random() - 0.5);
 
         const colY     = new Array(cols).fill(0);
         const colItems = Array.from({ length: cols }, () => []);
@@ -1253,24 +1253,16 @@ document.addEventListener('DOMContentLoaded', () => {
             archiveEmpty.classList.toggle('visible', items.length === 0);
             syncMounted();
             const fresh = Array.from(mounted.values());
-            gsap.set(fresh, {
-                x:        () => (Math.random() - 0.5) * 1600,
-                y:        () => (Math.random() - 0.5) * 1200 - 150,
-                rotation: () => (Math.random() - 0.5) * 200,
-                scale:    0,
-                opacity:  0,
-            });
+            gsap.set(fresh, { scale: 0, opacity: 0 });
         });
 
         tl.add(() => {
             const fresh = Array.from(mounted.values());
             if (!fresh.length) return;
             gsap.to(fresh, {
-                x: 0, y: 0,
-                rotation: (i, el) => parseFloat(el.dataset.rot) || 0,
                 scale: 1, opacity: 1,
                 duration: 0.9, ease: 'back.out(1.6)',
-                stagger: { amount: 0.55, from: 'random' },
+                stagger: { amount: 0.55, from: 'center' },
             });
         }, '+=0.05');
 
@@ -1321,27 +1313,19 @@ document.addEventListener('DOMContentLoaded', () => {
             archiveEmpty.classList.toggle('visible', items.length === 0);
             syncMounted();
             const fresh = Array.from(mounted.values());
-            gsap.set(fresh, {
-                x:        () => (Math.random() - 0.5) * 1600,
-                y:        () => (Math.random() - 0.5) * 1200 - 150,
-                rotation: () => (Math.random() - 0.5) * 200,
-                scale:    0,
-                opacity:  0,
-            });
+            gsap.set(fresh, { scale: 0, opacity: 0 });
         });
 
-        // 3. Drop in with bounce from random scatter
+        // 3. Drop in with bounce
         tl.add(() => {
             const fresh = Array.from(mounted.values());
             if (!fresh.length) return;
             gsap.to(fresh, {
-                x: 0, y: 0,
-                rotation: (i, el) => parseFloat(el.dataset.rot) || 0,
                 scale:    1,
                 opacity:  1,
                 duration: 0.9,
                 ease:     'back.out(1.6)',
-                stagger:  { amount: 0.55, from: 'random' },
+                stagger:  { amount: 0.55, from: 'center' },
             });
         }, '+=0.05');
 
@@ -1421,20 +1405,12 @@ document.addEventListener('DOMContentLoaded', () => {
         morphMenuToArchive();
 
         const fresh = Array.from(mounted.values());
-        gsap.set(fresh, {
-            x:        () => (Math.random() - 0.5) * 1600,
-            y:        () => (Math.random() - 0.5) * 1200 - 150,
-            rotation: () => (Math.random() - 0.5) * 200,
-            scale:    0,
-            opacity:  0,
-        });
+        gsap.set(fresh, { scale: 0.5, opacity: 0 });
         gsap.set(archiveCanvas, { opacity: 1 });
         gsap.to(fresh, {
-            x: 0, y: 0,
-            rotation: (i, el) => parseFloat(el.dataset.rot) || 0,
             scale: 1, opacity: 1,
             duration: 0.95, ease: 'back.out(1.4)',
-            stagger: { amount: 0.7, from: 'random' },
+            stagger: { amount: 0.6, from: 'center' },
             delay: 0.25,
         });
     }
