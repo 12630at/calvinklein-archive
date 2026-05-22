@@ -1724,4 +1724,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemViewOpen)      { closeItemView(); }
         else if (archiveOpen)  { closeArchive(); }
     });
+
+    // Preload archive manifest in background so search is always up to date
+    loadArchiveManifest().then(enrichSearchWithArchive).catch(() => {});
 });
