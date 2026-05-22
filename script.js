@@ -557,11 +557,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterResults(query) {
         const q = query.toLowerCase().trim();
         if (!q) return [];
-        return SEARCH_DATA.filter(item => {
-            if (item.type === 'archive' && !archiveOpen) return false;
-            if (item.type !== 'archive' && archiveOpen) return false;
-            return item.text.toLowerCase().includes(q);
-        }).slice(0, 6);
+        return SEARCH_DATA.filter(item => item.text.toLowerCase().includes(q)).slice(0, 8);
     }
 
     function showResults(query) {
@@ -668,28 +664,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function reverseSearchAndGoToArchiveItem(item) {
-        reverseSearch(() => {
-            if (!archiveOpen || !items.length) return;
-            const target = items.find(it => it.manifest && it.manifest.campaignKey === item.manifest.campaignKey);
-            if (!target) return;
-            const vw = window.innerWidth, vh = window.innerHeight;
-            const destX = vw / 2 - target.x - target.w / 2;
-            const destY = vh / 2 - target.y - target.h / 2;
-            if (momentumTween) { momentumTween.kill(); momentumTween = null; }
-            gsap.to(canvasOffset, {
-                x: destX, y: destY,
-                duration: 1.2,
-                ease: 'power3.inOut',
-                onUpdate: () => { applyCanvasTransform(); scheduleSync(); },
-                onComplete: () => {
-                    for (const [, el] of mounted) {
-                        if (parseInt(el.dataset.itemId, 10) === target.id) {
-                            setTimeout(() => openItemView(el), 80);
-                            break;
-                        }
-                    }
-                },
-            });
+        reverseSearch(async () => {
+            if (!archiveOpen) {
+                await openArchive();
+                setTimeout(() => applyArchiveFilter(item.text), 1200);
+            } else {
+                applyArchiveFilter(item.text);
+            }
         });
     }
 
@@ -986,7 +967,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const N = images.length;
         let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
 
-        const GAP = 52;
+        const GAP = 72;
         let COL_W = 290;
         let tileW = cols * (COL_W + GAP);   // includes trailing GAP
 
@@ -1196,10 +1177,85 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveViewport.addEventListener('pointerup', endDrag);
     archiveViewport.addEventListener('pointercancel', endDrag);
 
+    // Wheel/trackpad scroll to pan the canvas
+    archiveViewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (!archiveOpen || itemViewOpen || switching) return;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        canvasOffset.x -= e.deltaX;
+        canvasOffset.y -= e.deltaY;
+        applyCanvasTransform();
+        scheduleSync();
+    }, { passive: false });
+
+    // ----- Search filter across archive items -----
+    let currentSearchQuery = '';
+
+    function filterByQuery(manifests, query) {
+        if (!query) return manifests;
+        const q = query.toLowerCase().trim();
+        return manifests.filter(m => {
+            const c = m.csv;
+            return [c.year, c.campaign, c.description, c.subcategory,
+                    c.photographer, c.model, c.director, c.creative_director,
+                    c.art_director, c.publication]
+                .some(f => f && f.toLowerCase().replace(/_/g, ' ').includes(q));
+        });
+    }
+
+    function applyArchiveFilter(query) {
+        if (switching) return;
+        switching = true;
+        currentSearchQuery = query;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+
+        const oldEls = Array.from(mounted.values());
+        const cx = window.innerWidth  / 2;
+        const cy = window.innerHeight / 2;
+        const tl = gsap.timeline({ onComplete: () => { switching = false; } });
+
+        if (oldEls.length) {
+            tl.to(oldEls, {
+                x: () => (Math.random() - 0.5) * 1800,
+                y: () => (Math.random() - 0.5) * 1400,
+                rotation: () => (Math.random() - 0.5) * 220,
+                scale: 0, opacity: 0,
+                duration: 0.6, ease: 'power2.in',
+                stagger: { amount: 0.35, from: 'center' },
+            });
+        }
+
+        tl.call(() => {
+            unmountAll();
+            items = buildItems(filterByQuery(archiveManifest, query));
+            canvasOffset.x = -tileSize.w / 2 + cx;
+            canvasOffset.y = -tileSize.h / 2 + cy;
+            applyCanvasTransform();
+            archiveEmpty.classList.toggle('visible', items.length === 0);
+            syncMounted();
+            const fresh = Array.from(mounted.values());
+            gsap.set(fresh, { scale: 0, opacity: 0 });
+        });
+
+        tl.add(() => {
+            const fresh = Array.from(mounted.values());
+            if (!fresh.length) return;
+            gsap.to(fresh, {
+                scale: 1, opacity: 1,
+                duration: 0.9, ease: 'back.out(1.6)',
+                stagger: { amount: 0.55, from: 'center' },
+            });
+        }, '+=0.05');
+
+        tl.to({}, { duration: 1.0 });
+    }
+
     // ----- Category switch: scatter + drop-in -----
     function setCategory(catLabel) {
-        if (catLabel === currentCategory || switching) return;
+        const queryActive = currentSearchQuery !== '';
+        if ((catLabel === currentCategory && !queryActive) || switching) return;
         switching = true;
+        currentSearchQuery = '';
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
         currentCategory = catLabel;
 
@@ -1410,7 +1466,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const expandLabel = s => s ? (ACRONYM_MAP[s.toLowerCase().trim()] || s) : s;
 
     function buildTitle(csv) {
-        return prettify(csv.campaign) || expandLabel(csv.category).toUpperCase();
+        return prettify(csv.campaign) || prettify(csv.description) || expandLabel(csv.category).toUpperCase();
     }
 
     function renderItemMeta(csv) {
@@ -1493,6 +1549,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const group = (campaignGroups.get(item.manifest.campaignKey) || [item.manifest]).slice();
         const currentIdx = Math.max(0, group.findIndex(m => m.path === item.manifest.path));
+
+        // Preload all sibling images to eliminate lag on photo switch
+        group.forEach(m => { if (m.path !== item.src) { const i = new Image(); i.src = m.path; } });
 
         const r = imgEl.getBoundingClientRect();
         const origRect = { x: r.left, y: r.top, w: r.width, h: r.height };

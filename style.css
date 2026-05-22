@@ -459,7 +459,7 @@ body {
     text-transform: uppercase;
     letter-spacing: -0.35px;
     line-height: 12px;
-    color: #bbbdc0;
+    color: rgba(255, 255, 255, 0.55);
     cursor: pointer;
     white-space: nowrap;
     user-select: none;
@@ -468,11 +468,15 @@ body {
 }
 
 .search-result:hover {
-    color: #424242;
+    color: #ffffff;
 }
 
-.search-result[data-type="people"]:hover {
-    color: #000;
+#search-results .people-close {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+#search-results .people-close:hover {
+    color: rgba(255, 255, 255, 0.7);
 }
 
 /* ===== ARCHIVE PAGE ===== */
