@@ -552,7 +552,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let   searchActive   = false;
     let   _st            = null;   // active search trigger element
     let   _searchBarH    = 0;      // panel height for the bar only
-    const resultsBg      = document.getElementById('search-results-bg');
+    const searchBackdrop = document.getElementById('search-backdrop');
 
     // --- Filtering and results rendering ---
 
@@ -583,22 +583,6 @@ document.addEventListener('DOMContentLoaded', () => {
         backBtn.addEventListener('click', () => reverseSearch());
         searchResultsEl.appendChild(backBtn);
 
-        // Responsive white gradient bg below bar: covers results + back button
-        requestAnimationFrame(() => {
-            const panelTop      = parseFloat(searchPanel.style.top) || 0;
-            const bgTop         = panelTop + _searchBarH;
-            const resultsBottom = searchResultsEl.getBoundingClientRect().bottom;
-            const targetH       = Math.max(0, resultsBottom - bgTop + 36);
-            const panelW        = parseFloat(searchPanel.style.width) || 0;
-
-            gsap.set(resultsBg, { top: bgTop, left: 0, width: panelW });
-            gsap.to(resultsBg, {
-                height:   targetH,
-                opacity:  1,
-                duration: 0.32,
-                ease:     'power2.out',
-            });
-        });
     }
 
     // --- State management ---
@@ -626,7 +610,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
-        gsap.set(resultsBg, { opacity: 0, height: 0, x: 0 });
+        gsap.set(searchBackdrop, { opacity: 0 });
+        searchBackdrop.style.pointerEvents = 'none';
 
         menu.classList.remove('search-active');
         searchStage.style.display  = 'none';
@@ -660,13 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}`;
         searchPanel.style.transform  = `translateX(${slideX})`;
 
-        // Slide white bg out in sync
-        gsap.to(resultsBg, {
-            x:        -HALF_W,
-            opacity:  0,
-            duration: SLIDE_MS / 1000,
-            ease:     'power3.in',
-        });
+        // Fade out backdrop in sync
+        searchBackdrop.style.pointerEvents = 'none';
+        gsap.to(searchBackdrop, { opacity: 0, duration: SLIDE_MS / 1000, ease: 'power3.in' });
 
         await new Promise(r => setTimeout(r, SLIDE_MS + 60));
 
@@ -680,7 +661,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
-        gsap.set(resultsBg, { opacity: 0, height: 0, x: 0 });
+        gsap.set(searchBackdrop, { opacity: 0 });
+        searchBackdrop.style.pointerEvents = 'none';
 
         if (onComplete) onComplete();
     }
@@ -717,9 +699,13 @@ document.addEventListener('DOMContentLoaded', () => {
         input.spellcheck   = false;
         Object.assign(input.style, {
             position:      'fixed',
-            left:          `${rect.left}px`,
+            left:          '0',
             top:           `${rect.top}px`,
-            width:         `${HALF_W - rect.left}px`,
+            width:         `${HALF_W}px`,
+            paddingLeft:   `${rect.left}px`,
+            paddingRight:  '0',
+            paddingTop:    '0',
+            paddingBottom: '0',
             height:        `${rect.height}px`,
             background:    'transparent',
             border:        'none',
@@ -731,7 +717,6 @@ document.addEventListener('DOMContentLoaded', () => {
             letterSpacing: '-0.35px',
             color:         '#ffffff',
             caretColor:    '#ffffff',
-            padding:       '0',
             zIndex:        '100',
             WebkitFontSmoothing: 'antialiased',
         });
@@ -793,7 +778,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.bottom     = 'auto';
         searchPanel.style.transition = 'none';
         searchPanel.style.transform  = `translateX(-${HALF_W}px)`;
-        gsap.set(resultsBg, { opacity: 0, height: 0, x: 0 });
+        gsap.set(searchBackdrop, { opacity: 0 });
+        searchBackdrop.style.pointerEvents = 'none';
 
         // 3. Fall distance: right edge of text lands at x=0
         _st.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
@@ -823,6 +809,10 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateX(0)';
 
+        // Fade in backdrop as panel slides in
+        gsap.to(searchBackdrop, { opacity: 1, duration: 0.5, ease: 'power2.out', delay: 0.1 });
+        searchBackdrop.style.pointerEvents = 'auto';
+
         // 8. Text turns white once settled
         await new Promise(r => setTimeout(r, RISE_MS + 40));
         _st.style.transition = 'color 200ms ease-out';
@@ -844,6 +834,10 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         _st = document.getElementById('archive-search');
         playSearchTransition();
+    });
+
+    searchBackdrop.addEventListener('click', () => {
+        if (searchActive) reverseSearch();
     });
 
     // ===== ARCHIVE PAGE — MASONRY + VIRTUALIZED INFINITE CANVAS =====
@@ -1415,12 +1409,20 @@ document.addEventListener('DOMContentLoaded', () => {
         morphMenuToArchive();
 
         const fresh = Array.from(mounted.values());
-        gsap.set(fresh, { scale: 0.5, opacity: 0 });
+        gsap.set(fresh, {
+            x:        () => (Math.random() - 0.5) * 1600,
+            y:        () => (Math.random() - 0.5) * 1200 - 150,
+            rotation: () => (Math.random() - 0.5) * 200,
+            scale:    0,
+            opacity:  0,
+        });
         gsap.set(archiveCanvas, { opacity: 1 });
         gsap.to(fresh, {
+            x: 0, y: 0,
+            rotation: (i, el) => parseFloat(el.dataset.rot) || 0,
             scale: 1, opacity: 1,
             duration: 0.95, ease: 'back.out(1.4)',
-            stagger: { amount: 0.6, from: 'center' },
+            stagger: { amount: 0.7, from: 'random' },
             delay: 0.25,
         });
     }
