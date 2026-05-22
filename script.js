@@ -550,15 +550,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchPanel    = document.getElementById('search-panel');
     const searchResultsEl = document.getElementById('search-results');
     let   searchActive   = false;
+    let   _st            = null;   // active search trigger element
 
     // --- Filtering and results rendering ---
 
     function filterResults(query) {
         const q = query.toLowerCase().trim();
         if (!q) return [];
-        return SEARCH_DATA.filter(item =>
-            item.text.toLowerCase().includes(q)
-        ).slice(0, 6);
+        return SEARCH_DATA.filter(item => {
+            if (item.type === 'archive' && !archiveOpen) return false;
+            if (item.type !== 'archive' && archiveOpen) return false;
+            return item.text.toLowerCase().includes(q);
+        }).slice(0, 6);
     }
 
     function showResults(query) {
@@ -571,6 +574,7 @@ document.addEventListener('DOMContentLoaded', () => {
             el.dataset.type = item.type;
             el.addEventListener('click', () => {
                 if (item.type === 'people') reverseSearchAndGoToPeople();
+                else if (item.type === 'archive') reverseSearchAndGoToArchiveItem(item);
             });
             searchResultsEl.appendChild(el);
         }
@@ -607,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         _cleanupSearchPanel();
         ['visibility','pointerEvents','color','textShadow','transition','transform']
-            .forEach(p => { searchEl.style[p] = ''; });
+            .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
 
@@ -629,14 +633,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         _cleanupSearchPanel();
 
-        // Restore searchEl visibility before sliding (it's white, will slide out)
-        searchEl.style.visibility    = '';
-        searchEl.style.pointerEvents = '';
+        // Restore trigger visibility before sliding (it's white, will slide out)
+        if (_st) { _st.style.visibility = ''; _st.style.pointerEvents = ''; }
 
         const slideX = `-${HALF_W}px`;
-        searchEl.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}, color 200ms ease-out`;
-        searchEl.style.transform  = `translateX(${slideX})`;
-        searchEl.style.color      = '#bbbdc0';
+        if (_st) {
+            _st.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}, color 200ms ease-out`;
+            _st.style.transform  = `translateX(${slideX})`;
+            _st.style.color      = '#bbbdc0';
+        }
 
         searchPanel.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}`;
         searchPanel.style.transform  = `translateX(${slideX})`;
@@ -649,7 +654,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchStage.style.display = 'none';
         searchStage.setAttribute('aria-hidden', 'true');
         ['transition','transform','color','textShadow','visibility','pointerEvents']
-            .forEach(p => { searchEl.style[p] = ''; });
+            .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
 
@@ -660,6 +665,32 @@ document.addEventListener('DOMContentLoaded', () => {
         reverseSearch(() => playPeopleTransition());
     }
 
+    function reverseSearchAndGoToArchiveItem(item) {
+        reverseSearch(() => {
+            if (!archiveOpen || !items.length) return;
+            const target = items.find(it => it.manifest && it.manifest.campaignKey === item.manifest.campaignKey);
+            if (!target) return;
+            const vw = window.innerWidth, vh = window.innerHeight;
+            const destX = vw / 2 - target.x - target.w / 2;
+            const destY = vh / 2 - target.y - target.h / 2;
+            if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+            gsap.to(canvasOffset, {
+                x: destX, y: destY,
+                duration: 1.2,
+                ease: 'power3.inOut',
+                onUpdate: () => { applyCanvasTransform(); scheduleSync(); },
+                onComplete: () => {
+                    for (const [, el] of mounted) {
+                        if (parseInt(el.dataset.itemId, 10) === target.id) {
+                            setTimeout(() => openItemView(el), 80);
+                            break;
+                        }
+                    }
+                },
+            });
+        });
+    }
+
     // --- Input + back button activation ---
 
     function activateSearchInput(rect) {
@@ -667,10 +698,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const HALF_W = Math.round(window.innerWidth / 2);
 
         // Hide the original label AND disable its pointer events.
-        // visibility:hidden keeps layout intact but still receives pointer events
-        // by default — pointer-events:none passes clicks through to the input below.
-        searchEl.style.visibility    = 'hidden';
-        searchEl.style.pointerEvents = 'none';
+        if (_st) { _st.style.visibility = 'hidden'; _st.style.pointerEvents = 'none'; }
 
         // Input overlay at the exact position of the search label
         const input = document.createElement('input');
@@ -736,13 +764,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchActive) return;
         searchActive = true;
 
+        // Determine which element triggered the search (set before calling this fn)
+        if (!_st) _st = searchEl;
+
         const PAD_V     = 5;
         const HALF_W    = Math.round(window.innerWidth / 2);
         const RISE_MS   = 600;
         const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
         // 1. Capture original position BEFORE any transform is applied
-        const rect = searchEl.getBoundingClientRect();
+        const rect = _st.getBoundingClientRect();
 
         // 2. Panel: left:0, width:50vw — starts off-screen left at translateX(-HALF_W)
         searchPanel.style.top        = `${rect.top - PAD_V}px`;
@@ -754,37 +785,36 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transform  = `translateX(-${HALF_W}px)`;
 
         // 3. Fall distance: right edge of text lands at x=0
-        searchEl.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
+        _st.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
 
         // 4. Reveal stage (panel still off-screen)
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
         // 5. Phase 1 — text falls left with wall-bounce physics
-        searchEl.classList.add('search-falling');
+        _st.classList.add('search-falling');
         await new Promise(r => setTimeout(r, 480));
 
         // 6. Invisible snap: text moves to the same off-screen-left position as the panel
-        searchEl.classList.remove('search-falling');
-        searchEl.style.transition = 'none';
-        searchEl.style.transform  = `translateX(-${HALF_W}px)`;
-        void searchEl.offsetWidth;
+        _st.classList.remove('search-falling');
+        _st.style.transition = 'none';
+        _st.style.transform  = `translateX(-${HALF_W}px)`;
+        void _st.offsetWidth;
 
         // 7. Phase 2 — text and panel slide in from left in perfect sync
-        //    Adding search-active NOW hides other menu items in sync with the slide-in
         menu.classList.add('search-active');
 
-        searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
-        searchEl.style.transform  = 'translateX(0)';
+        _st.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
+        _st.style.transform  = 'translateX(0)';
 
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateX(0)';
 
         // 8. Text turns white once settled
         await new Promise(r => setTimeout(r, RISE_MS + 40));
-        searchEl.style.transition = 'color 200ms ease-out';
-        searchEl.style.color      = '#ffffff';
-        searchEl.style.textShadow = 'none';
+        _st.style.transition = 'color 200ms ease-out';
+        _st.style.color      = '#ffffff';
+        _st.style.textShadow = 'none';
 
         // 9. Activate the real input
         await new Promise(r => setTimeout(r, 220));
@@ -793,6 +823,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     searchEl.addEventListener('click', (e) => {
         e.preventDefault();
+        _st = searchEl;
+        playSearchTransition();
+    });
+
+    document.getElementById('archive-search').addEventListener('click', (e) => {
+        e.preventDefault();
+        _st = document.getElementById('archive-search');
         playSearchTransition();
     });
 
@@ -880,6 +917,46 @@ document.addEventListener('DOMContentLoaded', () => {
         return archiveManifest;
     }
 
+    let _searchEnriched = false;
+    function enrichSearchWithArchive() {
+        if (_searchEnriched) return;
+        _searchEnriched = true;
+        const seen = new Set(SEARCH_DATA.map(d => d.text.toLowerCase()));
+        for (const m of archiveManifest) {
+            const { csv } = m;
+            // Year
+            if (csv.year && !seen.has(csv.year)) {
+                SEARCH_DATA.push({ text: csv.year, type: 'archive', manifest: m });
+                seen.add(csv.year);
+            }
+            // Campaign
+            if (csv.campaign) {
+                const label = csv.campaign.replace(/_/g, ' ');
+                if (!seen.has(label)) {
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    seen.add(label);
+                }
+            }
+            // Description + campaign combined
+            if (csv.description || csv.campaign) {
+                const parts = [csv.description, csv.campaign].filter(Boolean).map(s => s.replace(/_/g, ' '));
+                const label = parts.join(' ');
+                if (label && !seen.has(label)) {
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    seen.add(label);
+                }
+            }
+            // Subcategory (e.g. "fragrance", "collection")
+            if (csv.subcategory) {
+                const label = csv.subcategory.replace(/_/g, ' ');
+                if (!seen.has(label)) {
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    seen.add(label);
+                }
+            }
+        }
+    }
+
     function filterImages(catLabel) {
         const code = CAT_MAP[catLabel];
         if (code === null)       return archiveManifest;
@@ -905,8 +982,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const N = images.length;
         let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
 
-        const GAP = 32;
-        let COL_W = 230;
+        const GAP = 52;
+        let COL_W = 290;
         let tileW = cols * (COL_W + GAP);   // includes trailing GAP
 
         const MIN_TW = vw;
@@ -915,11 +992,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tileW = MIN_TW;
         }
 
-        const ordered = images.slice().sort((a, b) => {
-            const ha = a.dh / a.dw, hb = b.dh / b.dw;
-            if (hb !== ha) return hb - ha;
-            return _hash(a.path) - _hash(b.path);
-        });
+        // Pseudo-random deterministic order → mixes portrait/landscape in every row
+        const ordered = images.slice().sort((a, b) => _hash(a.path + 's') - _hash(b.path + 's'));
 
         const colY     = new Array(cols).fill(0);
         const colItems = Array.from({ length: cols }, () => []);
@@ -1231,6 +1305,7 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveOpen = true;
 
         await loadArchiveManifest();
+        enrichSearchWithArchive();
         currentCategory = 'all';
         document.querySelectorAll('.menu-cat').forEach(el => el.classList.remove('active'));
         archiveShowAll.classList.add('cat-all-active');
@@ -1322,6 +1397,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const prettify = s => s ? s.replace(/_/g, ' ').toUpperCase() : '';
 
+    const ACRONYM_MAP = {
+        'adv': 'advertisement',
+        'edi': 'editorial',
+        'ss':  'spring / summer',
+        'fw':  'fall / winter',
+    };
+    const expandLabel = s => s ? (ACRONYM_MAP[s.toLowerCase().trim()] || s) : s;
+
     function buildTitle(csv) {
         const parts = [csv.description, csv.campaign].filter(Boolean).map(prettify);
         return parts.join(' ') || prettify(csv.category);
@@ -1329,11 +1412,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function renderItemMeta(csv) {
         itemViewMetaEl.innerHTML = '';
-        const seasonStr = csv.season ? csv.season.toUpperCase() : '';
+        const seasonStr = csv.season ? expandLabel(csv.season).toUpperCase() : '';
         const yearSeason = [csv.year, seasonStr].filter(Boolean).join(' ');
+        const catExpanded = expandLabel(csv.category).toUpperCase();
         const catLine = csv.subcategory
-            ? prettify(`${csv.category} / ${csv.subcategory}`)
-            : prettify(csv.category);
+            ? `${catExpanded} / ${prettify(csv.subcategory)}`
+            : catExpanded;
         const fields = [
             ['date',              yearSeason],
             ['category',          catLine],
@@ -1379,8 +1463,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function computeTargetRect(naturalW, naturalH) {
         const vw = window.innerWidth, vh = window.innerHeight;
         const marginY = 60;
-        const marginL = 120;
-        const marginR = 320;            // reserve right side for info panel
+        const marginR = 284;            // info panel (240) + right gap (36) + breathing room (8)
+        const marginL = marginR;        // symmetric → image perfectly centered in viewport
         const maxH = vh - 2 * marginY;
         const maxW = vw - marginL - marginR;
         const aspect = naturalW / naturalH;
