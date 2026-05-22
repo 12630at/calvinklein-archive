@@ -32,11 +32,43 @@
             <a href="#" class="menu-item">collections</a>
             <a href="#" class="menu-item">advertising</a>
             <a href="#" class="menu-item">editorials</a>
-            <a href="#" class="menu-item">invitations</a>
             <a href="#" class="menu-item">ephemera</a>
         </div>
 
+        <!-- Archive-mode primary column: replaces default primary when archive page is open -->
+        <div class="menu-primary menu-primary-archive">
+            <div class="menu-archive-header">
+                <button class="menu-archive-back" id="archive-back" aria-label="back to home">←</button>
+                <a href="#" class="menu-item menu-item-archive-active" id="archive-show-all">archive</a>
+            </div>
+            <a href="#" class="menu-item menu-cat" data-cat="collections">collections</a>
+            <a href="#" class="menu-item menu-cat" data-cat="advertising">advertising</a>
+            <a href="#" class="menu-item menu-cat" data-cat="editorials">editorials</a>
+            <a href="#" class="menu-item menu-cat" data-cat="ephemera">ephemera</a>
+            <a href="#" class="menu-item" id="archive-search">search</a>
+        </div>
+
     </nav>
+
+    <!-- Archive Page (infinite canvas) -->
+    <div id="archive-stage" aria-hidden="true">
+        <div id="archive-viewport">
+            <div id="archive-canvas"></div>
+        </div>
+        <div id="archive-empty">coming soon</div>
+    </div>
+
+    <!-- Item View (single image + info) -->
+    <div id="item-view" aria-hidden="true">
+        <div id="item-view-backdrop"></div>
+        <div id="item-view-img-wrap"></div>
+        <button class="item-view-back" id="item-view-back" aria-label="back to archive">←</button>
+        <aside id="item-view-info">
+            <h2 class="item-view-title"></h2>
+            <div class="item-view-meta"></div>
+            <div class="item-view-numbers"></div>
+        </aside>
+    </div>
 
     <!-- People Page -->
     <div id="people-stage" aria-hidden="true">
@@ -87,10 +119,13 @@
 
     <!-- Search Stage -->
     <div id="search-stage" aria-hidden="true">
+        <div id="search-backdrop"></div>
         <div id="search-panel"></div>
         <div id="search-results"></div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="archive_dims.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

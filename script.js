@@ -550,15 +550,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchPanel    = document.getElementById('search-panel');
     const searchResultsEl = document.getElementById('search-results');
     let   searchActive   = false;
+    let   _st            = null;   // active search trigger element
+    let   _searchBarH    = 0;      // panel height for the bar only
+    const searchBackdrop = document.getElementById('search-backdrop');
 
     // --- Filtering and results rendering ---
 
     function filterResults(query) {
         const q = query.toLowerCase().trim();
         if (!q) return [];
-        return SEARCH_DATA.filter(item =>
-            item.text.toLowerCase().includes(q)
-        ).slice(0, 6);
+        return SEARCH_DATA.filter(item => item.text.toLowerCase().includes(q)).slice(0, 8);
     }
 
     function showResults(query) {
@@ -571,18 +572,17 @@ document.addEventListener('DOMContentLoaded', () => {
             el.dataset.type = item.type;
             el.addEventListener('click', () => {
                 if (item.type === 'people') reverseSearchAndGoToPeople();
+                else if (item.type === 'archive') reverseSearchAndGoToArchiveItem(item);
             });
             searchResultsEl.appendChild(el);
         }
-        // Back button is always the last child of the results container:
-        // - no results  → only item, appears just below the bar (beside input)
-        // - with results → appears after the full list
         const backBtn = document.createElement('button');
-        backBtn.id        = 'search-back';
+        backBtn.id          = 'search-back';
         backBtn.textContent = '← back';
-        backBtn.className = 'people-close';
+        backBtn.className   = 'people-close';
         backBtn.addEventListener('click', () => reverseSearch());
         searchResultsEl.appendChild(backBtn);
+
     }
 
     // --- State management ---
@@ -607,12 +607,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         _cleanupSearchPanel();
         ['visibility','pointerEvents','color','textShadow','transition','transform']
-            .forEach(p => { searchEl.style[p] = ''; });
+            .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
+        gsap.set(searchBackdrop, { opacity: 0 });
+        searchBackdrop.style.pointerEvents = 'none';
 
         menu.classList.remove('search-active');
-        searchStage.style.display = 'none';
+        searchStage.style.display  = 'none';
+        searchStage.style.zIndex   = '';
         searchStage.setAttribute('aria-hidden', 'true');
     }
 
@@ -629,29 +632,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
         _cleanupSearchPanel();
 
-        // Restore searchEl visibility before sliding (it's white, will slide out)
-        searchEl.style.visibility    = '';
-        searchEl.style.pointerEvents = '';
+        // Restore trigger visibility before sliding (it's white, will slide out)
+        if (_st) { _st.style.visibility = ''; _st.style.pointerEvents = ''; }
 
         const slideX = `-${HALF_W}px`;
-        searchEl.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}, color 200ms ease-out`;
-        searchEl.style.transform  = `translateX(${slideX})`;
-        searchEl.style.color      = '#bbbdc0';
+        if (_st) {
+            _st.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}, color 200ms ease-out`;
+            _st.style.transform  = `translateX(${slideX})`;
+            _st.style.color      = '#bbbdc0';
+        }
 
         searchPanel.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}`;
         searchPanel.style.transform  = `translateX(${slideX})`;
+
+        // Fade out backdrop in sync
+        searchBackdrop.style.pointerEvents = 'none';
+        gsap.to(searchBackdrop, { opacity: 0, duration: SLIDE_MS / 1000, ease: 'power3.in' });
 
         await new Promise(r => setTimeout(r, SLIDE_MS + 60));
 
         // Full state cleanup
         searchActive = false;
         menu.classList.remove('search-active');
-        searchStage.style.display = 'none';
+        searchStage.style.display  = 'none';
+        searchStage.style.zIndex   = '';
         searchStage.setAttribute('aria-hidden', 'true');
         ['transition','transform','color','textShadow','visibility','pointerEvents']
-            .forEach(p => { searchEl.style[p] = ''; });
+            .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
+        gsap.set(searchBackdrop, { opacity: 0 });
+        searchBackdrop.style.pointerEvents = 'none';
 
         if (onComplete) onComplete();
     }
@@ -660,18 +671,27 @@ document.addEventListener('DOMContentLoaded', () => {
         reverseSearch(() => playPeopleTransition());
     }
 
+    function reverseSearchAndGoToArchiveItem(item) {
+        reverseSearch(async () => {
+            if (!archiveOpen) {
+                await openArchive();
+                setTimeout(() => applyArchiveFilter(item.text), 1200);
+            } else {
+                applyArchiveFilter(item.text);
+            }
+        });
+    }
+
     // --- Input + back button activation ---
 
     function activateSearchInput(rect) {
-        const PAD_V     = 5;
-        const INPUT_PAD = 8;
-        const HALF_W    = Math.round(window.innerWidth / 2);
+        const PAD_V  = 5;
+        const HALF_W = Math.round(window.innerWidth / 2);
 
         // Hide the original label AND disable its pointer events.
-        searchEl.style.visibility    = 'hidden';
-        searchEl.style.pointerEvents = 'none';
+        if (_st) { _st.style.visibility = 'hidden'; _st.style.pointerEvents = 'none'; }
 
-        // Input overlay centered on the search label, with extra vertical hit area
+        // Input overlay at the exact position of the search label
         const input = document.createElement('input');
         input.id           = 'search-input';
         input.type         = 'text';
@@ -680,9 +700,9 @@ document.addEventListener('DOMContentLoaded', () => {
         Object.assign(input.style, {
             position:      'fixed',
             left:          `${rect.left}px`,
-            top:           `${rect.top - INPUT_PAD}px`,
+            top:           `${rect.top}px`,
             width:         `${HALF_W - rect.left}px`,
-            height:        `${rect.height + INPUT_PAD * 2}px`,
+            height:        `${rect.height}px`,
             background:    'transparent',
             border:        'none',
             outline:       'none',
@@ -693,8 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
             letterSpacing: '-0.35px',
             color:         '#ffffff',
             caretColor:    '#ffffff',
-            padding:       `${INPUT_PAD}px 0`,
-            boxSizing:     'border-box',
+            padding:       '0',
             zIndex:        '100',
             WebkitFontSmoothing: 'antialiased',
         });
@@ -711,16 +730,20 @@ document.addEventListener('DOMContentLoaded', () => {
         searchStage.appendChild(input);
 
         // Clicking anywhere on the black panel re-focuses the input.
+        // The panel covers the full left half; the input only covers the text area.
         searchPanel.style.pointerEvents = 'auto';
         searchPanel.style.cursor        = 'text';
         searchPanel._focusInput = () => document.getElementById('search-input')?.focus();
         searchPanel.addEventListener('click', searchPanel._focusInput);
 
         // Position the results container just below the bar.
+        // The back button lives INSIDE this container as the last child,
+        // so it flows naturally: alone when no results, after the list when results exist.
         const barBottom = rect.top + rect.height + PAD_V;
         searchResultsEl.style.top  = `${barBottom + 12}px`;
         searchResultsEl.style.left = `${rect.left}px`;
 
+        // Initialise: render just the back button (query is empty at activation)
         showResults('');
 
         requestAnimationFrame(() => input.focus());
@@ -732,55 +755,66 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchActive) return;
         searchActive = true;
 
+        // Determine which element triggered the search (set before calling this fn)
+        if (!_st) _st = searchEl;
+
         const PAD_V     = 5;
         const HALF_W    = Math.round(window.innerWidth / 2);
         const RISE_MS   = 600;
         const RISE_EASE = 'cubic-bezier(0.19, 1, 0.22, 1)';
 
         // 1. Capture original position BEFORE any transform is applied
-        const rect = searchEl.getBoundingClientRect();
+        const rect = _st.getBoundingClientRect();
 
         // 2. Panel: left:0, width:50vw — starts off-screen left at translateX(-HALF_W)
+        _searchBarH = rect.height + PAD_V * 2;
         searchPanel.style.top        = `${rect.top - PAD_V}px`;
         searchPanel.style.left       = '0';
         searchPanel.style.width      = `${HALF_W}px`;
-        searchPanel.style.height     = `${rect.height + PAD_V * 2}px`;
+        searchPanel.style.height     = `${_searchBarH}px`;
         searchPanel.style.bottom     = 'auto';
         searchPanel.style.transition = 'none';
         searchPanel.style.transform  = `translateX(-${HALF_W}px)`;
+        gsap.set(searchBackdrop, { opacity: 0 });
+        searchBackdrop.style.pointerEvents = 'none';
 
         // 3. Fall distance: right edge of text lands at x=0
-        searchEl.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
+        _st.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
 
         // 4. Reveal stage (panel still off-screen)
+        // When archive is open (z:12), elevate search stage above it
+        searchStage.style.zIndex = archiveOpen ? '13' : '';
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
         // 5. Phase 1 — text falls left with wall-bounce physics
-        searchEl.classList.add('search-falling');
+        _st.classList.add('search-falling');
         await new Promise(r => setTimeout(r, 480));
 
         // 6. Invisible snap: text moves to the same off-screen-left position as the panel
-        searchEl.classList.remove('search-falling');
-        searchEl.style.transition = 'none';
-        searchEl.style.transform  = `translateX(-${HALF_W}px)`;
-        void searchEl.offsetWidth;
+        _st.classList.remove('search-falling');
+        _st.style.transition = 'none';
+        _st.style.transform  = `translateX(-${HALF_W}px)`;
+        void _st.offsetWidth;
 
         // 7. Phase 2 — text and panel slide in from left in perfect sync
-        //    Adding search-active NOW hides other menu items in sync with the slide-in
         menu.classList.add('search-active');
 
-        searchEl.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
-        searchEl.style.transform  = 'translateX(0)';
+        _st.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
+        _st.style.transform  = 'translateX(0)';
 
         searchPanel.style.transition = `transform ${RISE_MS}ms ${RISE_EASE}`;
         searchPanel.style.transform  = 'translateX(0)';
 
+        // Fade in backdrop as panel slides in
+        gsap.to(searchBackdrop, { opacity: 1, duration: 0.5, ease: 'power2.out', delay: 0.1 });
+        searchBackdrop.style.pointerEvents = 'auto';
+
         // 8. Text turns white once settled
         await new Promise(r => setTimeout(r, RISE_MS + 40));
-        searchEl.style.transition = 'color 200ms ease-out';
-        searchEl.style.color      = '#ffffff';
-        searchEl.style.textShadow = 'none';
+        _st.style.transition = 'color 200ms ease-out';
+        _st.style.color      = '#ffffff';
+        _st.style.textShadow = 'none';
 
         // 9. Activate the real input
         await new Promise(r => setTimeout(r, 220));
@@ -789,6 +823,904 @@ document.addEventListener('DOMContentLoaded', () => {
 
     searchEl.addEventListener('click', (e) => {
         e.preventDefault();
+        _st = searchEl;
         playSearchTransition();
+    });
+
+    document.getElementById('archive-search').addEventListener('click', (e) => {
+        e.preventDefault();
+        _st = document.getElementById('archive-search');
+        playSearchTransition();
+    });
+
+    searchBackdrop.addEventListener('click', () => {
+        if (searchActive) reverseSearch();
+    });
+
+    // ===== ARCHIVE PAGE — MASONRY + VIRTUALIZED INFINITE CANVAS =====
+
+    const archiveStage    = document.getElementById('archive-stage');
+    const archiveViewport = document.getElementById('archive-viewport');
+    const archiveCanvas   = document.getElementById('archive-canvas');
+    const archiveEmpty    = document.getElementById('archive-empty');
+    const archiveBackBtn  = document.getElementById('archive-back');
+    const archiveShowAll  = document.getElementById('archive-show-all');
+    const defaultPrimary  = menu.querySelector('.menu-primary:not(.menu-primary-archive)');
+    const defaultSecondary= menu.querySelector('.menu-secondary');
+    const archivePrimary  = menu.querySelector('.menu-primary-archive');
+
+    let archiveOpen     = false;
+    let archiveManifest = null;
+    let currentCategory = 'all';
+    let items           = [];                // [{id, x, y, w, h, rot, src}]
+    let tileSize        = { w: 0, h: 0 };
+    let canvasOffset    = { x: 0, y: 0 };
+    let switching       = false;             // category transition in progress
+    const mounted       = new Map();         // key "id_tx_ty" → img element
+
+    const CAT_MAP = {
+        all:         null,
+        advertising: 'adv',
+        editorials:  'edi',
+        collections: '__none__',
+        ephemera:    '__none__',
+    };
+
+    function _hash(s) {
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+    const rand01 = (seed, salt) => (_hash(seed + ':' + salt) % 100000) / 100000;
+
+    const campaignGroups = new Map();    // campaignKey → array of items in same campaign
+
+    async function loadArchiveManifest() {
+        if (archiveManifest) return archiveManifest;
+        const res = await fetch('archive_index.csv');
+        const txt = await res.text();
+        const lines = txt.trim().split(/\r?\n/);
+        const header = lines.shift().split(',');
+        const iFile = header.indexOf('filename');
+        const iCat  = header.indexOf('category');
+        const iSub  = header.indexOf('subcategory');
+        const iYear = header.indexOf('year');
+
+        archiveManifest = lines.map(line => {
+            const cols = line.split(',');
+            const filename = cols[iFile];
+            const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
+            if (!dims) return null;
+            const path = cols[iSub]
+                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.webp`
+                : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.webp`;
+            const csv = {};
+            for (let k = 0; k < header.length; k++) csv[header[k]] = cols[k] || '';
+            return {
+                path,
+                filename,
+                category: cols[iCat],
+                dw: dims[0],
+                dh: dims[1],
+                csv,
+                campaignKey: filename.replace(/_\d+$/, ''),
+            };
+        }).filter(Boolean);
+
+        // Group items by campaign key for multi-photo navigation
+        for (const m of archiveManifest) {
+            if (!campaignGroups.has(m.campaignKey)) campaignGroups.set(m.campaignKey, []);
+            campaignGroups.get(m.campaignKey).push(m);
+        }
+        // Stable sort each group by filename so photo numbering is consistent
+        for (const arr of campaignGroups.values()) arr.sort((a, b) => a.filename.localeCompare(b.filename));
+
+        return archiveManifest;
+    }
+
+    let _searchEnriched = false;
+    function enrichSearchWithArchive() {
+        if (_searchEnriched) return;
+        _searchEnriched = true;
+        const seen = new Set(SEARCH_DATA.map(d => d.text.toLowerCase()));
+        for (const m of archiveManifest) {
+            const { csv } = m;
+            // Year
+            if (csv.year && !seen.has(csv.year)) {
+                SEARCH_DATA.push({ text: csv.year, type: 'archive', manifest: m });
+                seen.add(csv.year);
+            }
+            // Campaign
+            if (csv.campaign) {
+                const label = csv.campaign.replace(/_/g, ' ');
+                if (!seen.has(label)) {
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    seen.add(label);
+                }
+            }
+            // Description + campaign combined
+            if (csv.description || csv.campaign) {
+                const parts = [csv.description, csv.campaign].filter(Boolean).map(s => s.replace(/_/g, ' '));
+                const label = parts.join(' ');
+                if (label && !seen.has(label)) {
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    seen.add(label);
+                }
+            }
+            // Subcategory (e.g. "fragrance", "collection")
+            if (csv.subcategory) {
+                const label = csv.subcategory.replace(/_/g, ' ');
+                if (!seen.has(label)) {
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    seen.add(label);
+                }
+            }
+        }
+    }
+
+    function filterImages(catLabel) {
+        const code = CAT_MAP[catLabel];
+        if (code === null)       return archiveManifest;
+        if (code === '__none__') return [];
+        return archiveManifest.filter(m => m.category === code);
+    }
+
+    // Masonry packing using real aspect ratios.
+    // - Tile width includes trailing GAP so adjacent tile copies have proper spacing
+    //   at horizontal seams (no touching columns).
+    // - Tall-first placement (sort by aspect desc) produces nearly-balanced columns.
+    // - Post-pass distributes leftover space in shorter columns as extra padding,
+    //   so every column ends exactly at colMax → no vertical white gaps at seams.
+    function buildItems(images) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+
+        if (!images.length) {
+            tileSize.w = Math.max(vw + 800, 2000);
+            tileSize.h = Math.max(vh + 800, 1400);
+            return [];
+        }
+
+        const N = images.length;
+        let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
+
+        const GAP = 72;
+        let COL_W = 290;
+        let tileW = cols * (COL_W + GAP);   // includes trailing GAP
+
+        const MIN_TW = vw;
+        if (tileW < MIN_TW) {
+            COL_W = (MIN_TW / cols) - GAP;
+            tileW = MIN_TW;
+        }
+
+        // Pseudo-random deterministic order → mixes portrait/landscape in every row
+        const ordered = images.slice().sort(() => Math.random() - 0.5);
+
+        const colY     = new Array(cols).fill(0);
+        const colItems = Array.from({ length: cols }, () => []);
+        const result   = [];
+
+        for (let i = 0; i < ordered.length; i++) {
+            const img    = ordered[i];
+            const aspect = img.dw / img.dh;
+            const w = COL_W;
+            const h = w / aspect;
+            const rot = (rand01(img.path, 'r') - 0.5) * 1.2;       // ±0.6deg — safe vs GAP=32
+
+            let minCol = 0;
+            for (let c = 1; c < cols; c++) {
+                if (colY[c] < colY[minCol]) minCol = c;
+            }
+            const x = minCol * (COL_W + GAP);
+            const y = colY[minCol];
+            colY[minCol] += h + GAP;
+
+            const it = { id: i, col: minCol, x, y, w, h, rot, src: img.path, manifest: img };
+            result.push(it);
+            colItems[minCol].push(it);
+        }
+
+        const colMax = Math.max(...colY);
+
+        // Balance columns: pad shorter columns by distributing leftover space
+        // evenly between items. Removes the white gap that would appear below
+        // shorter columns at the tile's vertical seam.
+        for (let c = 0; c < cols; c++) {
+            const arr = colItems[c];
+            if (!arr.length) continue;
+            const extra = colMax - colY[c];
+            if (extra <= 0.5) continue;
+            const perItem = extra / arr.length;
+            let cum = 0;
+            for (const it of arr) {
+                it.y += cum;
+                cum += perItem;
+            }
+        }
+
+        tileSize.w = tileW;
+        tileSize.h = colMax;             // includes trailing GAP from last "+ h + GAP"
+        return result;
+    }
+
+    function applyCanvasTransform() {
+        archiveCanvas.style.transform =
+            `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0)`;
+    }
+
+    // Virtualization — only DOM-mount items in tile copies that intersect the viewport.
+    let syncQueued = false;
+    function scheduleSync() {
+        if (syncQueued) return;
+        syncQueued = true;
+        requestAnimationFrame(() => { syncQueued = false; syncMounted(); });
+    }
+
+    function createImgEl(it, wx, wy) {
+        const el = document.createElement('img');
+        el.className   = 'archive-img';
+        el.src         = it.src;
+        el.decoding    = 'async';
+        el.draggable   = false;
+        el.onerror     = () => el.remove();
+        el.style.width  = it.w + 'px';
+        el.style.height = it.h + 'px';
+        el.style.left   = wx + 'px';
+        el.style.top    = wy + 'px';
+        el.dataset.rot    = it.rot;
+        el.dataset.itemId = it.id;
+        gsap.set(el, { rotation: it.rot });
+        return el;
+    }
+
+    function syncMounted() {
+        if (!items.length) return;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const MARGIN = 200;
+
+        const x0 = -canvasOffset.x - MARGIN;
+        const y0 = -canvasOffset.y - MARGIN;
+        const x1 = x0 + vw + MARGIN * 2;
+        const y1 = y0 + vh + MARGIN * 2;
+
+        const tx0 = Math.floor(x0 / tileSize.w);
+        const tx1 = Math.floor(x1 / tileSize.w);
+        const ty0 = Math.floor(y0 / tileSize.h);
+        const ty1 = Math.floor(y1 / tileSize.h);
+
+        const needed = new Set();
+        for (let tx = tx0; tx <= tx1; tx++) {
+            for (let ty = ty0; ty <= ty1; ty++) {
+                const dx = tx * tileSize.w;
+                const dy = ty * tileSize.h;
+                for (const it of items) {
+                    const wx = it.x + dx;
+                    const wy = it.y + dy;
+                    if (wx + it.w < x0 || wx > x1) continue;
+                    if (wy + it.h < y0 || wy > y1) continue;
+
+                    const key = it.id + '_' + tx + '_' + ty;
+                    needed.add(key);
+                    if (!mounted.has(key)) {
+                        const el = createImgEl(it, wx, wy);
+                        archiveCanvas.appendChild(el);
+                        mounted.set(key, el);
+                    }
+                }
+            }
+        }
+
+        for (const [key, el] of mounted) {
+            if (!needed.has(key)) {
+                el.remove();
+                mounted.delete(key);
+            }
+        }
+    }
+
+    function unmountAll() {
+        for (const [, el] of mounted) el.remove();
+        mounted.clear();
+    }
+
+    // ----- Drag with momentum + click detection -----
+    let dragging = false;
+    let dragStart = null;
+    let dragOffsetStart = null;
+    let lastSample = null;
+    let velocity = { x: 0, y: 0 };
+    let momentumTween = null;
+    let downTarget = null;
+    let downTime   = 0;
+
+    archiveViewport.addEventListener('pointerdown', (e) => {
+        if (switching || itemViewOpen) return;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        dragging = true;
+        archiveViewport.classList.add('dragging');
+        archiveViewport.setPointerCapture(e.pointerId);
+        dragStart = { x: e.clientX, y: e.clientY };
+        dragOffsetStart = { x: canvasOffset.x, y: canvasOffset.y };
+        lastSample = { x: e.clientX, y: e.clientY, t: performance.now() };
+        velocity = { x: 0, y: 0 };
+        downTarget = e.target;
+        downTime   = performance.now();
+    });
+
+    archiveViewport.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        canvasOffset.x = dragOffsetStart.x + (e.clientX - dragStart.x);
+        canvasOffset.y = dragOffsetStart.y + (e.clientY - dragStart.y);
+        applyCanvasTransform();
+        scheduleSync();
+
+        const now = performance.now();
+        const dt = Math.max(8, now - lastSample.t);
+        velocity.x = (e.clientX - lastSample.x) / dt;
+        velocity.y = (e.clientY - lastSample.y) / dt;
+        lastSample = { x: e.clientX, y: e.clientY, t: now };
+    });
+
+    function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        archiveViewport.classList.remove('dragging');
+        try { archiveViewport.releasePointerCapture(e.pointerId); } catch(_){}
+
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        const dist = Math.hypot(dx, dy);
+        const elapsed = performance.now() - downTime;
+
+        // Treat as click if pointer barely moved and target was an archive image
+        if (dist < 6 && elapsed < 400 && downTarget && downTarget.classList && downTarget.classList.contains('archive-img')) {
+            openItemView(downTarget);
+            return;
+        }
+
+        if (Math.abs(velocity.x) > 0.3 || Math.abs(velocity.y) > 0.3) {
+            const MOMENTUM = 260;
+            momentumTween = gsap.to(canvasOffset, {
+                x: canvasOffset.x + velocity.x * MOMENTUM,
+                y: canvasOffset.y + velocity.y * MOMENTUM,
+                duration: 1.0,
+                ease: 'power3.out',
+                onUpdate: () => { applyCanvasTransform(); scheduleSync(); },
+                onComplete: () => { momentumTween = null; },
+            });
+        }
+    }
+    archiveViewport.addEventListener('pointerup', endDrag);
+    archiveViewport.addEventListener('pointercancel', endDrag);
+
+    // Wheel/trackpad scroll to pan the canvas
+    archiveViewport.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        if (!archiveOpen || itemViewOpen || switching) return;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        canvasOffset.x -= e.deltaX;
+        canvasOffset.y -= e.deltaY;
+        applyCanvasTransform();
+        scheduleSync();
+    }, { passive: false });
+
+    // ----- Search filter across archive items -----
+    let currentSearchQuery = '';
+
+    function filterByQuery(manifests, query) {
+        if (!query) return manifests;
+        const q = query.toLowerCase().trim();
+        return manifests.filter(m => {
+            const c = m.csv;
+            return [c.year, c.campaign, c.description, c.subcategory,
+                    c.photographer, c.model, c.director, c.creative_director,
+                    c.art_director, c.publication]
+                .some(f => f && f.toLowerCase().replace(/_/g, ' ').includes(q));
+        });
+    }
+
+    function applyArchiveFilter(query) {
+        if (switching) return;
+        switching = true;
+        currentSearchQuery = query;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+
+        const oldEls = Array.from(mounted.values());
+        const cx = window.innerWidth  / 2;
+        const cy = window.innerHeight / 2;
+        const tl = gsap.timeline({ onComplete: () => { switching = false; } });
+
+        if (oldEls.length) {
+            tl.to(oldEls, {
+                x: () => (Math.random() - 0.5) * 1800,
+                y: () => (Math.random() - 0.5) * 1400,
+                rotation: () => (Math.random() - 0.5) * 220,
+                scale: 0, opacity: 0,
+                duration: 0.6, ease: 'power2.in',
+                stagger: { amount: 0.35, from: 'center' },
+            });
+        }
+
+        tl.call(() => {
+            unmountAll();
+            items = buildItems(filterByQuery(archiveManifest, query));
+            canvasOffset.x = -tileSize.w / 2 + cx;
+            canvasOffset.y = -tileSize.h / 2 + cy;
+            applyCanvasTransform();
+            archiveEmpty.classList.toggle('visible', items.length === 0);
+            syncMounted();
+            const fresh = Array.from(mounted.values());
+            gsap.set(fresh, { scale: 0, opacity: 0 });
+        });
+
+        tl.add(() => {
+            const fresh = Array.from(mounted.values());
+            if (!fresh.length) return;
+            gsap.to(fresh, {
+                scale: 1, opacity: 1,
+                duration: 0.9, ease: 'back.out(1.6)',
+                stagger: { amount: 0.55, from: 'center' },
+            });
+        }, '+=0.05');
+
+        tl.to({}, { duration: 1.0 });
+    }
+
+    // ----- Category switch: scatter + drop-in -----
+    function setCategory(catLabel) {
+        const queryActive = currentSearchQuery !== '';
+        if ((catLabel === currentCategory && !queryActive) || switching) return;
+        switching = true;
+        currentSearchQuery = '';
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        currentCategory = catLabel;
+
+        document.querySelectorAll('.menu-cat').forEach(el => {
+            el.classList.toggle('active', el.dataset.cat === catLabel);
+        });
+        archiveShowAll.classList.toggle('cat-all-active', catLabel === 'all');
+
+        const oldEls = Array.from(mounted.values());
+        const cx = window.innerWidth  / 2;
+        const cy = window.innerHeight / 2;
+
+        const tl = gsap.timeline({ onComplete: () => { switching = false; } });
+
+        // 1. Scatter outward from viewport center
+        if (oldEls.length) {
+            tl.to(oldEls, {
+                x:        () => (Math.random() - 0.5) * 1800,
+                y:        () => (Math.random() - 0.5) * 1400,
+                rotation: () => (Math.random() - 0.5) * 220,
+                scale:    0,
+                opacity:  0,
+                duration: 0.6,
+                ease:     'power2.in',
+                stagger:  { amount: 0.35, from: 'center' },
+            });
+        }
+
+        // 2. Rebuild layout & mount fresh elements (initially invisible)
+        tl.call(() => {
+            unmountAll();
+            items = buildItems(filterImages(catLabel));
+            canvasOffset.x = -tileSize.w / 2 + cx;
+            canvasOffset.y = -tileSize.h / 2 + cy;
+            applyCanvasTransform();
+            archiveEmpty.classList.toggle('visible', items.length === 0);
+            syncMounted();
+            const fresh = Array.from(mounted.values());
+            gsap.set(fresh, { scale: 0, opacity: 0 });
+        });
+
+        // 3. Drop in with bounce
+        tl.add(() => {
+            const fresh = Array.from(mounted.values());
+            if (!fresh.length) return;
+            gsap.to(fresh, {
+                scale:    1,
+                opacity:  1,
+                duration: 0.9,
+                ease:     'back.out(1.6)',
+                stagger:  { amount: 0.55, from: 'center' },
+            });
+        }, '+=0.05');
+
+        // Hold timeline open until drop-in finishes
+        tl.to({}, { duration: 1.0 });
+    }
+
+    // ----- Smooth menu morph between default ↔ archive mode -----
+    function morphMenuToArchive() {
+        return new Promise(resolve => {
+            const tl = gsap.timeline({ onComplete: resolve });
+            tl.to([defaultPrimary, defaultSecondary], {
+                opacity: 0, duration: 0.22, ease: 'power2.in',
+            });
+            tl.call(() => {
+                gsap.set(archivePrimary, { opacity: 0, y: -6 });
+                menu.classList.remove('hover-active');
+                menu.classList.add('archive-active');
+                // Reset default opacities (they'll be display:none under archive-active)
+                defaultPrimary.style.opacity   = '';
+                defaultSecondary.style.opacity = '';
+            });
+            tl.to(archivePrimary, {
+                opacity: 1, y: 0, duration: 0.35, ease: 'power2.out',
+            });
+        });
+    }
+
+    function morphMenuToDefault() {
+        return new Promise(resolve => {
+            const tl = gsap.timeline({ onComplete: resolve });
+            tl.to(archivePrimary, {
+                opacity: 0, y: -4, duration: 0.22, ease: 'power2.in',
+            });
+            tl.call(() => {
+                // Pre-stage default primary invisible BEFORE removing archive-active class
+                // (defaultPrimary is display:none under archive-active, so this is invisible)
+                gsap.set(defaultPrimary, { opacity: 0 });
+                menu.classList.remove('archive-active');
+                // archivePrimary is now display:none — reset its inline styles
+                archivePrimary.style.opacity = '';
+                archivePrimary.style.transform = '';
+            });
+            tl.to(defaultPrimary, {
+                opacity: 1, duration: 0.35, ease: 'power2.out',
+            });
+            tl.call(() => {
+                defaultPrimary.style.opacity = '';
+            });
+        });
+    }
+
+    async function openArchive() {
+        if (archiveOpen) return;
+        archiveOpen = true;
+
+        await loadArchiveManifest();
+        enrichSearchWithArchive();
+        currentCategory = 'all';
+        document.querySelectorAll('.menu-cat').forEach(el => el.classList.remove('active'));
+        archiveShowAll.classList.add('cat-all-active');
+
+        items = buildItems(filterImages('all'));
+        canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
+        canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
+        applyCanvasTransform();
+        archiveEmpty.classList.toggle('visible', items.length === 0);
+        archiveCanvas.style.opacity = '0';
+        syncMounted();
+
+        // Reveal stage behind menu (fades up while menu morphs)
+        archiveStage.removeAttribute('aria-hidden');
+        archiveStage.style.display = 'block';
+        gsap.fromTo(archiveStage, { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' });
+
+        // Menu morph + canvas drop-in run in parallel
+        morphMenuToArchive();
+
+        const fresh = Array.from(mounted.values());
+        gsap.set(fresh, { scale: 0.5, opacity: 0 });
+        gsap.set(archiveCanvas, { opacity: 1 });
+        gsap.to(fresh, {
+            scale: 1, opacity: 1,
+            duration: 0.95, ease: 'back.out(1.4)',
+            stagger: { amount: 0.6, from: 'center' },
+            delay: 0.25,
+        });
+    }
+
+    async function closeArchive() {
+        if (!archiveOpen) return;
+        archiveOpen = false;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+
+        // Run stage fade + menu morph in parallel
+        gsap.to(archiveStage, {
+            opacity: 0, duration: 0.45, ease: 'power2.in',
+            onComplete: () => {
+                archiveStage.style.display = 'none';
+                archiveStage.setAttribute('aria-hidden', 'true');
+                archiveStage.style.opacity = '';
+                unmountAll();
+            },
+        });
+
+        await morphMenuToDefault();
+    }
+
+    archive.addEventListener('click', (e) => { e.preventDefault(); openArchive(); });
+    archiveBackBtn.addEventListener('click', (e) => { e.preventDefault(); closeArchive(); });
+    archiveShowAll.addEventListener('click', (e) => { e.preventDefault(); setCategory('all'); });
+
+    document.querySelectorAll('.menu-cat').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            setCategory(el.dataset.cat);
+        });
+    });
+
+    let resizeTimer = null;
+    window.addEventListener('resize', () => {
+        if (!archiveOpen) return;
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            unmountAll();
+            items = buildItems(filterImages(currentCategory));
+            canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
+            canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
+            applyCanvasTransform();
+            syncMounted();
+        }, 150);
+    });
+
+    // ===== ITEM VIEW (single image + info) =====
+
+    const itemView         = document.getElementById('item-view');
+    const itemViewBackdrop = document.getElementById('item-view-backdrop');
+    const itemViewImgWrap  = document.getElementById('item-view-img-wrap');
+    const itemViewInfo     = document.getElementById('item-view-info');
+    const itemViewBackBtn  = document.getElementById('item-view-back');
+    const itemViewNumbersEl = itemView.querySelector('.item-view-numbers');
+    const itemViewTitleEl   = itemView.querySelector('.item-view-title');
+    const itemViewMetaEl    = itemView.querySelector('.item-view-meta');
+
+    let itemViewOpen   = false;
+    let itemViewState  = null;
+
+    const prettify = s => s ? s.replace(/_/g, ' ').toUpperCase() : '';
+
+    const ACRONYM_MAP = {
+        'adv': 'advertisement',
+        'edi': 'editorial',
+        'ss':  'spring / summer',
+        'fw':  'fall / winter',
+    };
+    const expandLabel = s => s ? (ACRONYM_MAP[s.toLowerCase().trim()] || s) : s;
+
+    function buildTitle(csv) {
+        return prettify(csv.campaign) || prettify(csv.description) || expandLabel(csv.category).toUpperCase();
+    }
+
+    function renderItemMeta(csv) {
+        itemViewMetaEl.innerHTML = '';
+        const seasonStr = csv.season ? expandLabel(csv.season).toUpperCase() : '';
+        const yearSeason = [csv.year, seasonStr].filter(Boolean).join(' ');
+        const catExpanded = expandLabel(csv.category).toUpperCase();
+        const isAdv = csv.category === 'adv';
+        const catLine = (!isAdv && csv.subcategory)
+            ? `${catExpanded} / ${prettify(csv.subcategory)}`
+            : catExpanded;
+        const mediaLine = isAdv ? prettify(csv.subcategory) : '';
+        const fields = [
+            ['date',              yearSeason],
+            ['category',          catLine],
+            ['media',             mediaLine],
+            ['line',              prettify(csv.description)],
+            ['photographer',      prettify(csv.photographer)],
+            ['model',             prettify(csv.model)],
+            ['director',          prettify(csv.director)],
+            ['stylist',           prettify(csv.stylist)],
+            ['art director',      prettify(csv.art_director)],
+            ['creative director', prettify(csv.creative_director)],
+            ['hair',              prettify(csv.hair)],
+            ['makeup',            prettify(csv.makeup)],
+            ['publication',       prettify(csv.publication)],
+            ['issue',             prettify(csv.issue_date)],
+            ['music',             prettify(csv.music)],
+        ];
+        for (const [label, value] of fields) {
+            if (!value) continue;
+            const row = document.createElement('div');
+            row.className = 'item-view-meta-row';
+            const l = document.createElement('span');
+            l.className = 'item-view-meta-label';
+            l.textContent = label;
+            const v = document.createElement('span');
+            v.className = 'item-view-meta-value';
+            v.textContent = value;
+            row.appendChild(l); row.appendChild(v);
+            itemViewMetaEl.appendChild(row);
+        }
+    }
+
+    function renderItemNumbers(group, currentIdx) {
+        itemViewNumbersEl.innerHTML = '';
+        if (group.length <= 1) return;
+        for (let i = 0; i < group.length; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'item-view-num' + (i === currentIdx ? ' active' : '');
+            btn.textContent = String(i + 1).padStart(2, '0');
+            btn.addEventListener('click', () => switchItemPhoto(i));
+            itemViewNumbersEl.appendChild(btn);
+        }
+    }
+
+    function computeTargetRect(naturalW, naturalH) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const marginY = 60;
+        const marginR = 284;            // info panel (240) + right gap (36) + breathing room (8)
+        const marginL = marginR;        // symmetric → image perfectly centered in viewport
+        const maxH = vh - 2 * marginY;
+        const maxW = vw - marginL - marginR;
+        const aspect = naturalW / naturalH;
+        let h = maxH, w = h * aspect;
+        if (w > maxW) { w = maxW; h = w / aspect; }
+        const x = marginL + (maxW - w) / 2;
+        const y = (vh - h) / 2;
+        return { x, y, w, h };
+    }
+
+    function openItemView(imgEl) {
+        if (itemViewOpen) return;
+        const itemId = parseInt(imgEl.dataset.itemId, 10);
+        const item = items[itemId];
+        if (!item) return;
+
+        itemViewOpen = true;
+        document.body.classList.add('item-view-open');
+
+        const group = (campaignGroups.get(item.manifest.campaignKey) || [item.manifest]).slice();
+        const currentIdx = Math.max(0, group.findIndex(m => m.path === item.manifest.path));
+
+        // Preload all sibling images to eliminate lag on photo switch
+        group.forEach(m => { if (m.path !== item.src) { const i = new Image(); i.src = m.path; } });
+
+        const r = imgEl.getBoundingClientRect();
+        const origRect = { x: r.left, y: r.top, w: r.width, h: r.height };
+
+        imgEl.classList.add('is-hidden');
+
+        const clone = document.createElement('img');
+        clone.src       = item.src;
+        clone.draggable = false;
+        itemViewImgWrap.appendChild(clone);
+
+        itemViewState = {
+            group,
+            currentIdx,
+            sourceEl:  imgEl,
+            sourceRot: item.rot,
+            cloneImg:  clone,
+            origRect,
+            currentManifest: item.manifest,
+        };
+
+        gsap.set(clone, {
+            position: 'absolute',
+            left:     origRect.x,
+            top:      origRect.y,
+            width:    origRect.w,
+            height:   origRect.h,
+            rotation: item.rot,
+            transformOrigin: 'center center',
+        });
+
+        const tgt = computeTargetRect(item.manifest.dw, item.manifest.dh);
+
+        itemViewTitleEl.textContent = buildTitle(item.manifest.csv);
+        renderItemMeta(item.manifest.csv);
+        renderItemNumbers(group, currentIdx);
+
+        itemView.removeAttribute('aria-hidden');
+        itemView.style.display = 'block';
+
+        const tl = gsap.timeline();
+
+        // Backdrop fades + blurs in
+        tl.fromTo(itemViewBackdrop,
+            { opacity: 0 },
+            { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0);
+
+        // Z-axis punch: image lifts toward viewer while expanding
+        tl.fromTo(clone, { z: -180 }, { z: 0, duration: 0.95, ease: 'power3.out' }, 0);
+        tl.to(clone, {
+            left:     tgt.x,
+            top:      tgt.y,
+            width:    tgt.w,
+            height:   tgt.h,
+            rotation: 0,
+            duration: 0.9,
+            ease:     'power3.inOut',
+        }, 0);
+
+        // Info panel slides in from the right
+        tl.fromTo(itemViewInfo,
+            { x: 30, opacity: 0 },
+            { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+    }
+
+    function switchItemPhoto(idx) {
+        if (!itemViewOpen || !itemViewState) return;
+        if (idx === itemViewState.currentIdx) return;
+        const m = itemViewState.group[idx];
+        if (!m) return;
+
+        itemViewState.currentIdx = idx;
+        itemViewState.currentManifest = m;
+        itemViewNumbersEl.querySelectorAll('.item-view-num').forEach((b, i) => {
+            b.classList.toggle('active', i === idx);
+        });
+
+        const clone = itemViewState.cloneImg;
+        const tgt   = computeTargetRect(m.dw, m.dh);
+
+        // Cross-fade: shrink + fade out, swap src, expand + fade in
+        const tl = gsap.timeline();
+        tl.to(clone, {
+            opacity: 0,
+            scale: 0.96,
+            duration: 0.22,
+            ease: 'power2.in',
+            onComplete: () => {
+                clone.src = m.path;
+                gsap.set(clone, { left: tgt.x, top: tgt.y, width: tgt.w, height: tgt.h, scale: 1 });
+            },
+        });
+        tl.to(clone, { opacity: 1, duration: 0.35, ease: 'power2.out' });
+    }
+
+    function closeItemView() {
+        if (!itemViewOpen) return;
+        itemViewOpen = false;
+
+        const st = itemViewState;
+        const clone = st.cloneImg;
+        const target = st.origRect;
+
+        const sourceItem = items[parseInt(st.sourceEl.dataset.itemId, 10)];
+        const photoSwitched = st.currentManifest.path !== sourceItem.src;
+
+        const tl = gsap.timeline({
+            onComplete: () => {
+                itemView.style.display = 'none';
+                itemView.setAttribute('aria-hidden', 'true');
+                clone.remove();
+                st.sourceEl.classList.remove('is-hidden');
+                itemViewState = null;
+                document.body.classList.remove('item-view-open');
+            },
+        });
+
+        // Fade info out immediately
+        tl.to(itemViewInfo, { x: 30, opacity: 0, duration: 0.3, ease: 'power2.in' }, 0);
+
+        // If user navigated to a different photo, restore source img before shrinking
+        if (photoSwitched) {
+            tl.to(clone, {
+                opacity: 0, duration: 0.18,
+                onComplete: () => { clone.src = sourceItem.src; },
+            }, 0);
+            tl.to(clone, { opacity: 1, duration: 0.15 }, 0.18);
+        }
+
+        // Shrink back to canvas position — z animation removed to avoid stretch artifact
+        gsap.set(clone, { z: 0 });
+        tl.to(clone, {
+            left:     target.x,
+            top:      target.y,
+            width:    target.w,
+            height:   target.h,
+            rotation: st.sourceRot,
+            duration: 0.75,
+            ease:     'power3.inOut',
+        }, photoSwitched ? 0.3 : 0.15);
+
+        tl.to(itemViewBackdrop, { opacity: 0, duration: 0.4, ease: 'power2.in' }, '-=0.45');
+    }
+
+    itemViewBackBtn.addEventListener('click', (e) => { e.preventDefault(); closeItemView(); });
+    itemViewBackdrop.addEventListener('click', closeItemView);
+
+    // Escape closes item view, then archive
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (itemViewOpen)      { closeItemView(); }
+        else if (archiveOpen)  { closeArchive(); }
     });
 });
