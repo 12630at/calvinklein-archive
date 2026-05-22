@@ -32,11 +32,28 @@
             <a href="#" class="menu-item">collections</a>
             <a href="#" class="menu-item">advertising</a>
             <a href="#" class="menu-item">editorials</a>
-            <a href="#" class="menu-item">invitations</a>
             <a href="#" class="menu-item">ephemera</a>
         </div>
 
+        <!-- Archive-mode primary column: replaces default primary when archive page is open -->
+        <div class="menu-primary menu-primary-archive">
+            <a href="#" class="menu-item menu-item-archive-active">archive</a>
+            <a href="#" class="menu-item menu-cat" data-cat="collections">collections</a>
+            <a href="#" class="menu-item menu-cat" data-cat="advertising">advertising</a>
+            <a href="#" class="menu-item menu-cat" data-cat="editorials">editorials</a>
+            <a href="#" class="menu-item menu-cat" data-cat="ephemera">ephemera</a>
+        </div>
+
     </nav>
+
+    <!-- Archive Page (infinite canvas) -->
+    <div id="archive-stage" aria-hidden="true">
+        <div id="archive-viewport">
+            <div id="archive-canvas"></div>
+        </div>
+        <div id="archive-empty">coming soon</div>
+        <button id="archive-close" class="people-close">← back</button>
+    </div>
 
     <!-- People Page -->
     <div id="people-stage" aria-hidden="true">
@@ -91,6 +108,7 @@
         <div id="search-results"></div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

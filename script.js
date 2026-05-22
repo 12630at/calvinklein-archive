@@ -795,4 +795,273 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         playSearchTransition();
     });
+
+    // ===== ARCHIVE PAGE — INFINITE CANVAS =====
+
+    const archiveStage    = document.getElementById('archive-stage');
+    const archiveViewport = document.getElementById('archive-viewport');
+    const archiveCanvas   = document.getElementById('archive-canvas');
+    const archiveEmpty    = document.getElementById('archive-empty');
+    const archiveCloseBtn = document.getElementById('archive-close');
+
+    let archiveOpen        = false;
+    let archiveManifest    = null;       // [{path, category}, ...]
+    let currentCategory    = 'all';      // 'all' | 'advertising' | 'editorials' | 'collections' | 'ephemera'
+    let canvasOffset       = { x: 0, y: 0 };
+    let tileSize           = { w: 0, h: 0 };
+    let tileEls            = [];         // 4 tile container elements (2x2)
+
+    // Maps menu category labels to manifest category codes
+    const CAT_MAP = {
+        all:         null,
+        advertising: 'adv',
+        editorials:  'edi',
+        collections: '__none__',
+        ephemera:    '__none__',
+    };
+
+    // FNV-1a hash → deterministic pseudo-random [0,1) per (filename, salt)
+    function _hash(s) {
+        let h = 2166136261;
+        for (let i = 0; i < s.length; i++) {
+            h ^= s.charCodeAt(i);
+            h = Math.imul(h, 16777619);
+        }
+        return h >>> 0;
+    }
+    function rand01(seed, salt) { return (_hash(seed + ':' + salt) % 100000) / 100000; }
+
+    // Parse archive_index.csv → [{path, category}]
+    async function loadArchiveManifest() {
+        if (archiveManifest) return archiveManifest;
+        const res = await fetch('archive_index.csv');
+        const txt = await res.text();
+        const lines = txt.trim().split(/\r?\n/);
+        const header = lines.shift().split(',');
+        const iFile = header.indexOf('filename');
+        const iYear = header.indexOf('year');
+        const iCat  = header.indexOf('category');
+        const iSub  = header.indexOf('subcategory');
+        archiveManifest = lines.map(line => {
+            const cols = line.split(',');
+            const filename = cols[iFile];
+            const year     = cols[iYear];
+            const cat      = cols[iCat];
+            const sub      = cols[iSub];
+            const path = sub
+                ? `assets/index/${cat}/${sub}/${year}/${filename}.webp`
+                : `assets/index/${cat}/${year}/${filename}.webp`;
+            return { path, category: cat };
+        });
+        return archiveManifest;
+    }
+
+    function filterImages(catLabel) {
+        const code = CAT_MAP[catLabel];
+        if (code === null)        return archiveManifest;            // all
+        if (code === '__none__')  return [];                          // empty categories
+        return archiveManifest.filter(m => m.category === code);
+    }
+
+    // Build one tile of images using deterministic layout.
+    // Returns a fresh DOM element fully populated.
+    function buildTile(images) {
+        const tile = document.createElement('div');
+        tile.className = 'archive-tile';
+        tile.style.width  = tileSize.w + 'px';
+        tile.style.height = tileSize.h + 'px';
+
+        const MIN_W = 140, MAX_W = 320, MARGIN = 360;
+        const usableW = Math.max(100, tileSize.w - MARGIN);
+        const usableH = Math.max(100, tileSize.h - MARGIN);
+
+        for (const img of images) {
+            const seed = img.path;
+            const w   = MIN_W + rand01(seed, 'w') * (MAX_W - MIN_W);
+            const x   = rand01(seed, 'x') * usableW;
+            const y   = rand01(seed, 'y') * usableH;
+            const rot = (rand01(seed, 'r') - 0.5) * 4; // ±2deg
+
+            const el = document.createElement('img');
+            el.className = 'archive-img';
+            el.src       = img.path;
+            el.loading   = 'lazy';
+            el.onerror   = () => el.remove();
+            el.style.width     = w + 'px';
+            el.style.left      = x + 'px';
+            el.style.top       = y + 'px';
+            el.style.transform = `rotate(${rot.toFixed(2)}deg)`;
+            tile.appendChild(el);
+        }
+        return tile;
+    }
+
+    function computeTileSize() {
+        tileSize.w = Math.max(2400, window.innerWidth  + 400);
+        tileSize.h = Math.max(1800, window.innerHeight + 400);
+    }
+
+    // Build the 2x2 grid of identical tile copies inside the canvas.
+    function rebuildCanvas(images) {
+        archiveCanvas.innerHTML = '';
+        tileEls = [];
+
+        if (!images.length) {
+            archiveEmpty.classList.add('visible');
+            return;
+        }
+        archiveEmpty.classList.remove('visible');
+
+        const proto = buildTile(images);
+
+        for (let i = 0; i < 4; i++) {
+            const t = (i === 0) ? proto : proto.cloneNode(true);
+            const col = i % 2, row = (i / 2) | 0;
+            t.style.transform = `translate(${col * tileSize.w}px, ${row * tileSize.h}px)`;
+            archiveCanvas.appendChild(t);
+            tileEls.push(t);
+        }
+    }
+
+    // Stagger fade-in for all images in the first tile (clones inherit via class).
+    function animateImagesIn() {
+        const imgs = archiveCanvas.querySelectorAll('.archive-img');
+        if (typeof gsap === 'undefined') {
+            imgs.forEach(i => { i.style.opacity = '1'; });
+            return;
+        }
+        gsap.fromTo(imgs,
+            { opacity: 0, scale: 0.92 },
+            {
+                opacity: 1, scale: 1,
+                duration: 0.7,
+                ease: 'power3.out',
+                stagger: { amount: 0.8, from: 'random' },
+                onComplete: () => imgs.forEach(i => { i.style.willChange = 'auto'; }),
+            }
+        );
+    }
+
+    function applyCanvasTransform() {
+        // Normalize offset so it stays within [-tileSize, 0] — keeps the 2x2
+        // grid always covering the viewport from origin.
+        const ox = ((canvasOffset.x % tileSize.w) - tileSize.w) % tileSize.w;
+        const oy = ((canvasOffset.y % tileSize.h) - tileSize.h) % tileSize.h;
+        archiveCanvas.style.transform = `translate3d(${ox}px, ${oy}px, 0)`;
+    }
+
+    // Drag with pointer events
+    let dragging = false;
+    let dragStart = null;
+    let dragOffsetStart = null;
+
+    archiveViewport.addEventListener('pointerdown', (e) => {
+        dragging = true;
+        archiveViewport.classList.add('dragging');
+        archiveViewport.setPointerCapture(e.pointerId);
+        dragStart = { x: e.clientX, y: e.clientY };
+        dragOffsetStart = { x: canvasOffset.x, y: canvasOffset.y };
+    });
+    archiveViewport.addEventListener('pointermove', (e) => {
+        if (!dragging) return;
+        canvasOffset.x = dragOffsetStart.x + (e.clientX - dragStart.x);
+        canvasOffset.y = dragOffsetStart.y + (e.clientY - dragStart.y);
+        applyCanvasTransform();
+    });
+    function endDrag(e) {
+        if (!dragging) return;
+        dragging = false;
+        archiveViewport.classList.remove('dragging');
+        try { archiveViewport.releasePointerCapture(e.pointerId); } catch (_) {}
+    }
+    archiveViewport.addEventListener('pointerup', endDrag);
+    archiveViewport.addEventListener('pointercancel', endDrag);
+
+    // Category filter: fade out → swap → fade in
+    function setCategory(catLabel) {
+        if (catLabel === currentCategory) return;
+        currentCategory = catLabel;
+
+        document.querySelectorAll('.menu-cat').forEach(el => {
+            el.classList.toggle('active', el.dataset.cat === catLabel);
+        });
+
+        const oldImgs = archiveCanvas.querySelectorAll('.archive-img');
+        const next = () => {
+            rebuildCanvas(filterImages(catLabel));
+            animateImagesIn();
+        };
+        if (oldImgs.length && typeof gsap !== 'undefined') {
+            gsap.to(oldImgs, {
+                opacity: 0, scale: 0.96, duration: 0.35, ease: 'power2.in',
+                stagger: { amount: 0.25, from: 'random' },
+                onComplete: next,
+            });
+        } else {
+            next();
+        }
+    }
+
+    async function openArchive() {
+        if (archiveOpen) return;
+        archiveOpen = true;
+
+        // Swap menu to archive-mode (keeps menu in its original position)
+        menu.classList.remove('hover-active');
+        menu.classList.add('archive-active');
+
+        await loadArchiveManifest();
+        computeTileSize();
+        currentCategory = 'all';
+        document.querySelectorAll('.menu-cat').forEach(el => el.classList.remove('active'));
+        rebuildCanvas(filterImages('all'));
+
+        // Center the canvas roughly so first paint isn't all at top-left
+        canvasOffset.x = -tileSize.w / 4;
+        canvasOffset.y = -tileSize.h / 4;
+        applyCanvasTransform();
+
+        archiveStage.removeAttribute('aria-hidden');
+        archiveStage.style.display = 'block';
+        void archiveStage.offsetWidth;
+        archiveStage.style.opacity = '1';
+
+        // Wait for fade-in to start before animating images
+        setTimeout(animateImagesIn, 300);
+    }
+
+    function closeArchive() {
+        if (!archiveOpen) return;
+        archiveOpen = false;
+
+        archiveStage.style.opacity = '0';
+        setTimeout(() => {
+            archiveStage.style.display = 'none';
+            archiveStage.setAttribute('aria-hidden', 'true');
+            archiveCanvas.innerHTML = '';
+            menu.classList.remove('archive-active');
+        }, 650);
+    }
+
+    archive.addEventListener('click', (e) => {
+        e.preventDefault();
+        openArchive();
+    });
+
+    archiveCloseBtn.addEventListener('click', closeArchive);
+
+    document.querySelectorAll('.menu-cat').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            setCategory(el.dataset.cat);
+        });
+    });
+
+    window.addEventListener('resize', () => {
+        if (!archiveOpen) return;
+        computeTileSize();
+        rebuildCanvas(filterImages(currentCategory));
+        applyCanvasTransform();
+        animateImagesIn();
+    });
 });
