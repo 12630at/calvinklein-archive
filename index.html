@@ -37,7 +37,10 @@
 
         <!-- Archive-mode primary column: replaces default primary when archive page is open -->
         <div class="menu-primary menu-primary-archive">
-            <a href="#" class="menu-item menu-item-archive-active">archive</a>
+            <div class="menu-archive-header">
+                <span class="menu-item menu-item-archive-active">archive</span>
+                <button class="menu-archive-back" id="archive-back" aria-label="back to home">←</button>
+            </div>
             <a href="#" class="menu-item menu-cat" data-cat="collections">collections</a>
             <a href="#" class="menu-item menu-cat" data-cat="advertising">advertising</a>
             <a href="#" class="menu-item menu-cat" data-cat="editorials">editorials</a>
@@ -52,7 +55,6 @@
             <div id="archive-canvas"></div>
         </div>
         <div id="archive-empty">coming soon</div>
-        <button id="archive-close" class="people-close">← back</button>
     </div>
 
     <!-- People Page -->

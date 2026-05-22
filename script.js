@@ -796,22 +796,22 @@ document.addEventListener('DOMContentLoaded', () => {
         playSearchTransition();
     });
 
-    // ===== ARCHIVE PAGE — INFINITE CANVAS =====
+    // ===== ARCHIVE PAGE — INFINITE VIRTUALIZED CANVAS =====
 
     const archiveStage    = document.getElementById('archive-stage');
     const archiveViewport = document.getElementById('archive-viewport');
     const archiveCanvas   = document.getElementById('archive-canvas');
     const archiveEmpty    = document.getElementById('archive-empty');
-    const archiveCloseBtn = document.getElementById('archive-close');
+    const archiveBackBtn  = document.getElementById('archive-back');
 
-    let archiveOpen        = false;
-    let archiveManifest    = null;       // [{path, category}, ...]
-    let currentCategory    = 'all';      // 'all' | 'advertising' | 'editorials' | 'collections' | 'ephemera'
-    let canvasOffset       = { x: 0, y: 0 };
-    let tileSize           = { w: 0, h: 0 };
-    let tileEls            = [];         // 4 tile container elements (2x2)
+    let archiveOpen     = false;
+    let archiveManifest = null;
+    let currentCategory = 'all';
+    let items           = [];                // [{id, x, y, w, rot, src}]
+    let tileSize        = { w: 0, h: 0 };
+    let canvasOffset    = { x: 0, y: 0 };
+    const mounted       = new Map();         // key "id_tx_ty" → img element
 
-    // Maps menu category labels to manifest category codes
     const CAT_MAP = {
         all:         null,
         advertising: 'adv',
@@ -820,7 +820,6 @@ document.addEventListener('DOMContentLoaded', () => {
         ephemera:    '__none__',
     };
 
-    // FNV-1a hash → deterministic pseudo-random [0,1) per (filename, salt)
     function _hash(s) {
         let h = 2166136261;
         for (let i = 0; i < s.length; i++) {
@@ -829,9 +828,8 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return h >>> 0;
     }
-    function rand01(seed, salt) { return (_hash(seed + ':' + salt) % 100000) / 100000; }
+    const rand01 = (seed, salt) => (_hash(seed + ':' + salt) % 100000) / 100000;
 
-    // Parse archive_index.csv → [{path, category}]
     async function loadArchiveManifest() {
         if (archiveManifest) return archiveManifest;
         const res = await fetch('archive_index.csv');
@@ -844,140 +842,200 @@ document.addEventListener('DOMContentLoaded', () => {
         const iSub  = header.indexOf('subcategory');
         archiveManifest = lines.map(line => {
             const cols = line.split(',');
-            const filename = cols[iFile];
-            const year     = cols[iYear];
-            const cat      = cols[iCat];
-            const sub      = cols[iSub];
-            const path = sub
-                ? `assets/index/${cat}/${sub}/${year}/${filename}.webp`
-                : `assets/index/${cat}/${year}/${filename}.webp`;
-            return { path, category: cat };
+            const path = cols[iSub]
+                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${cols[iFile]}.webp`
+                : `assets/index/${cols[iCat]}/${cols[iYear]}/${cols[iFile]}.webp`;
+            return { path, category: cols[iCat] };
         });
         return archiveManifest;
     }
 
     function filterImages(catLabel) {
         const code = CAT_MAP[catLabel];
-        if (code === null)        return archiveManifest;            // all
-        if (code === '__none__')  return [];                          // empty categories
+        if (code === null)       return archiveManifest;
+        if (code === '__none__') return [];
         return archiveManifest.filter(m => m.category === code);
     }
 
-    // Build one tile of images using deterministic layout.
-    // Returns a fresh DOM element fully populated.
-    function buildTile(images) {
-        const tile = document.createElement('div');
-        tile.className = 'archive-tile';
-        tile.style.width  = tileSize.w + 'px';
-        tile.style.height = tileSize.h + 'px';
-
-        const MIN_W = 140, MAX_W = 320, MARGIN = 360;
-        const usableW = Math.max(100, tileSize.w - MARGIN);
-        const usableH = Math.max(100, tileSize.h - MARGIN);
-
-        for (const img of images) {
-            const seed = img.path;
-            const w   = MIN_W + rand01(seed, 'w') * (MAX_W - MIN_W);
-            const x   = rand01(seed, 'x') * usableW;
-            const y   = rand01(seed, 'y') * usableH;
-            const rot = (rand01(seed, 'r') - 0.5) * 4; // ±2deg
-
-            const el = document.createElement('img');
-            el.className = 'archive-img';
-            el.src       = img.path;
-            el.loading   = 'lazy';
-            el.onerror   = () => el.remove();
-            el.style.width     = w + 'px';
-            el.style.left      = x + 'px';
-            el.style.top       = y + 'px';
-            el.style.transform = `rotate(${rot.toFixed(2)}deg)`;
-            tile.appendChild(el);
-        }
-        return tile;
-    }
-
-    function computeTileSize() {
-        tileSize.w = Math.max(2400, window.innerWidth  + 400);
-        tileSize.h = Math.max(1800, window.innerHeight + 400);
-    }
-
-    // Build the 2x2 grid of identical tile copies inside the canvas.
-    function rebuildCanvas(images) {
-        archiveCanvas.innerHTML = '';
-        tileEls = [];
+    // Cell-based deterministic layout — no overlap, even distribution.
+    // Returns items in tile coordinates [0, tileSize.w) × [0, tileSize.h).
+    function buildItems(images) {
+        const vw = window.innerWidth, vh = window.innerHeight;
 
         if (!images.length) {
-            archiveEmpty.classList.add('visible');
-            return;
+            tileSize.w = Math.max(vw + 800, 2000);
+            tileSize.h = Math.max(vh + 800, 1400);
+            return [];
         }
-        archiveEmpty.classList.remove('visible');
 
-        const proto = buildTile(images);
+        const N = images.length;
+        const aspect = vw / vh;
+        const cols = Math.max(1, Math.round(Math.sqrt(N * aspect)));
+        const rows = Math.ceil(N / cols);
 
-        for (let i = 0; i < 4; i++) {
-            const t = (i === 0) ? proto : proto.cloneNode(true);
-            const col = i % 2, row = (i / 2) | 0;
-            t.style.transform = `translate(${col * tileSize.w}px, ${row * tileSize.h}px)`;
-            archiveCanvas.appendChild(t);
-            tileEls.push(t);
-        }
-    }
+        let CELL_W = 320, CELL_H = 380;
+        let tw = cols * CELL_W, th = rows * CELL_H;
 
-    // Stagger fade-in for all images in the first tile (clones inherit via class).
-    function animateImagesIn() {
-        const imgs = archiveCanvas.querySelectorAll('.archive-img');
-        if (typeof gsap === 'undefined') {
-            imgs.forEach(i => { i.style.opacity = '1'; });
-            return;
-        }
-        gsap.fromTo(imgs,
-            { opacity: 0, scale: 0.92 },
-            {
-                opacity: 1, scale: 1,
-                duration: 0.7,
-                ease: 'power3.out',
-                stagger: { amount: 0.8, from: 'random' },
-                onComplete: () => imgs.forEach(i => { i.style.willChange = 'auto'; }),
-            }
-        );
+        // Ensure tile spans more than one viewport in each axis (wrap looks seamless)
+        const MIN_TW = vw + 600, MIN_TH = vh + 600;
+        if (tw < MIN_TW) { CELL_W *= MIN_TW / tw; tw = MIN_TW; }
+        if (th < MIN_TH) { CELL_H *= MIN_TH / th; th = MIN_TH; }
+
+        tileSize.w = tw;
+        tileSize.h = th;
+
+        // Deterministic shuffle so visual order isn't alphabetic
+        const shuffled = images.slice().sort((a, b) => _hash(a.path) - _hash(b.path));
+
+        return shuffled.map((img, i) => {
+            const col = i % cols;
+            const row = (i / cols) | 0;
+            const seed = img.path;
+            const w = 170 + rand01(seed, 'w') * 110;       // 170–280
+            const rot = (rand01(seed, 'r') - 0.5) * 4;     // ±2deg
+            const jx = (rand01(seed, 'jx') - 0.5) * (CELL_W - w) * 0.7;
+            const jy = (rand01(seed, 'jy') - 0.5) * Math.min(80, CELL_H * 0.2);
+            return {
+                id:  i,
+                x:   col * CELL_W + (CELL_W - w) / 2 + jx,
+                y:   row * CELL_H + 30 + jy,
+                w, rot,
+                src: img.path,
+            };
+        });
     }
 
     function applyCanvasTransform() {
-        // Normalize offset so it stays within [-tileSize, 0] — keeps the 2x2
-        // grid always covering the viewport from origin.
-        const ox = ((canvasOffset.x % tileSize.w) - tileSize.w) % tileSize.w;
-        const oy = ((canvasOffset.y % tileSize.h) - tileSize.h) % tileSize.h;
-        archiveCanvas.style.transform = `translate3d(${ox}px, ${oy}px, 0)`;
+        archiveCanvas.style.transform =
+            `translate3d(${canvasOffset.x}px, ${canvasOffset.y}px, 0)`;
     }
 
-    // Drag with pointer events
+    // Virtualization — only DOM-mount items in tile copies that intersect the viewport.
+    let syncQueued = false;
+    function scheduleSync() {
+        if (syncQueued) return;
+        syncQueued = true;
+        requestAnimationFrame(() => { syncQueued = false; syncMounted(); });
+    }
+
+    function syncMounted() {
+        if (!items.length) return;
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const MARGIN = 250;
+
+        // World coordinates currently visible (offset is negative when canvas slides left)
+        const x0 = -canvasOffset.x - MARGIN;
+        const y0 = -canvasOffset.y - MARGIN;
+        const x1 = x0 + vw + MARGIN * 2;
+        const y1 = y0 + vh + MARGIN * 2;
+
+        const tx0 = Math.floor(x0 / tileSize.w);
+        const tx1 = Math.floor(x1 / tileSize.w);
+        const ty0 = Math.floor(y0 / tileSize.h);
+        const ty1 = Math.floor(y1 / tileSize.h);
+
+        const needed = new Set();
+        for (let tx = tx0; tx <= tx1; tx++) {
+            for (let ty = ty0; ty <= ty1; ty++) {
+                const dx = tx * tileSize.w;
+                const dy = ty * tileSize.h;
+                for (const it of items) {
+                    const wx = it.x + dx;
+                    const wy = it.y + dy;
+                    // Skip if entirely outside visible rect (approx height = w*1.4)
+                    const approxH = it.w * 1.4;
+                    if (wx + it.w < x0 || wx > x1) continue;
+                    if (wy + approxH < y0 || wy > y1) continue;
+
+                    const key = it.id + '_' + tx + '_' + ty;
+                    needed.add(key);
+                    if (!mounted.has(key)) {
+                        const el = document.createElement('img');
+                        el.className   = 'archive-img';
+                        el.src         = it.src;
+                        el.decoding    = 'async';
+                        el.draggable   = false;
+                        el.onerror     = () => el.remove();
+                        el.style.width     = it.w + 'px';
+                        el.style.left      = wx + 'px';
+                        el.style.top       = wy + 'px';
+                        el.style.transform = `rotate(${it.rot.toFixed(2)}deg)`;
+                        archiveCanvas.appendChild(el);
+                        mounted.set(key, el);
+                    }
+                }
+            }
+        }
+
+        // Unmount no-longer-needed
+        for (const [key, el] of mounted) {
+            if (!needed.has(key)) {
+                el.remove();
+                mounted.delete(key);
+            }
+        }
+    }
+
+    function unmountAll() {
+        for (const [, el] of mounted) el.remove();
+        mounted.clear();
+    }
+
+    // ----- Drag with momentum -----
     let dragging = false;
     let dragStart = null;
     let dragOffsetStart = null;
+    let lastSample = null;       // {x, y, t} for velocity calc
+    let velocity = { x: 0, y: 0 };
+    let momentumTween = null;
 
     archiveViewport.addEventListener('pointerdown', (e) => {
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
         dragging = true;
         archiveViewport.classList.add('dragging');
         archiveViewport.setPointerCapture(e.pointerId);
         dragStart = { x: e.clientX, y: e.clientY };
         dragOffsetStart = { x: canvasOffset.x, y: canvasOffset.y };
+        lastSample = { x: e.clientX, y: e.clientY, t: performance.now() };
+        velocity = { x: 0, y: 0 };
     });
+
     archiveViewport.addEventListener('pointermove', (e) => {
         if (!dragging) return;
         canvasOffset.x = dragOffsetStart.x + (e.clientX - dragStart.x);
         canvasOffset.y = dragOffsetStart.y + (e.clientY - dragStart.y);
         applyCanvasTransform();
+        scheduleSync();
+
+        const now = performance.now();
+        const dt = Math.max(8, now - lastSample.t);
+        velocity.x = (e.clientX - lastSample.x) / dt;
+        velocity.y = (e.clientY - lastSample.y) / dt;
+        lastSample = { x: e.clientX, y: e.clientY, t: now };
     });
+
     function endDrag(e) {
         if (!dragging) return;
         dragging = false;
         archiveViewport.classList.remove('dragging');
-        try { archiveViewport.releasePointerCapture(e.pointerId); } catch (_) {}
+        try { archiveViewport.releasePointerCapture(e.pointerId); } catch(_){}
+
+        if (typeof gsap !== 'undefined' && (Math.abs(velocity.x) > 0.3 || Math.abs(velocity.y) > 0.3)) {
+            const MOMENTUM = 240;
+            momentumTween = gsap.to(canvasOffset, {
+                x: canvasOffset.x + velocity.x * MOMENTUM,
+                y: canvasOffset.y + velocity.y * MOMENTUM,
+                duration: 1.0,
+                ease: 'power3.out',
+                onUpdate: () => { applyCanvasTransform(); scheduleSync(); },
+                onComplete: () => { momentumTween = null; },
+            });
+        }
     }
     archiveViewport.addEventListener('pointerup', endDrag);
     archiveViewport.addEventListener('pointercancel', endDrag);
 
-    // Category filter: fade out → swap → fade in
+    // ----- Category filter: canvas-level fade out → rebuild → fade in -----
     function setCategory(catLabel) {
         if (catLabel === currentCategory) return;
         currentCategory = catLabel;
@@ -986,19 +1044,26 @@ document.addEventListener('DOMContentLoaded', () => {
             el.classList.toggle('active', el.dataset.cat === catLabel);
         });
 
-        const oldImgs = archiveCanvas.querySelectorAll('.archive-img');
-        const next = () => {
-            rebuildCanvas(filterImages(catLabel));
-            animateImagesIn();
+        const rebuild = () => {
+            unmountAll();
+            items = buildItems(filterImages(catLabel));
+            canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
+            canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
+            applyCanvasTransform();
+            archiveEmpty.classList.toggle('visible', items.length === 0);
+            syncMounted();
         };
-        if (oldImgs.length && typeof gsap !== 'undefined') {
-            gsap.to(oldImgs, {
-                opacity: 0, scale: 0.96, duration: 0.35, ease: 'power2.in',
-                stagger: { amount: 0.25, from: 'random' },
-                onComplete: next,
+
+        if (typeof gsap !== 'undefined') {
+            gsap.to(archiveCanvas, {
+                opacity: 0, duration: 0.3, ease: 'power2.in',
+                onComplete: () => {
+                    rebuild();
+                    gsap.to(archiveCanvas, { opacity: 1, duration: 0.5, ease: 'power2.out' });
+                },
             });
         } else {
-            next();
+            rebuild();
         }
     }
 
@@ -1006,49 +1071,51 @@ document.addEventListener('DOMContentLoaded', () => {
         if (archiveOpen) return;
         archiveOpen = true;
 
-        // Swap menu to archive-mode (keeps menu in its original position)
         menu.classList.remove('hover-active');
         menu.classList.add('archive-active');
 
         await loadArchiveManifest();
-        computeTileSize();
         currentCategory = 'all';
         document.querySelectorAll('.menu-cat').forEach(el => el.classList.remove('active'));
-        rebuildCanvas(filterImages('all'));
 
-        // Center the canvas roughly so first paint isn't all at top-left
-        canvasOffset.x = -tileSize.w / 4;
-        canvasOffset.y = -tileSize.h / 4;
+        items = buildItems(filterImages('all'));
+        canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
+        canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
         applyCanvasTransform();
+        archiveEmpty.classList.toggle('visible', items.length === 0);
+        archiveCanvas.style.opacity = '0';
+        syncMounted();
 
         archiveStage.removeAttribute('aria-hidden');
         archiveStage.style.display = 'block';
         void archiveStage.offsetWidth;
         archiveStage.style.opacity = '1';
 
-        // Wait for fade-in to start before animating images
-        setTimeout(animateImagesIn, 300);
+        if (typeof gsap !== 'undefined') {
+            gsap.to(archiveCanvas, {
+                opacity: 1, duration: 0.8, ease: 'power2.out', delay: 0.15,
+            });
+        } else {
+            archiveCanvas.style.opacity = '1';
+        }
     }
 
     function closeArchive() {
         if (!archiveOpen) return;
         archiveOpen = false;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
 
         archiveStage.style.opacity = '0';
         setTimeout(() => {
             archiveStage.style.display = 'none';
             archiveStage.setAttribute('aria-hidden', 'true');
-            archiveCanvas.innerHTML = '';
+            unmountAll();
             menu.classList.remove('archive-active');
         }, 650);
     }
 
-    archive.addEventListener('click', (e) => {
-        e.preventDefault();
-        openArchive();
-    });
-
-    archiveCloseBtn.addEventListener('click', closeArchive);
+    archive.addEventListener('click', (e) => { e.preventDefault(); openArchive(); });
+    archiveBackBtn.addEventListener('click', closeArchive);
 
     document.querySelectorAll('.menu-cat').forEach(el => {
         el.addEventListener('click', (e) => {
@@ -1057,11 +1124,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    let resizeTimer = null;
     window.addEventListener('resize', () => {
         if (!archiveOpen) return;
-        computeTileSize();
-        rebuildCanvas(filterImages(currentCategory));
-        applyCanvasTransform();
-        animateImagesIn();
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => {
+            unmountAll();
+            items = buildItems(filterImages(currentCategory));
+            syncMounted();
+        }, 150);
     });
 });

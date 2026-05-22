@@ -563,8 +563,11 @@ body {
     user-select: none;
     -webkit-user-drag: none;
     pointer-events: none;
-    opacity: 0;
-    will-change: opacity, transform;
+    height: auto;
+}
+
+#archive-canvas {
+    will-change: transform, opacity;
 }
 
 #archive-empty {
@@ -589,9 +592,28 @@ body {
     opacity: 1;
 }
 
-#archive-close {
-    position: absolute;
-    top: 36px;
-    right: 36px;
-    z-index: 2;
+.menu-archive-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.menu-archive-back {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.menu-archive-back:hover {
+    color: #424242;
 }
