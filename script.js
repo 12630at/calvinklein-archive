@@ -551,6 +551,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchResultsEl = document.getElementById('search-results');
     let   searchActive   = false;
     let   _st            = null;   // active search trigger element
+    let   _searchBarH    = 0;      // panel height when only the bar is shown
+    const searchGradient = document.getElementById('search-gradient');
 
     // --- Filtering and results rendering ---
 
@@ -574,15 +576,26 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             searchResultsEl.appendChild(el);
         }
-        // Back button is always the last child of the results container:
-        // - no results  → only item, appears just below the bar (beside input)
-        // - with results → appears after the full list
         const backBtn = document.createElement('button');
-        backBtn.id        = 'search-back';
+        backBtn.id          = 'search-back';
         backBtn.textContent = '← back';
-        backBtn.className = 'people-close';
+        backBtn.className   = 'people-close';
         backBtn.addEventListener('click', () => reverseSearch());
         searchResultsEl.appendChild(backBtn);
+
+        // Expand panel to cover results + animate gradient
+        requestAnimationFrame(() => {
+            const panelTop      = parseFloat(searchPanel.style.top) || 0;
+            const resultsBottom = searchResultsEl.getBoundingClientRect().bottom;
+            const targetH       = Math.max(_searchBarH, resultsBottom - panelTop + 28);
+            gsap.to(searchPanel, { height: targetH, duration: 0.28, ease: 'power2.out' });
+
+            if (matches.length > 0) {
+                gsap.to(searchGradient, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out', delay: 0.1 });
+            } else {
+                gsap.to(searchGradient, { opacity: 0, y: 6, duration: 0.2, ease: 'power2.in' });
+            }
+        });
     }
 
     // --- State management ---
@@ -610,6 +623,8 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
+        searchPanel.style.height     = '';
+        gsap.set(searchGradient, { opacity: 0, y: 6 });
 
         menu.classList.remove('search-active');
         searchStage.style.display  = 'none';
@@ -759,13 +774,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const rect = _st.getBoundingClientRect();
 
         // 2. Panel: left:0, width:50vw — starts off-screen left at translateX(-HALF_W)
+        _searchBarH = rect.height + PAD_V * 2;
         searchPanel.style.top        = `${rect.top - PAD_V}px`;
         searchPanel.style.left       = '0';
         searchPanel.style.width      = `${HALF_W}px`;
-        searchPanel.style.height     = `${rect.height + PAD_V * 2}px`;
+        searchPanel.style.height     = `${_searchBarH}px`;
         searchPanel.style.bottom     = 'auto';
         searchPanel.style.transition = 'none';
         searchPanel.style.transform  = `translateX(-${HALF_W}px)`;
+        gsap.set(searchGradient, { opacity: 0, y: 6 });
 
         // 3. Fall distance: right edge of text lands at x=0
         _st.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
