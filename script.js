@@ -699,13 +699,9 @@ document.addEventListener('DOMContentLoaded', () => {
         input.spellcheck   = false;
         Object.assign(input.style, {
             position:      'fixed',
-            left:          '0',
+            left:          `${rect.left}px`,
             top:           `${rect.top}px`,
-            width:         `${HALF_W}px`,
-            paddingLeft:   `${rect.left}px`,
-            paddingRight:  '0',
-            paddingTop:    '0',
-            paddingBottom: '0',
+            width:         `${HALF_W - rect.left}px`,
             height:        `${rect.height}px`,
             background:    'transparent',
             border:        'none',
@@ -717,6 +713,7 @@ document.addEventListener('DOMContentLoaded', () => {
             letterSpacing: '-0.35px',
             color:         '#ffffff',
             caretColor:    '#ffffff',
+            padding:       '0',
             zIndex:        '100',
             WebkitFontSmoothing: 'antialiased',
         });
@@ -1256,16 +1253,24 @@ document.addEventListener('DOMContentLoaded', () => {
             archiveEmpty.classList.toggle('visible', items.length === 0);
             syncMounted();
             const fresh = Array.from(mounted.values());
-            gsap.set(fresh, { scale: 0, opacity: 0 });
+            gsap.set(fresh, {
+                x:        () => (Math.random() - 0.5) * 1600,
+                y:        () => (Math.random() - 0.5) * 1200 - 150,
+                rotation: () => (Math.random() - 0.5) * 200,
+                scale:    0,
+                opacity:  0,
+            });
         });
 
         tl.add(() => {
             const fresh = Array.from(mounted.values());
             if (!fresh.length) return;
             gsap.to(fresh, {
+                x: 0, y: 0,
+                rotation: (i, el) => parseFloat(el.dataset.rot) || 0,
                 scale: 1, opacity: 1,
                 duration: 0.9, ease: 'back.out(1.6)',
-                stagger: { amount: 0.55, from: 'center' },
+                stagger: { amount: 0.55, from: 'random' },
             });
         }, '+=0.05');
 
@@ -1315,21 +1320,28 @@ document.addEventListener('DOMContentLoaded', () => {
             applyCanvasTransform();
             archiveEmpty.classList.toggle('visible', items.length === 0);
             syncMounted();
-            // Pre-stage new els at scale 0 / opacity 0 so they don't flash before stagger
             const fresh = Array.from(mounted.values());
-            gsap.set(fresh, { scale: 0, opacity: 0 });
+            gsap.set(fresh, {
+                x:        () => (Math.random() - 0.5) * 1600,
+                y:        () => (Math.random() - 0.5) * 1200 - 150,
+                rotation: () => (Math.random() - 0.5) * 200,
+                scale:    0,
+                opacity:  0,
+            });
         });
 
-        // 3. Drop in with bounce
+        // 3. Drop in with bounce from random scatter
         tl.add(() => {
             const fresh = Array.from(mounted.values());
             if (!fresh.length) return;
             gsap.to(fresh, {
+                x: 0, y: 0,
+                rotation: (i, el) => parseFloat(el.dataset.rot) || 0,
                 scale:    1,
                 opacity:  1,
                 duration: 0.9,
                 ease:     'back.out(1.6)',
-                stagger:  { amount: 0.55, from: 'center' },
+                stagger:  { amount: 0.55, from: 'random' },
             });
         }, '+=0.05');
 
