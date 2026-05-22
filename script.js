@@ -894,9 +894,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const filename = cols[iFile];
             const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
             if (!dims) return null;
+            const ext = dims[2] || 'webp';
             const path = cols[iSub]
-                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.webp`
-                : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.webp`;
+                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.${ext}`
+                : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.${ext}`;
             const csv = {};
             for (let k = 0; k < header.length; k++) csv[header[k]] = cols[k] || '';
             return {
