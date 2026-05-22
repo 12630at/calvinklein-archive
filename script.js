@@ -551,8 +551,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const searchResultsEl = document.getElementById('search-results');
     let   searchActive   = false;
     let   _st            = null;   // active search trigger element
-    let   _searchBarH    = 0;      // panel height when only the bar is shown
-    const searchGradient = document.getElementById('search-gradient');
+    let   _searchBarH    = 0;      // panel height for the bar only
+    const resultsBg      = document.getElementById('search-results-bg');
 
     // --- Filtering and results rendering ---
 
@@ -583,18 +583,21 @@ document.addEventListener('DOMContentLoaded', () => {
         backBtn.addEventListener('click', () => reverseSearch());
         searchResultsEl.appendChild(backBtn);
 
-        // Expand panel to cover results + animate gradient
+        // Responsive white gradient bg below bar: covers results + back button
         requestAnimationFrame(() => {
             const panelTop      = parseFloat(searchPanel.style.top) || 0;
+            const bgTop         = panelTop + _searchBarH;
             const resultsBottom = searchResultsEl.getBoundingClientRect().bottom;
-            const targetH       = Math.max(_searchBarH, resultsBottom - panelTop + 28);
-            gsap.to(searchPanel, { height: targetH, duration: 0.28, ease: 'power2.out' });
+            const targetH       = Math.max(0, resultsBottom - bgTop + 36);
+            const panelW        = parseFloat(searchPanel.style.width) || 0;
 
-            if (matches.length > 0) {
-                gsap.to(searchGradient, { opacity: 1, y: 0, duration: 0.35, ease: 'power2.out', delay: 0.1 });
-            } else {
-                gsap.to(searchGradient, { opacity: 0, y: 6, duration: 0.2, ease: 'power2.in' });
-            }
+            gsap.set(resultsBg, { top: bgTop, left: 0, width: panelW });
+            gsap.to(resultsBg, {
+                height:   targetH,
+                opacity:  1,
+                duration: 0.32,
+                ease:     'power2.out',
+            });
         });
     }
 
@@ -623,8 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
-        searchPanel.style.height     = '';
-        gsap.set(searchGradient, { opacity: 0, y: 6 });
+        gsap.set(resultsBg, { opacity: 0, height: 0, x: 0 });
 
         menu.classList.remove('search-active');
         searchStage.style.display  = 'none';
@@ -658,6 +660,14 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transition = `transform ${SLIDE_MS}ms ${SLIDE_EASE}`;
         searchPanel.style.transform  = `translateX(${slideX})`;
 
+        // Slide white bg out in sync
+        gsap.to(resultsBg, {
+            x:        -HALF_W,
+            opacity:  0,
+            duration: SLIDE_MS / 1000,
+            ease:     'power3.in',
+        });
+
         await new Promise(r => setTimeout(r, SLIDE_MS + 60));
 
         // Full state cleanup
@@ -670,6 +680,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .forEach(p => { if (_st) _st.style[p] = ''; });
         searchPanel.style.transition = '';
         searchPanel.style.transform  = '';
+        gsap.set(resultsBg, { opacity: 0, height: 0, x: 0 });
 
         if (onComplete) onComplete();
     }
@@ -782,7 +793,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.bottom     = 'auto';
         searchPanel.style.transition = 'none';
         searchPanel.style.transform  = `translateX(-${HALF_W}px)`;
-        gsap.set(searchGradient, { opacity: 0, y: 6 });
+        gsap.set(resultsBg, { opacity: 0, height: 0, x: 0 });
 
         // 3. Fall distance: right edge of text lands at x=0
         _st.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
