@@ -796,20 +796,25 @@ document.addEventListener('DOMContentLoaded', () => {
         playSearchTransition();
     });
 
-    // ===== ARCHIVE PAGE — INFINITE VIRTUALIZED CANVAS =====
+    // ===== ARCHIVE PAGE — MASONRY + VIRTUALIZED INFINITE CANVAS =====
 
     const archiveStage    = document.getElementById('archive-stage');
     const archiveViewport = document.getElementById('archive-viewport');
     const archiveCanvas   = document.getElementById('archive-canvas');
     const archiveEmpty    = document.getElementById('archive-empty');
     const archiveBackBtn  = document.getElementById('archive-back');
+    const archiveShowAll  = document.getElementById('archive-show-all');
+    const defaultPrimary  = menu.querySelector('.menu-primary:not(.menu-primary-archive)');
+    const defaultSecondary= menu.querySelector('.menu-secondary');
+    const archivePrimary  = menu.querySelector('.menu-primary-archive');
 
     let archiveOpen     = false;
     let archiveManifest = null;
     let currentCategory = 'all';
-    let items           = [];                // [{id, x, y, w, rot, src}]
+    let items           = [];                // [{id, x, y, w, h, rot, src}]
     let tileSize        = { w: 0, h: 0 };
     let canvasOffset    = { x: 0, y: 0 };
+    let switching       = false;             // category transition in progress
     const mounted       = new Map();         // key "id_tx_ty" → img element
 
     const CAT_MAP = {
@@ -842,11 +847,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const iSub  = header.indexOf('subcategory');
         archiveManifest = lines.map(line => {
             const cols = line.split(',');
+            const filename = cols[iFile];
             const path = cols[iSub]
-                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${cols[iFile]}.webp`
-                : `assets/index/${cols[iCat]}/${cols[iYear]}/${cols[iFile]}.webp`;
-            return { path, category: cols[iCat] };
-        });
+                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.webp`
+                : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.webp`;
+            // Only include if we have dimensions for it (skips missing files)
+            const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
+            return dims ? { path, category: cols[iCat], dw: dims[0], dh: dims[1] } : null;
+        }).filter(Boolean);
         return archiveManifest;
     }
 
@@ -857,8 +865,7 @@ document.addEventListener('DOMContentLoaded', () => {
         return archiveManifest.filter(m => m.category === code);
     }
 
-    // Cell-based deterministic layout — no overlap, even distribution.
-    // Returns items in tile coordinates [0, tileSize.w) × [0, tileSize.h).
+    // Masonry packing using real aspect ratios → tight layout, no overlap, no big gaps.
     function buildItems(images) {
         const vw = window.innerWidth, vh = window.innerHeight;
 
@@ -869,40 +876,49 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const N = images.length;
-        const aspect = vw / vh;
-        const cols = Math.max(1, Math.round(Math.sqrt(N * aspect)));
-        const rows = Math.ceil(N / cols);
+        // Square-ish tile: cols^2 ≈ N * avg_aspect (avg portrait 0.75 → height/width = 1.33)
+        let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
 
-        let CELL_W = 320, CELL_H = 380;
-        let tw = cols * CELL_W, th = rows * CELL_H;
+        const GAP = 14;
+        let COL_W = 230;
+        let tileW = cols * COL_W + (cols - 1) * GAP;
 
-        // Ensure tile spans more than one viewport in each axis (wrap looks seamless)
-        const MIN_TW = vw + 600, MIN_TH = vh + 600;
-        if (tw < MIN_TW) { CELL_W *= MIN_TW / tw; tw = MIN_TW; }
-        if (th < MIN_TH) { CELL_H *= MIN_TH / th; th = MIN_TH; }
+        const MIN_TW = vw + 500;
+        if (tileW < MIN_TW) {
+            COL_W = (MIN_TW - (cols - 1) * GAP) / cols;
+            tileW = MIN_TW;
+        }
 
-        tileSize.w = tw;
-        tileSize.h = th;
-
-        // Deterministic shuffle so visual order isn't alphabetic
+        // Deterministic shuffle so categories aren't placed in CSV order
         const shuffled = images.slice().sort((a, b) => _hash(a.path) - _hash(b.path));
 
-        return shuffled.map((img, i) => {
-            const col = i % cols;
-            const row = (i / cols) | 0;
-            const seed = img.path;
-            const w = 170 + rand01(seed, 'w') * 110;       // 170–280
-            const rot = (rand01(seed, 'r') - 0.5) * 4;     // ±2deg
-            const jx = (rand01(seed, 'jx') - 0.5) * (CELL_W - w) * 0.7;
-            const jy = (rand01(seed, 'jy') - 0.5) * Math.min(80, CELL_H * 0.2);
-            return {
-                id:  i,
-                x:   col * CELL_W + (CELL_W - w) / 2 + jx,
-                y:   row * CELL_H + 30 + jy,
-                w, rot,
-                src: img.path,
-            };
-        });
+        const colY = new Array(cols).fill(0);
+        const result = [];
+
+        for (let i = 0; i < shuffled.length; i++) {
+            const img = shuffled[i];
+            const aspect = img.dw / img.dh;                       // w/h
+            const w = COL_W;
+            const h = w / aspect;
+            const rot = (rand01(img.path, 'r') - 0.5) * 2;        // ±1deg
+
+            // Place in shortest column (classic masonry)
+            let minCol = 0;
+            for (let c = 1; c < cols; c++) {
+                if (colY[c] < colY[minCol]) minCol = c;
+            }
+            const x = minCol * (COL_W + GAP);
+            const y = colY[minCol];
+            colY[minCol] += h + GAP;
+
+            result.push({ id: i, x, y, w, h, rot, src: img.path });
+        }
+
+        const colMax = Math.max(...colY);
+        const MIN_TH = vh + 500;
+        tileSize.w = tileW;
+        tileSize.h = Math.max(colMax, MIN_TH);
+        return result;
     }
 
     function applyCanvasTransform() {
@@ -918,12 +934,27 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => { syncQueued = false; syncMounted(); });
     }
 
+    function createImgEl(it, wx, wy) {
+        const el = document.createElement('img');
+        el.className   = 'archive-img';
+        el.src         = it.src;
+        el.decoding    = 'async';
+        el.draggable   = false;
+        el.onerror     = () => el.remove();
+        el.style.width  = it.w + 'px';
+        el.style.height = it.h + 'px';
+        el.style.left   = wx + 'px';
+        el.style.top    = wy + 'px';
+        el.dataset.rot  = it.rot;
+        gsap.set(el, { rotation: it.rot });
+        return el;
+    }
+
     function syncMounted() {
         if (!items.length) return;
         const vw = window.innerWidth, vh = window.innerHeight;
-        const MARGIN = 250;
+        const MARGIN = 200;
 
-        // World coordinates currently visible (offset is negative when canvas slides left)
         const x0 = -canvasOffset.x - MARGIN;
         const y0 = -canvasOffset.y - MARGIN;
         const x1 = x0 + vw + MARGIN * 2;
@@ -942,24 +973,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 for (const it of items) {
                     const wx = it.x + dx;
                     const wy = it.y + dy;
-                    // Skip if entirely outside visible rect (approx height = w*1.4)
-                    const approxH = it.w * 1.4;
                     if (wx + it.w < x0 || wx > x1) continue;
-                    if (wy + approxH < y0 || wy > y1) continue;
+                    if (wy + it.h < y0 || wy > y1) continue;
 
                     const key = it.id + '_' + tx + '_' + ty;
                     needed.add(key);
                     if (!mounted.has(key)) {
-                        const el = document.createElement('img');
-                        el.className   = 'archive-img';
-                        el.src         = it.src;
-                        el.decoding    = 'async';
-                        el.draggable   = false;
-                        el.onerror     = () => el.remove();
-                        el.style.width     = it.w + 'px';
-                        el.style.left      = wx + 'px';
-                        el.style.top       = wy + 'px';
-                        el.style.transform = `rotate(${it.rot.toFixed(2)}deg)`;
+                        const el = createImgEl(it, wx, wy);
                         archiveCanvas.appendChild(el);
                         mounted.set(key, el);
                     }
@@ -967,7 +987,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        // Unmount no-longer-needed
         for (const [key, el] of mounted) {
             if (!needed.has(key)) {
                 el.remove();
@@ -985,11 +1004,12 @@ document.addEventListener('DOMContentLoaded', () => {
     let dragging = false;
     let dragStart = null;
     let dragOffsetStart = null;
-    let lastSample = null;       // {x, y, t} for velocity calc
+    let lastSample = null;
     let velocity = { x: 0, y: 0 };
     let momentumTween = null;
 
     archiveViewport.addEventListener('pointerdown', (e) => {
+        if (switching) return;
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
         dragging = true;
         archiveViewport.classList.add('dragging');
@@ -1020,8 +1040,8 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveViewport.classList.remove('dragging');
         try { archiveViewport.releasePointerCapture(e.pointerId); } catch(_){}
 
-        if (typeof gsap !== 'undefined' && (Math.abs(velocity.x) > 0.3 || Math.abs(velocity.y) > 0.3)) {
-            const MOMENTUM = 240;
+        if (Math.abs(velocity.x) > 0.3 || Math.abs(velocity.y) > 0.3) {
+            const MOMENTUM = 260;
             momentumTween = gsap.to(canvasOffset, {
                 x: canvasOffset.x + velocity.x * MOMENTUM,
                 y: canvasOffset.y + velocity.y * MOMENTUM,
@@ -1035,48 +1055,122 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveViewport.addEventListener('pointerup', endDrag);
     archiveViewport.addEventListener('pointercancel', endDrag);
 
-    // ----- Category filter: canvas-level fade out → rebuild → fade in -----
+    // ----- Category switch: scatter + drop-in -----
     function setCategory(catLabel) {
-        if (catLabel === currentCategory) return;
+        if (catLabel === currentCategory || switching) return;
+        switching = true;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
         currentCategory = catLabel;
 
         document.querySelectorAll('.menu-cat').forEach(el => {
             el.classList.toggle('active', el.dataset.cat === catLabel);
         });
+        archiveShowAll.classList.toggle('cat-all-active', catLabel === 'all');
 
-        const rebuild = () => {
+        const oldEls = Array.from(mounted.values());
+        const cx = window.innerWidth  / 2;
+        const cy = window.innerHeight / 2;
+
+        const tl = gsap.timeline({ onComplete: () => { switching = false; } });
+
+        // 1. Scatter outward from viewport center
+        if (oldEls.length) {
+            tl.to(oldEls, {
+                x:        () => (Math.random() - 0.5) * 1800,
+                y:        () => (Math.random() - 0.5) * 1400,
+                rotation: () => (Math.random() - 0.5) * 220,
+                scale:    0,
+                opacity:  0,
+                duration: 0.6,
+                ease:     'power2.in',
+                stagger:  { amount: 0.35, from: 'center' },
+            });
+        }
+
+        // 2. Rebuild layout & mount fresh elements (initially invisible)
+        tl.call(() => {
             unmountAll();
             items = buildItems(filterImages(catLabel));
-            canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
-            canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
+            canvasOffset.x = -tileSize.w / 2 + cx;
+            canvasOffset.y = -tileSize.h / 2 + cy;
             applyCanvasTransform();
             archiveEmpty.classList.toggle('visible', items.length === 0);
             syncMounted();
-        };
+            // Pre-stage new els at scale 0 / opacity 0 so they don't flash before stagger
+            const fresh = Array.from(mounted.values());
+            gsap.set(fresh, { scale: 0, opacity: 0 });
+        });
 
-        if (typeof gsap !== 'undefined') {
-            gsap.to(archiveCanvas, {
-                opacity: 0, duration: 0.3, ease: 'power2.in',
-                onComplete: () => {
-                    rebuild();
-                    gsap.to(archiveCanvas, { opacity: 1, duration: 0.5, ease: 'power2.out' });
-                },
+        // 3. Drop in with bounce
+        tl.add(() => {
+            const fresh = Array.from(mounted.values());
+            if (!fresh.length) return;
+            gsap.to(fresh, {
+                scale:    1,
+                opacity:  1,
+                duration: 0.9,
+                ease:     'back.out(1.6)',
+                stagger:  { amount: 0.55, from: 'center' },
             });
-        } else {
-            rebuild();
-        }
+        }, '+=0.05');
+
+        // Hold timeline open until drop-in finishes
+        tl.to({}, { duration: 1.0 });
+    }
+
+    // ----- Smooth menu morph between default ↔ archive mode -----
+    function morphMenuToArchive() {
+        return new Promise(resolve => {
+            const tl = gsap.timeline({ onComplete: resolve });
+            tl.to([defaultPrimary, defaultSecondary], {
+                opacity: 0, duration: 0.22, ease: 'power2.in',
+            });
+            tl.call(() => {
+                gsap.set(archivePrimary, { opacity: 0, y: -6 });
+                menu.classList.remove('hover-active');
+                menu.classList.add('archive-active');
+                // Reset default opacities (they'll be display:none under archive-active)
+                defaultPrimary.style.opacity   = '';
+                defaultSecondary.style.opacity = '';
+            });
+            tl.to(archivePrimary, {
+                opacity: 1, y: 0, duration: 0.35, ease: 'power2.out',
+            });
+        });
+    }
+
+    function morphMenuToDefault() {
+        return new Promise(resolve => {
+            const tl = gsap.timeline({ onComplete: resolve });
+            tl.to(archivePrimary, {
+                opacity: 0, y: -4, duration: 0.22, ease: 'power2.in',
+            });
+            tl.call(() => {
+                // Pre-stage default primary invisible BEFORE removing archive-active class
+                // (defaultPrimary is display:none under archive-active, so this is invisible)
+                gsap.set(defaultPrimary, { opacity: 0 });
+                menu.classList.remove('archive-active');
+                // archivePrimary is now display:none — reset its inline styles
+                archivePrimary.style.opacity = '';
+                archivePrimary.style.transform = '';
+            });
+            tl.to(defaultPrimary, {
+                opacity: 1, duration: 0.35, ease: 'power2.out',
+            });
+            tl.call(() => {
+                defaultPrimary.style.opacity = '';
+            });
+        });
     }
 
     async function openArchive() {
         if (archiveOpen) return;
         archiveOpen = true;
 
-        menu.classList.remove('hover-active');
-        menu.classList.add('archive-active');
-
         await loadArchiveManifest();
         currentCategory = 'all';
         document.querySelectorAll('.menu-cat').forEach(el => el.classList.remove('active'));
+        archiveShowAll.classList.add('cat-all-active');
 
         items = buildItems(filterImages('all'));
         canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
@@ -1086,36 +1180,47 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveCanvas.style.opacity = '0';
         syncMounted();
 
+        // Reveal stage behind menu (fades up while menu morphs)
         archiveStage.removeAttribute('aria-hidden');
         archiveStage.style.display = 'block';
-        void archiveStage.offsetWidth;
-        archiveStage.style.opacity = '1';
+        gsap.fromTo(archiveStage, { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' });
 
-        if (typeof gsap !== 'undefined') {
-            gsap.to(archiveCanvas, {
-                opacity: 1, duration: 0.8, ease: 'power2.out', delay: 0.15,
-            });
-        } else {
-            archiveCanvas.style.opacity = '1';
-        }
+        // Menu morph + canvas drop-in run in parallel
+        morphMenuToArchive();
+
+        const fresh = Array.from(mounted.values());
+        gsap.set(fresh, { scale: 0.5, opacity: 0 });
+        gsap.set(archiveCanvas, { opacity: 1 });
+        gsap.to(fresh, {
+            scale: 1, opacity: 1,
+            duration: 0.95, ease: 'back.out(1.4)',
+            stagger: { amount: 0.6, from: 'center' },
+            delay: 0.25,
+        });
     }
 
-    function closeArchive() {
+    async function closeArchive() {
         if (!archiveOpen) return;
         archiveOpen = false;
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
 
-        archiveStage.style.opacity = '0';
-        setTimeout(() => {
-            archiveStage.style.display = 'none';
-            archiveStage.setAttribute('aria-hidden', 'true');
-            unmountAll();
-            menu.classList.remove('archive-active');
-        }, 650);
+        // Run stage fade + menu morph in parallel
+        gsap.to(archiveStage, {
+            opacity: 0, duration: 0.45, ease: 'power2.in',
+            onComplete: () => {
+                archiveStage.style.display = 'none';
+                archiveStage.setAttribute('aria-hidden', 'true');
+                archiveStage.style.opacity = '';
+                unmountAll();
+            },
+        });
+
+        await morphMenuToDefault();
     }
 
     archive.addEventListener('click', (e) => { e.preventDefault(); openArchive(); });
-    archiveBackBtn.addEventListener('click', closeArchive);
+    archiveBackBtn.addEventListener('click', (e) => { e.preventDefault(); closeArchive(); });
+    archiveShowAll.addEventListener('click', (e) => { e.preventDefault(); setCategory('all'); });
 
     document.querySelectorAll('.menu-cat').forEach(el => {
         el.addEventListener('click', (e) => {
@@ -1131,6 +1236,9 @@ document.addEventListener('DOMContentLoaded', () => {
         resizeTimer = setTimeout(() => {
             unmountAll();
             items = buildItems(filterImages(currentCategory));
+            canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
+            canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
+            applyCanvasTransform();
             syncMounted();
         }, 150);
     });

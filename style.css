@@ -503,10 +503,15 @@ body {
     z-index: 14;
 }
 
-/* "archive" entry stays in hover-active color while on the page */
+/* "archive" entry: always dark on archive page; click = show all images */
 .menu-item-archive-active {
-    color: #424242 !important;
-    cursor: default;
+    color: #bbbdc0;
+    cursor: pointer;
+}
+
+.menu-item-archive-active:hover,
+.menu-item-archive-active.cat-all-active {
+    color: #424242;
 }
 
 .menu-cat:hover {
@@ -525,7 +530,6 @@ body {
     z-index: 12;
     display: none;
     opacity: 0;
-    transition: opacity 600ms ease-in-out;
     overflow: hidden;
 }
 
@@ -563,7 +567,6 @@ body {
     user-select: none;
     -webkit-user-drag: none;
     pointer-events: none;
-    height: auto;
 }
 
 #archive-canvas {
