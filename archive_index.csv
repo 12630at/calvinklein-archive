@@ -1,0 +1,21 @@
+filename,year,season,category,subcategory,description,campaign,photographer,director,producer,production_company,model,stylist,art_director,creative_director,hair,makeup,set_designer,casting_director,agency,publication,issue_date,venue,music,source_url,notes
+
+# --- EXAMPLES BY CATEGORY ---
+
+# ADV › PRINT / OOH / DIGITAL
+1995_aw_adv_print_eyewear_001,1995,aw,adv,print,eyewear,,Bruce Weber,,,,Kate Moss,Camilla Nickerson,,,Garren,,,,,,,,,https://www.scannedfashionworld.com/2025/07/campaign-calvin-klein-eyewear-fw-1995.html,
+
+# ADV › VIDEO / TV SPOT
+1994_ss_adv_video_fragrance_obsession_001,1994,ss,adv,video,fragrance,obsession,,Fabien Baron,,,Kate Moss,,,Calvin Klein,,,,,,,,,,
+
+# COL › RUNWAY
+1997_ss_col_rtw-w_runway_001,1997,ss,col,rtw-w,runway,,Niall McInerney,,,,,,,,,,,,,,,,
+
+# EDI › TESTATA
+2001_ss_edi_vogue-us_fashion-story_001,2001,ss,edi,fashion,nothing to hide,,Steven Meisel,,,,Kate Moss,Camilla Nickerson,Grace Coddington,,Garren,Pat McGrath,,,, Vogue US,April 2001,,,
+
+# INV › SHOW
+1997_aw_inv_show_card_001,1997,aw,inv,show,show invite,,,,,,,,,,,,,,,,,Bryant Park NY,,
+
+# EPH › BACKSTAGE
+2003_ss_eph_backstage_fitting_001,2003,ss,eph,backstage,fitting backstage,,,,,,,,,,,,,,,,,,,,
