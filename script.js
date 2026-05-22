@@ -835,6 +835,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     const rand01 = (seed, salt) => (_hash(seed + ':' + salt) % 100000) / 100000;
 
+    const campaignGroups = new Map();    // campaignKey → array of items in same campaign
+
     async function loadArchiveManifest() {
         if (archiveManifest) return archiveManifest;
         const res = await fetch('archive_index.csv');
@@ -842,19 +844,39 @@ document.addEventListener('DOMContentLoaded', () => {
         const lines = txt.trim().split(/\r?\n/);
         const header = lines.shift().split(',');
         const iFile = header.indexOf('filename');
-        const iYear = header.indexOf('year');
         const iCat  = header.indexOf('category');
         const iSub  = header.indexOf('subcategory');
+        const iYear = header.indexOf('year');
+
         archiveManifest = lines.map(line => {
             const cols = line.split(',');
             const filename = cols[iFile];
+            const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
+            if (!dims) return null;
             const path = cols[iSub]
                 ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.webp`
                 : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.webp`;
-            // Only include if we have dimensions for it (skips missing files)
-            const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
-            return dims ? { path, category: cols[iCat], dw: dims[0], dh: dims[1] } : null;
+            const csv = {};
+            for (let k = 0; k < header.length; k++) csv[header[k]] = cols[k] || '';
+            return {
+                path,
+                filename,
+                category: cols[iCat],
+                dw: dims[0],
+                dh: dims[1],
+                csv,
+                campaignKey: filename.replace(/_\d+$/, ''),
+            };
         }).filter(Boolean);
+
+        // Group items by campaign key for multi-photo navigation
+        for (const m of archiveManifest) {
+            if (!campaignGroups.has(m.campaignKey)) campaignGroups.set(m.campaignKey, []);
+            campaignGroups.get(m.campaignKey).push(m);
+        }
+        // Stable sort each group by filename so photo numbering is consistent
+        for (const arr of campaignGroups.values()) arr.sort((a, b) => a.filename.localeCompare(b.filename));
+
         return archiveManifest;
     }
 
@@ -865,7 +887,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return archiveManifest.filter(m => m.category === code);
     }
 
-    // Masonry packing using real aspect ratios → tight layout, no overlap, no big gaps.
+    // Masonry packing using real aspect ratios.
+    // - Tile width includes trailing GAP so adjacent tile copies have proper spacing
+    //   at horizontal seams (no touching columns).
+    // - Tall-first placement (sort by aspect desc) produces nearly-balanced columns.
+    // - Post-pass distributes leftover space in shorter columns as extra padding,
+    //   so every column ends exactly at colMax → no vertical white gaps at seams.
     function buildItems(images) {
         const vw = window.innerWidth, vh = window.innerHeight;
 
@@ -876,33 +903,35 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const N = images.length;
-        // Square-ish tile: cols^2 ≈ N * avg_aspect (avg portrait 0.75 → height/width = 1.33)
         let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
 
-        const GAP = 14;
+        const GAP = 32;
         let COL_W = 230;
-        let tileW = cols * COL_W + (cols - 1) * GAP;
+        let tileW = cols * (COL_W + GAP);   // includes trailing GAP
 
-        const MIN_TW = vw + 500;
+        const MIN_TW = vw;
         if (tileW < MIN_TW) {
-            COL_W = (MIN_TW - (cols - 1) * GAP) / cols;
+            COL_W = (MIN_TW / cols) - GAP;
             tileW = MIN_TW;
         }
 
-        // Deterministic shuffle so categories aren't placed in CSV order
-        const shuffled = images.slice().sort((a, b) => _hash(a.path) - _hash(b.path));
+        const ordered = images.slice().sort((a, b) => {
+            const ha = a.dh / a.dw, hb = b.dh / b.dw;
+            if (hb !== ha) return hb - ha;
+            return _hash(a.path) - _hash(b.path);
+        });
 
-        const colY = new Array(cols).fill(0);
-        const result = [];
+        const colY     = new Array(cols).fill(0);
+        const colItems = Array.from({ length: cols }, () => []);
+        const result   = [];
 
-        for (let i = 0; i < shuffled.length; i++) {
-            const img = shuffled[i];
-            const aspect = img.dw / img.dh;                       // w/h
+        for (let i = 0; i < ordered.length; i++) {
+            const img    = ordered[i];
+            const aspect = img.dw / img.dh;
             const w = COL_W;
             const h = w / aspect;
-            const rot = (rand01(img.path, 'r') - 0.5) * 2;        // ±1deg
+            const rot = (rand01(img.path, 'r') - 0.5) * 1.2;       // ±0.6deg — safe vs GAP=32
 
-            // Place in shortest column (classic masonry)
             let minCol = 0;
             for (let c = 1; c < cols; c++) {
                 if (colY[c] < colY[minCol]) minCol = c;
@@ -911,13 +940,31 @@ document.addEventListener('DOMContentLoaded', () => {
             const y = colY[minCol];
             colY[minCol] += h + GAP;
 
-            result.push({ id: i, x, y, w, h, rot, src: img.path });
+            const it = { id: i, col: minCol, x, y, w, h, rot, src: img.path, manifest: img };
+            result.push(it);
+            colItems[minCol].push(it);
         }
 
         const colMax = Math.max(...colY);
-        const MIN_TH = vh + 500;
+
+        // Balance columns: pad shorter columns by distributing leftover space
+        // evenly between items. Removes the white gap that would appear below
+        // shorter columns at the tile's vertical seam.
+        for (let c = 0; c < cols; c++) {
+            const arr = colItems[c];
+            if (!arr.length) continue;
+            const extra = colMax - colY[c];
+            if (extra <= 0.5) continue;
+            const perItem = extra / arr.length;
+            let cum = 0;
+            for (const it of arr) {
+                it.y += cum;
+                cum += perItem;
+            }
+        }
+
         tileSize.w = tileW;
-        tileSize.h = Math.max(colMax, MIN_TH);
+        tileSize.h = colMax;             // includes trailing GAP from last "+ h + GAP"
         return result;
     }
 
@@ -945,7 +992,8 @@ document.addEventListener('DOMContentLoaded', () => {
         el.style.height = it.h + 'px';
         el.style.left   = wx + 'px';
         el.style.top    = wy + 'px';
-        el.dataset.rot  = it.rot;
+        el.dataset.rot    = it.rot;
+        el.dataset.itemId = it.id;
         gsap.set(el, { rotation: it.rot });
         return el;
     }
@@ -1000,16 +1048,18 @@ document.addEventListener('DOMContentLoaded', () => {
         mounted.clear();
     }
 
-    // ----- Drag with momentum -----
+    // ----- Drag with momentum + click detection -----
     let dragging = false;
     let dragStart = null;
     let dragOffsetStart = null;
     let lastSample = null;
     let velocity = { x: 0, y: 0 };
     let momentumTween = null;
+    let downTarget = null;
+    let downTime   = 0;
 
     archiveViewport.addEventListener('pointerdown', (e) => {
-        if (switching) return;
+        if (switching || itemViewOpen) return;
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
         dragging = true;
         archiveViewport.classList.add('dragging');
@@ -1018,6 +1068,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dragOffsetStart = { x: canvasOffset.x, y: canvasOffset.y };
         lastSample = { x: e.clientX, y: e.clientY, t: performance.now() };
         velocity = { x: 0, y: 0 };
+        downTarget = e.target;
+        downTime   = performance.now();
     });
 
     archiveViewport.addEventListener('pointermove', (e) => {
@@ -1039,6 +1091,17 @@ document.addEventListener('DOMContentLoaded', () => {
         dragging = false;
         archiveViewport.classList.remove('dragging');
         try { archiveViewport.releasePointerCapture(e.pointerId); } catch(_){}
+
+        const dx = e.clientX - dragStart.x;
+        const dy = e.clientY - dragStart.y;
+        const dist = Math.hypot(dx, dy);
+        const elapsed = performance.now() - downTime;
+
+        // Treat as click if pointer barely moved and target was an archive image
+        if (dist < 6 && elapsed < 400 && downTarget && downTarget.classList && downTarget.classList.contains('archive-img')) {
+            openItemView(downTarget);
+            return;
+        }
 
         if (Math.abs(velocity.x) > 0.3 || Math.abs(velocity.y) > 0.3) {
             const MOMENTUM = 260;
@@ -1241,5 +1304,264 @@ document.addEventListener('DOMContentLoaded', () => {
             applyCanvasTransform();
             syncMounted();
         }, 150);
+    });
+
+    // ===== ITEM VIEW (single image + info) =====
+
+    const itemView         = document.getElementById('item-view');
+    const itemViewBackdrop = document.getElementById('item-view-backdrop');
+    const itemViewImgWrap  = document.getElementById('item-view-img-wrap');
+    const itemViewInfo     = document.getElementById('item-view-info');
+    const itemViewBackBtn  = document.getElementById('item-view-back');
+    const itemViewNumbersEl = itemView.querySelector('.item-view-numbers');
+    const itemViewTitleEl   = itemView.querySelector('.item-view-title');
+    const itemViewMetaEl    = itemView.querySelector('.item-view-meta');
+
+    let itemViewOpen   = false;
+    let itemViewState  = null;
+
+    const prettify = s => s ? s.replace(/_/g, ' ').toUpperCase() : '';
+
+    function buildTitle(csv) {
+        const parts = [csv.description, csv.campaign].filter(Boolean).map(prettify);
+        return parts.join(' ') || prettify(csv.category);
+    }
+
+    function renderItemMeta(csv) {
+        itemViewMetaEl.innerHTML = '';
+        const seasonStr = csv.season ? csv.season.toUpperCase() : '';
+        const yearSeason = [csv.year, seasonStr].filter(Boolean).join(' ');
+        const catLine = csv.subcategory
+            ? prettify(`${csv.category} / ${csv.subcategory}`)
+            : prettify(csv.category);
+        const fields = [
+            ['date',              yearSeason],
+            ['category',          catLine],
+            ['photographer',      prettify(csv.photographer)],
+            ['model',             prettify(csv.model)],
+            ['director',          prettify(csv.director)],
+            ['stylist',           prettify(csv.stylist)],
+            ['art director',      prettify(csv.art_director)],
+            ['creative director', prettify(csv.creative_director)],
+            ['hair',              prettify(csv.hair)],
+            ['makeup',            prettify(csv.makeup)],
+            ['publication',       prettify(csv.publication)],
+            ['issue',             prettify(csv.issue_date)],
+            ['music',             prettify(csv.music)],
+        ];
+        for (const [label, value] of fields) {
+            if (!value) continue;
+            const row = document.createElement('div');
+            row.className = 'item-view-meta-row';
+            const l = document.createElement('span');
+            l.className = 'item-view-meta-label';
+            l.textContent = label;
+            const v = document.createElement('span');
+            v.className = 'item-view-meta-value';
+            v.textContent = value;
+            row.appendChild(l); row.appendChild(v);
+            itemViewMetaEl.appendChild(row);
+        }
+    }
+
+    function renderItemNumbers(group, currentIdx) {
+        itemViewNumbersEl.innerHTML = '';
+        if (group.length <= 1) return;
+        for (let i = 0; i < group.length; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'item-view-num' + (i === currentIdx ? ' active' : '');
+            btn.textContent = String(i + 1).padStart(2, '0');
+            btn.addEventListener('click', () => switchItemPhoto(i));
+            itemViewNumbersEl.appendChild(btn);
+        }
+    }
+
+    function computeTargetRect(naturalW, naturalH) {
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const marginY = 60;
+        const marginL = 120;
+        const marginR = 320;            // reserve right side for info panel
+        const maxH = vh - 2 * marginY;
+        const maxW = vw - marginL - marginR;
+        const aspect = naturalW / naturalH;
+        let h = maxH, w = h * aspect;
+        if (w > maxW) { w = maxW; h = w / aspect; }
+        const x = marginL + (maxW - w) / 2;
+        const y = (vh - h) / 2;
+        return { x, y, w, h };
+    }
+
+    function openItemView(imgEl) {
+        if (itemViewOpen) return;
+        const itemId = parseInt(imgEl.dataset.itemId, 10);
+        const item = items[itemId];
+        if (!item) return;
+
+        itemViewOpen = true;
+        document.body.classList.add('item-view-open');
+
+        const group = (campaignGroups.get(item.manifest.campaignKey) || [item.manifest]).slice();
+        const currentIdx = Math.max(0, group.findIndex(m => m.path === item.manifest.path));
+
+        const r = imgEl.getBoundingClientRect();
+        const origRect = { x: r.left, y: r.top, w: r.width, h: r.height };
+
+        imgEl.classList.add('is-hidden');
+
+        const clone = document.createElement('img');
+        clone.src       = item.src;
+        clone.draggable = false;
+        itemViewImgWrap.appendChild(clone);
+
+        itemViewState = {
+            group,
+            currentIdx,
+            sourceEl:  imgEl,
+            sourceRot: item.rot,
+            cloneImg:  clone,
+            origRect,
+            currentManifest: item.manifest,
+        };
+
+        gsap.set(clone, {
+            position: 'absolute',
+            left:     origRect.x,
+            top:      origRect.y,
+            width:    origRect.w,
+            height:   origRect.h,
+            rotation: item.rot,
+            transformOrigin: 'center center',
+        });
+
+        const tgt = computeTargetRect(item.manifest.dw, item.manifest.dh);
+
+        itemViewTitleEl.textContent = buildTitle(item.manifest.csv);
+        renderItemMeta(item.manifest.csv);
+        renderItemNumbers(group, currentIdx);
+
+        itemView.removeAttribute('aria-hidden');
+        itemView.style.display = 'block';
+
+        const tl = gsap.timeline();
+
+        // Backdrop fades + blurs in
+        tl.fromTo(itemViewBackdrop,
+            { opacity: 0 },
+            { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0);
+
+        // Z-axis punch: image lifts toward viewer while expanding
+        tl.fromTo(clone, { z: -180 }, { z: 0, duration: 0.95, ease: 'power3.out' }, 0);
+        tl.to(clone, {
+            left:     tgt.x,
+            top:      tgt.y,
+            width:    tgt.w,
+            height:   tgt.h,
+            rotation: 0,
+            duration: 0.9,
+            ease:     'power3.inOut',
+        }, 0);
+
+        // Info panel slides in from the right
+        tl.fromTo(itemViewInfo,
+            { x: 30, opacity: 0 },
+            { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+    }
+
+    function switchItemPhoto(idx) {
+        if (!itemViewOpen || !itemViewState) return;
+        if (idx === itemViewState.currentIdx) return;
+        const m = itemViewState.group[idx];
+        if (!m) return;
+
+        itemViewState.currentIdx = idx;
+        itemViewState.currentManifest = m;
+        itemViewNumbersEl.querySelectorAll('.item-view-num').forEach((b, i) => {
+            b.classList.toggle('active', i === idx);
+        });
+
+        const clone = itemViewState.cloneImg;
+        const tgt   = computeTargetRect(m.dw, m.dh);
+
+        // Cross-fade: shrink + fade out, swap src, expand + fade in
+        const tl = gsap.timeline();
+        tl.to(clone, {
+            opacity: 0,
+            scale: 0.96,
+            duration: 0.22,
+            ease: 'power2.in',
+            onComplete: () => {
+                clone.src = m.path;
+                gsap.set(clone, { left: tgt.x, top: tgt.y, width: tgt.w, height: tgt.h, scale: 1 });
+            },
+        });
+        tl.to(clone, { opacity: 1, duration: 0.35, ease: 'power2.out' });
+
+        // Update info with subtle fade
+        gsap.to(itemViewInfo, { opacity: 0, duration: 0.15, ease: 'power2.in',
+            onComplete: () => {
+                itemViewTitleEl.textContent = buildTitle(m.csv);
+                renderItemMeta(m.csv);
+                gsap.to(itemViewInfo, { opacity: 1, duration: 0.3, ease: 'power2.out' });
+            },
+        });
+    }
+
+    function closeItemView() {
+        if (!itemViewOpen) return;
+        itemViewOpen = false;
+
+        const st = itemViewState;
+        const clone = st.cloneImg;
+        const target = st.origRect;
+
+        const sourceItem = items[parseInt(st.sourceEl.dataset.itemId, 10)];
+        const photoSwitched = st.currentManifest.path !== sourceItem.src;
+
+        const tl = gsap.timeline({
+            onComplete: () => {
+                itemView.style.display = 'none';
+                itemView.setAttribute('aria-hidden', 'true');
+                clone.remove();
+                st.sourceEl.classList.remove('is-hidden');
+                itemViewState = null;
+                document.body.classList.remove('item-view-open');
+            },
+        });
+
+        // Fade info out immediately
+        tl.to(itemViewInfo, { x: 30, opacity: 0, duration: 0.3, ease: 'power2.in' }, 0);
+
+        // If user navigated to a different photo, restore source img before shrinking
+        if (photoSwitched) {
+            tl.to(clone, {
+                opacity: 0, duration: 0.18,
+                onComplete: () => { clone.src = sourceItem.src; },
+            }, 0);
+            tl.to(clone, { opacity: 1, duration: 0.15 }, 0.18);
+        }
+
+        // Shrink + retreat on Z axis back to canvas position
+        tl.to(clone, {
+            left:     target.x,
+            top:      target.y,
+            width:    target.w,
+            height:   target.h,
+            rotation: st.sourceRot,
+            duration: 0.75,
+            ease:     'power3.inOut',
+        }, photoSwitched ? 0.3 : 0.15);
+        tl.fromTo(clone, { z: 0 }, { z: -80, duration: 0.75, ease: 'power2.in' }, photoSwitched ? 0.3 : 0.15);
+
+        tl.to(itemViewBackdrop, { opacity: 0, duration: 0.4, ease: 'power2.in' }, '-=0.45');
+    }
+
+    itemViewBackBtn.addEventListener('click', (e) => { e.preventDefault(); closeItemView(); });
+    itemViewBackdrop.addEventListener('click', closeItemView);
+
+    // Escape closes item view, then archive
+    document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape') return;
+        if (itemViewOpen)      { closeItemView(); }
+        else if (archiveOpen)  { closeArchive(); }
     });
 });

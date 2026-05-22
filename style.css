@@ -566,7 +566,11 @@ body {
     background: #f4f4f4;
     user-select: none;
     -webkit-user-drag: none;
-    pointer-events: none;
+    cursor: pointer;
+}
+
+.archive-img.is-hidden {
+    visibility: hidden;
 }
 
 #archive-canvas {
@@ -619,4 +623,158 @@ body {
 
 .menu-archive-back:hover {
     color: #424242;
+}
+
+/* ===== ITEM VIEW ===== */
+
+#item-view {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    perspective: 1400px;
+}
+
+#item-view-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(28px);
+    -webkit-backdrop-filter: blur(28px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+#item-view-img-wrap {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    pointer-events: none;
+}
+
+#item-view-img-wrap img {
+    position: absolute;
+    display: block;
+    will-change: transform, opacity;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.12);
+    background: #f4f4f4;
+}
+
+#item-view-info {
+    position: absolute;
+    right: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    opacity: 0;
+    pointer-events: auto;
+}
+
+.item-view-numbers {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    min-height: 14px;
+}
+
+.item-view-num {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.item-view-num:hover,
+.item-view-num.active {
+    color: #424242;
+}
+
+.item-view-header {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+}
+
+.item-view-back {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.item-view-back:hover {
+    color: #424242;
+}
+
+.item-view-title {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+}
+
+.item-view-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.item-view-meta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.item-view-meta-label {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 11px;
+    line-height: 12px;
+    text-transform: uppercase;
+    letter-spacing: -0.2px;
+    color: #bbbdc0;
+    -webkit-font-smoothing: antialiased;
+}
+
+.item-view-meta-value {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 13px;
+    line-height: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.3px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* While item view is open, menu stays visible but un-clickable */
+body.item-view-open .menu .menu-item,
+body.item-view-open .menu-archive-back {
+    pointer-events: none;
 }
