@@ -616,7 +616,8 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transform  = '';
 
         menu.classList.remove('search-active');
-        searchStage.style.display = 'none';
+        searchStage.style.display  = 'none';
+        searchStage.style.zIndex   = '';
         searchStage.setAttribute('aria-hidden', 'true');
     }
 
@@ -651,7 +652,8 @@ document.addEventListener('DOMContentLoaded', () => {
         // Full state cleanup
         searchActive = false;
         menu.classList.remove('search-active');
-        searchStage.style.display = 'none';
+        searchStage.style.display  = 'none';
+        searchStage.style.zIndex   = '';
         searchStage.setAttribute('aria-hidden', 'true');
         ['transition','transform','color','textShadow','visibility','pointerEvents']
             .forEach(p => { if (_st) _st.style[p] = ''; });
@@ -788,6 +790,8 @@ document.addEventListener('DOMContentLoaded', () => {
         _st.style.setProperty('--search-fall-x', `${-(rect.right + 6)}px`);
 
         // 4. Reveal stage (panel still off-screen)
+        // When archive is open (z:12), elevate search stage above it
+        searchStage.style.zIndex = archiveOpen ? '13' : '';
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
@@ -1406,8 +1410,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const expandLabel = s => s ? (ACRONYM_MAP[s.toLowerCase().trim()] || s) : s;
 
     function buildTitle(csv) {
-        const parts = [csv.description, csv.campaign].filter(Boolean).map(prettify);
-        return parts.join(' ') || prettify(csv.category);
+        return prettify(csv.campaign) || expandLabel(csv.category).toUpperCase();
     }
 
     function renderItemMeta(csv) {
@@ -1415,12 +1418,16 @@ document.addEventListener('DOMContentLoaded', () => {
         const seasonStr = csv.season ? expandLabel(csv.season).toUpperCase() : '';
         const yearSeason = [csv.year, seasonStr].filter(Boolean).join(' ');
         const catExpanded = expandLabel(csv.category).toUpperCase();
-        const catLine = csv.subcategory
+        const isAdv = csv.category === 'adv';
+        const catLine = (!isAdv && csv.subcategory)
             ? `${catExpanded} / ${prettify(csv.subcategory)}`
             : catExpanded;
+        const mediaLine = isAdv ? prettify(csv.subcategory) : '';
         const fields = [
             ['date',              yearSeason],
             ['category',          catLine],
+            ['media',             mediaLine],
+            ['line',              prettify(csv.description)],
             ['photographer',      prettify(csv.photographer)],
             ['model',             prettify(csv.model)],
             ['director',          prettify(csv.director)],
@@ -1579,15 +1586,6 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         });
         tl.to(clone, { opacity: 1, duration: 0.35, ease: 'power2.out' });
-
-        // Update info with subtle fade
-        gsap.to(itemViewInfo, { opacity: 0, duration: 0.15, ease: 'power2.in',
-            onComplete: () => {
-                itemViewTitleEl.textContent = buildTitle(m.csv);
-                renderItemMeta(m.csv);
-                gsap.to(itemViewInfo, { opacity: 1, duration: 0.3, ease: 'power2.out' });
-            },
-        });
     }
 
     function closeItemView() {
@@ -1624,7 +1622,8 @@ document.addEventListener('DOMContentLoaded', () => {
             tl.to(clone, { opacity: 1, duration: 0.15 }, 0.18);
         }
 
-        // Shrink + retreat on Z axis back to canvas position
+        // Shrink back to canvas position — z animation removed to avoid stretch artifact
+        gsap.set(clone, { z: 0 });
         tl.to(clone, {
             left:     target.x,
             top:      target.y,
@@ -1634,7 +1633,6 @@ document.addEventListener('DOMContentLoaded', () => {
             duration: 0.75,
             ease:     'power3.inOut',
         }, photoSwitched ? 0.3 : 0.15);
-        tl.fromTo(clone, { z: 0 }, { z: -80, duration: 0.75, ease: 'power2.in' }, photoSwitched ? 0.3 : 0.15);
 
         tl.to(itemViewBackdrop, { opacity: 0, duration: 0.4, ease: 'power2.in' }, '-=0.45');
     }

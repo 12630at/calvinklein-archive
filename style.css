@@ -703,14 +703,11 @@ body {
     color: #424242;
 }
 
-.item-view-header {
-    display: flex;
-    flex-direction: row-reverse;
-    align-items: baseline;
-    gap: 10px;
-}
-
 .item-view-back {
+    position: absolute;
+    left: 36px;
+    top: 50%;
+    transform: translateY(-50%);
     font-family: 'Klein', sans-serif;
     font-weight: 350;
     font-size: 14px;
@@ -723,6 +720,7 @@ body {
     text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 200ms ease-out;
+    z-index: 1;
 }
 
 .item-view-back:hover {
