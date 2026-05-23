@@ -567,13 +567,13 @@ document.addEventListener('DOMContentLoaded', () => {
             const results = [];
             for (const m of archiveManifest) {
                 const c = m.csv;
-                const bag = [c.year, c.season, c.description, c.campaign?.replace(/_/g, ' '),
+                const bag = [c.year, c.season, c.description, normalize(c.campaign),
                     c.subcategory, c.publication, c.photographer, c.model]
                     .filter(Boolean).join(' ').toLowerCase();
                 if (tokens.every(t => bag.includes(t)) && !seen.has(m.filename)) {
                     seen.add(m.filename);
                     const descPart = c.description === 'fragrance' ? null : c.description;
-                    const label = [c.year, descPart, c.campaign?.replace(/_/g, ' ')]
+                    const label = [c.year, descPart, normalize(c.campaign)]
                         .filter(Boolean).join(' ');
                     results.push({ text: label, type: 'archive', manifest: m });
                 }
@@ -963,7 +963,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             // Campaign
             if (csv.campaign) {
-                const label = csv.campaign.replace(/_/g, ' ');
+                const label = normalize(csv.campaign);
                 if (!seen.has(label)) {
                     SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
                     seen.add(label);
@@ -972,16 +972,16 @@ document.addEventListener('DOMContentLoaded', () => {
             // Description + campaign combined (skip description for fragrance)
             if (csv.description || csv.campaign) {
                 const descPart = csv.description === 'fragrance' ? null : csv.description;
-                const parts = [descPart, csv.campaign].filter(Boolean).map(s => s.replace(/_/g, ' '));
+                const parts = [descPart, csv.campaign].filter(Boolean).map(normalize);
                 const label = parts.join(' ');
                 if (label && !seen.has(label)) {
                     SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
                     seen.add(label);
                 }
             }
-            // Subcategory (e.g. "fragrance", "collection")
+            // Subcategory
             if (csv.subcategory) {
-                const label = csv.subcategory.replace(/_/g, ' ');
+                const label = normalize(csv.subcategory);
                 if (!seen.has(label)) {
                     SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
                     seen.add(label);
@@ -1502,7 +1502,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let itemViewOpen   = false;
     let itemViewState  = null;
 
-    const prettify = s => s ? s.replace(/_/g, ' ').replace(/\bformen\b/gi, 'for men').toUpperCase() : '';
+    const normalize = s => s ? s.replace(/_/g, ' ').replace(/\bformen\b/gi, 'for men') : '';
+    const prettify  = s => normalize(s).toUpperCase();
 
     const ACRONYM_MAP = {
         'adv': 'advertisement',
