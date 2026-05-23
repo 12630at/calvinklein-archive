@@ -559,7 +559,30 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterResults(query) {
         const q = query.toLowerCase().trim();
         if (!q) return [];
-        return SEARCH_DATA.filter(item => item.text.toLowerCase().includes(q)).slice(0, 8);
+        const tokens = q.split(/\s+/).filter(Boolean);
+
+        // Multi-token: search archive manifests directly across all CSV fields
+        if (tokens.length > 1 && archiveManifest) {
+            const seen = new Set();
+            const results = [];
+            for (const m of archiveManifest) {
+                const c = m.csv;
+                const bag = [c.year, c.season, c.description, c.campaign?.replace(/_/g, ' '),
+                    c.subcategory, c.publication, c.photographer, c.model]
+                    .filter(Boolean).join(' ').toLowerCase();
+                if (tokens.every(t => bag.includes(t)) && !seen.has(m.filename)) {
+                    seen.add(m.filename);
+                    const label = [c.year, c.description, c.campaign?.replace(/_/g, ' ')]
+                        .filter(Boolean).join(' ');
+                    results.push({ text: label, type: 'archive', manifest: m });
+                }
+                if (results.length >= 8) break;
+            }
+            return results;
+        }
+
+        // Single token: use SEARCH_DATA
+        return SEARCH_DATA.filter(item => item.text.toLowerCase().includes(tokens[0])).slice(0, 8);
     }
 
     function showResults(query) {
@@ -720,10 +743,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         input.addEventListener('input', () => showResults(input.value));
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') { reverseSearch(); }
-            else if (e.key === 'Enter') {
+            if (e.key === 'Escape') { reverseSearch(); return; }
+            if (e.key === 'Enter') {
                 const matches = filterResults(input.value);
-                if (matches.length && matches[0].type === 'people') reverseSearchAndGoToPeople();
+                if (!matches.length) return;
+                const first = matches[0];
+                if (first.type === 'people')  reverseSearchAndGoToPeople();
+                else if (first.type === 'archive') reverseSearchAndGoToArchiveItem(first);
             }
         });
 
