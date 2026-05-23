@@ -879,7 +879,8 @@ body.item-view-open .menu-archive-back {
 }
 
 /* The year — large, 2000s soft type. Starts invisible
-   and is animated in when its entry enters the viewport. */
+   and is animated in when its entry enters the viewport.
+   Clickable: zooms into the archive page filtered to that year. */
 .timeline-year {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
@@ -896,16 +897,39 @@ body.item-view-open .menu-archive-back {
     filter: blur(8px);
     transform-origin: 50% 50%;
     will-change: opacity, transform, filter;
+    cursor: pointer;
+    transition: color 200ms ease-out;
 }
 
-/* Flash-in: same curve as the intro words. */
+.timeline-year:hover {
+    color: #424242;
+}
+
+/* Scroll-down (default): enters from below, exits upward. */
 .timeline-year.flash-in {
     animation: flashIn 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
 }
-
-/* Flash-out: dissolves up under a motion blur. */
 .timeline-year.flash-out {
     animation: flashOut 1200ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+}
+
+/* Scroll-up: enters from above, exits downward. */
+.timeline-year.flash-in.from-above {
+    animation: flashInFromAbove 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+.timeline-year.flash-out.to-below {
+    animation: flashOutToBelow 1200ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+}
+
+@keyframes flashInFromAbove {
+    0%   { opacity: 0; transform: translateY(-35vh) scale(0.92); filter: blur(8px); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; transform: translateY(0) scale(1);        filter: blur(0); }
+}
+
+@keyframes flashOutToBelow {
+    0%   { opacity: 1; transform: translateY(0) scale(1);     filter: blur(0); }
+    100% { opacity: 0; transform: translateY(5px) scale(1.04); filter: blur(6px); }
 }
 
 /* Paragraphs: invisible at start. GSAP drives entry/exit

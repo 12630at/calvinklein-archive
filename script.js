@@ -1785,7 +1785,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const timelineScroll = document.getElementById('timeline-scroll');
     const timelineClose  = document.getElementById('timeline-close');
 
-    let timelineObserver = null;
+    let timelineObserver  = null;
+    let timelineScrollDir = 'down';
+    let timelineLastTop   = 0;
+
+    // Track scroll direction so animations come from above when scrolling up.
+    timelineScroll.addEventListener('scroll', () => {
+        const st = timelineScroll.scrollTop;
+        if (st > timelineLastTop + 0.5)      timelineScrollDir = 'down';
+        else if (st < timelineLastTop - 0.5) timelineScrollDir = 'up';
+        timelineLastTop = st;
+    }, { passive: true });
 
     function openTimeline() {
         document.body.classList.add('timeline-open');
@@ -1796,43 +1806,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Reset scroll + animation state every time the page is opened
         timelineScroll.scrollTop = 0;
+        timelineLastTop   = 0;
+        timelineScrollDir = 'down';
         const entries = timelineStage.querySelectorAll('.timeline-entry');
         entries.forEach(entry => {
             const year = entry.querySelector('.timeline-year');
             const para = entry.querySelector('.timeline-paragraph');
-            year.classList.remove('flash-in', 'flash-out');
-            gsap.set(para, { opacity: 0, y: 16, filter: 'blur(4px)' });
+            year.classList.remove('flash-in', 'flash-out', 'from-above', 'to-below');
+            gsap.set(year, { clearProps: 'all' });
+            gsap.set(para, { opacity: 0, y: 16, filter: 'blur(4px)', clearProps: 'scale' });
         });
 
         // One observer per entry. When the entry's center crosses into the
         // viewport, the year flashes in immediately and the paragraph
         // follows after a short delay (year first, then paragraph).
-        // When the entry leaves, both animate out so they can replay
-        // cleanly when the user scrolls back.
+        // Direction of the flash depends on timelineScrollDir.
         timelineObserver = new IntersectionObserver((records) => {
             for (const record of records) {
                 const entry = record.target;
                 const year  = entry.querySelector('.timeline-year');
                 const para  = entry.querySelector('.timeline-paragraph');
+                const goingUp = timelineScrollDir === 'up';
 
                 if (record.isIntersecting) {
-                    year.classList.remove('flash-out');
+                    year.classList.remove('flash-out', 'to-below');
+                    // from-above only when scrolling up
+                    year.classList.toggle('from-above', goingUp);
                     year.classList.add('flash-in');
 
                     gsap.killTweensOf(para);
                     gsap.fromTo(para,
-                        { opacity: 0, y: 16, filter: 'blur(4px)' },
+                        { opacity: 0, y: goingUp ? -16 : 16, filter: 'blur(4px)' },
                         { opacity: 1, y: 0, filter: 'blur(0px)',
                           duration: 0.9, delay: 0.55,
                           ease: 'expo.out', overwrite: true });
                 } else {
                     if (year.classList.contains('flash-in')) {
-                        year.classList.remove('flash-in');
+                        year.classList.remove('flash-in', 'from-above');
+                        // to-below only when scrolling up (entry exits downward)
+                        year.classList.toggle('to-below', goingUp);
                         year.classList.add('flash-out');
                     }
                     gsap.killTweensOf(para);
                     gsap.to(para,
-                        { opacity: 0, y: 16, filter: 'blur(4px)',
+                        { opacity: 0, y: goingUp ? -16 : 16, filter: 'blur(4px)',
                           duration: 0.45, ease: 'power2.in', overwrite: true });
                 }
             }
@@ -1856,6 +1873,71 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }, 650);
     }
+
+    // Click a year → 2000s-Flash zoom-out into the archive page,
+    // filtered to that year. The clicked year scales up under a heavy
+    // motion blur while the rest of the page bleeds out, then the
+    // archive opens and the filter is applied once the canvas settles.
+    let timelineJumpInFlight = false;
+    function jumpToArchiveYear(yearEl) {
+        if (timelineJumpInFlight) return;
+        timelineJumpInFlight = true;
+
+        const yearText = yearEl.textContent.trim();
+        const entry    = yearEl.closest('.timeline-entry');
+        const para     = entry ? entry.querySelector('.timeline-paragraph') : null;
+
+        const tl = gsap.timeline({
+            onComplete: async () => {
+                timelineStage.style.display = 'none';
+                timelineStage.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('timeline-open');
+                if (timelineObserver) { timelineObserver.disconnect(); timelineObserver = null; }
+                // Reset so the page is fresh next time
+                gsap.set(timelineStage, { opacity: 1 });
+                gsap.set(yearEl, { clearProps: 'all' });
+                if (para) gsap.set(para, { clearProps: 'all' });
+
+                if (!archiveOpen) {
+                    await openArchive();
+                    setTimeout(() => applyArchiveFilter(yearText), 1200);
+                } else {
+                    applyArchiveFilter(yearText);
+                }
+                timelineJumpInFlight = false;
+            }
+        });
+
+        // Year zooms toward the camera, blurs, dissolves
+        tl.to(yearEl, {
+            scale: 4.2,
+            opacity: 0,
+            filter: 'blur(28px)',
+            duration: 0.7,
+            ease: 'power3.in',
+        }, 0);
+        if (para) {
+            tl.to(para, {
+                opacity: 0,
+                y: 24,
+                filter: 'blur(6px)',
+                duration: 0.45,
+                ease: 'power2.in',
+            }, 0);
+        }
+        // Whole stage washes out behind the zoom — classic Flash transition
+        tl.to(timelineStage, {
+            opacity: 0,
+            duration: 0.55,
+            ease: 'power2.in',
+        }, 0.25);
+    }
+
+    // Delegated click handler — survives page open/close without re-binding
+    timelineStage.addEventListener('click', (e) => {
+        const yearEl = e.target.closest('.timeline-year');
+        if (yearEl) jumpToArchiveYear(yearEl);
+    });
 
     if (timelineEl) {
         timelineEl.addEventListener('click', (e) => {
