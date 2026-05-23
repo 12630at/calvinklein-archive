@@ -1113,23 +1113,42 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function createImgEl(it, wx, wy) {
         const isVideo = isVideoSrc(it.src);
-        const el = document.createElement(isVideo ? 'video' : 'img');
-        el.className   = 'archive-img';
+
         if (isVideo) {
-            el.src         = it.src;
-            el.muted       = true;
-            el.loop        = true;
-            el.autoplay    = true;
-            el.playsInline = true;
-            el.setAttribute('muted', '');
-            el.setAttribute('playsinline', '');
-            // Some browsers need an explicit play() after metadata
-            el.addEventListener('loadedmetadata', () => { el.play().catch(() => {}); });
-            el.play().catch(() => {});
-        } else {
-            el.src       = it.src;
-            el.decoding  = 'async';
+            // Wrap in a plain div so the rotation transform lives on the wrapper,
+            // not on the <video> element itself — avoids GPU compositing pixelation.
+            const wrap = document.createElement('div');
+            wrap.className = 'archive-img archive-video-wrap';
+            wrap.style.width  = it.w + 'px';
+            wrap.style.height = it.h + 'px';
+            wrap.style.left   = wx + 'px';
+            wrap.style.top    = wy + 'px';
+            wrap.dataset.rot    = it.rot;
+            wrap.dataset.itemId = it.id;
+            wrap.dataset.video  = '1';
+            gsap.set(wrap, { rotation: it.rot });
+
+            const vid = document.createElement('video');
+            vid.src         = it.src;
+            vid.muted       = true;
+            vid.loop        = true;
+            vid.autoplay    = true;
+            vid.playsInline = true;
+            vid.setAttribute('muted', '');
+            vid.setAttribute('playsinline', '');
+            vid.style.width  = '100%';
+            vid.style.height = '100%';
+            vid.style.display = 'block';
+            vid.addEventListener('loadedmetadata', () => vid.play().catch(() => {}));
+            vid.play().catch(() => {});
+            wrap.appendChild(vid);
+            return wrap;
         }
+
+        const el = document.createElement('img');
+        el.className   = 'archive-img';
+        el.src         = it.src;
+        el.decoding    = 'async';
         el.draggable   = false;
         el.onerror     = () => el.remove();
         el.style.width  = it.w + 'px';
@@ -1138,7 +1157,6 @@ document.addEventListener('DOMContentLoaded', () => {
         el.style.top    = wy + 'px';
         el.dataset.rot    = it.rot;
         el.dataset.itemId = it.id;
-        if (isVideo) el.dataset.video = '1';
         gsap.set(el, { rotation: it.rot });
         return el;
     }
@@ -1736,38 +1754,47 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ----- Video item view controls (hover zones + reverse / fast-forward / stop) -----
-    let videoReverseRAF = null;
+    let videoReversing  = false;
+    let _reverseCleanup = null;
     let videoZonesEl    = null;
 
     function stopVideoReverse() {
-        if (videoReverseRAF) { cancelAnimationFrame(videoReverseRAF); videoReverseRAF = null; }
+        videoReversing = false;
+        if (_reverseCleanup) { _reverseCleanup(); _reverseCleanup = null; }
     }
 
+    // Seeked-event-chaining reverse: after each seek completes we immediately
+    // schedule the next one. This is the only browser-compatible way to show
+    // backward frames — rAF-based currentTime stomping gets ignored mid-seek.
     function startVideoReverse(video) {
-        if (videoReverseRAF) return;
-        // Try to pause smoothly; some browsers throttle seeks while playing.
+        if (videoReversing) return;
+        videoReversing = true;
         try { video.pause(); } catch (_) {}
-        let last = performance.now();
-        const REV_RATE = 1.0; // seconds of video time per real second
-        const step = (now) => {
-            const dt = Math.min(0.1, (now - last) / 1000);
-            last = now;
-            const dur = video.duration || 0;
-            let t = video.currentTime - dt * REV_RATE;
-            if (!isFinite(t) || t <= 0.05) t = Math.max(0.05, dur - 0.05);
-            if (typeof video.fastSeek === 'function') video.fastSeek(t);
-            else video.currentTime = t;
-            videoReverseRAF = requestAnimationFrame(step);
+
+        const STEP = 0.08; // seconds per seek step (~12 fps backward)
+
+        const doSeek = () => {
+            if (!videoReversing) return;
+            const dur = isFinite(video.duration) ? video.duration : 0;
+            let t = video.currentTime - STEP;
+            if (t < 0.02) t = Math.max(0.02, dur - 0.05);
+            video.currentTime = t;
         };
-        videoReverseRAF = requestAnimationFrame(step);
+
+        const onSeeked = () => {
+            if (!videoReversing) return;
+            // 25 ms gap lets the browser decode + paint the decoded frame
+            setTimeout(doSeek, 25);
+        };
+
+        video.addEventListener('seeked', onSeeked);
+        _reverseCleanup = () => video.removeEventListener('seeked', onSeeked);
+
+        doSeek(); // start the chain
     }
 
     function setVideoSpeed(video, mode) {
-        // mode: 'normal' | 'fast' | 'reverse' | 'paused'
-        if (mode === 'reverse') {
-            startVideoReverse(video);
-            return;
-        }
+        if (mode === 'reverse') { startVideoReverse(video); return; }
         stopVideoReverse();
         if (mode === 'paused') { video.pause(); return; }
         video.playbackRate = (mode === 'fast') ? 3 : 1;
@@ -1780,29 +1807,25 @@ document.addEventListener('DOMContentLoaded', () => {
         videoZonesEl = document.createElement('div');
         videoZonesEl.id = 'item-view-video-zones';
 
-        const left   = document.createElement('div'); left.className   = 'iv-zone iv-zone-left';
+        const left   = document.createElement('div'); left.className = 'iv-zone iv-zone-left';
         const center = document.createElement('div'); center.className = 'iv-zone iv-zone-center';
-        const right  = document.createElement('div'); right.className  = 'iv-zone iv-zone-right';
+        const right  = document.createElement('div'); right.className = 'iv-zone iv-zone-right';
 
-        // Only side zones show an icon (chevrons). Centre uses a custom cursor (stop/play) only.
-        left.innerHTML  = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><polygon points="20,5 10,12 20,19"/><polygon points="11,5 2,12 11,19"/></svg></span>';
-        right.innerHTML = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><polygon points="4,5 14,12 4,19"/><polygon points="13,5 22,12 13,19"/></svg></span>';
-
+        // No icon elements — the cursor shape IS the affordance for all three zones.
         videoZonesEl.appendChild(left);
         videoZonesEl.appendChild(center);
         videoZonesEl.appendChild(right);
         itemView.appendChild(videoZonesEl);
 
-        const videoEl = () => itemViewState && itemViewState.cloneImg;
-        const controlsReady = () => itemViewState && itemViewState.controlsEnabled && !itemViewState.userPaused;
+        const getVid = () => itemViewState && itemViewState.cloneImg;
+        const ready  = () => itemViewState && itemViewState.controlsEnabled && !itemViewState.userPaused;
 
-        // Left margin = reverse, right margin = fast forward.
-        left.addEventListener('mouseenter',  () => { const v = videoEl(); if (controlsReady()) setVideoSpeed(v, 'reverse'); });
-        right.addEventListener('mouseenter', () => { const v = videoEl(); if (controlsReady()) setVideoSpeed(v, 'fast'); });
-        center.addEventListener('mouseenter',() => { const v = videoEl(); if (controlsReady()) setVideoSpeed(v, 'normal'); });
+        left.addEventListener('mouseenter',   () => { const v = getVid(); if (ready()) setVideoSpeed(v, 'reverse'); });
+        right.addEventListener('mouseenter',  () => { const v = getVid(); if (ready()) setVideoSpeed(v, 'fast'); });
+        center.addEventListener('mouseenter', () => { const v = getVid(); if (ready()) setVideoSpeed(v, 'normal'); });
 
         center.addEventListener('click', () => {
-            const v = videoEl(); if (!v) return;
+            const v = getVid(); if (!v) return;
             itemViewState.userPaused = !itemViewState.userPaused;
             setVideoSpeed(v, itemViewState.userPaused ? 'paused' : 'normal');
             itemView.classList.toggle('video-paused', itemViewState.userPaused);
@@ -1849,6 +1872,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const clone = itemViewState.cloneImg;
         const tgt   = computeTargetRect(m.dw, m.dh);
+        const nextIsVideo = isVideoSrc(m.path);
 
         // Cross-fade: shrink + fade out, swap src, expand + fade in
         const tl = gsap.timeline();
@@ -1860,6 +1884,10 @@ document.addEventListener('DOMContentLoaded', () => {
             onComplete: () => {
                 clone.src = m.path;
                 gsap.set(clone, { left: tgt.x, top: tgt.y, width: tgt.w, height: tgt.h, scale: 1 });
+                if (nextIsVideo) {
+                    clone.currentTime = 0;
+                    clone.play().catch(() => {});
+                }
             },
         });
         tl.to(clone, { opacity: 1, duration: 0.35, ease: 'power2.out' });
