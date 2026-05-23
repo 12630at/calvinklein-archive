@@ -1796,46 +1796,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Reset scroll + animation state every time the page is opened
         timelineScroll.scrollTop = 0;
-        const years = timelineStage.querySelectorAll('.timeline-year');
-        const paras = timelineStage.querySelectorAll('.timeline-paragraph');
-        years.forEach(y => y.classList.remove('flash-in', 'flash-out'));
-        paras.forEach(p => p.classList.remove('is-visible'));
+        const entries = timelineStage.querySelectorAll('.timeline-entry');
+        entries.forEach(entry => {
+            const year = entry.querySelector('.timeline-year');
+            const para = entry.querySelector('.timeline-paragraph');
+            year.classList.remove('flash-in', 'flash-out');
+            gsap.set(para, { opacity: 0, y: 16, filter: 'blur(4px)' });
+        });
 
-        // IntersectionObserver — watches both years and paragraphs inside
-        // the scrollable container so it triggers off the real scroll.
-        timelineObserver = new IntersectionObserver((entries) => {
-            for (const entry of entries) {
-                const el = entry.target;
-                if (el.classList.contains('timeline-year')) {
-                    if (entry.isIntersecting) {
-                        el.classList.remove('flash-out');
-                        el.classList.add('flash-in');
-                    } else if (el.classList.contains('flash-in')) {
-                        // Year has left the viewport — animate out, then
-                        // reset so it can flash-in again on the next pass.
-                        el.classList.remove('flash-in');
-                        el.classList.add('flash-out');
+        // One observer per entry. When the entry's center crosses into the
+        // viewport, the year flashes in immediately and the paragraph
+        // follows after a short delay (year first, then paragraph).
+        // When the entry leaves, both animate out so they can replay
+        // cleanly when the user scrolls back.
+        timelineObserver = new IntersectionObserver((records) => {
+            for (const record of records) {
+                const entry = record.target;
+                const year  = entry.querySelector('.timeline-year');
+                const para  = entry.querySelector('.timeline-paragraph');
+
+                if (record.isIntersecting) {
+                    year.classList.remove('flash-out');
+                    year.classList.add('flash-in');
+
+                    gsap.killTweensOf(para);
+                    gsap.fromTo(para,
+                        { opacity: 0, y: 16, filter: 'blur(4px)' },
+                        { opacity: 1, y: 0, filter: 'blur(0px)',
+                          duration: 0.9, delay: 0.55,
+                          ease: 'expo.out', overwrite: true });
+                } else {
+                    if (year.classList.contains('flash-in')) {
+                        year.classList.remove('flash-in');
+                        year.classList.add('flash-out');
                     }
-                } else if (el.classList.contains('timeline-paragraph')) {
-                    if (entry.isIntersecting) {
-                        // Paragraphs only animate in once.
-                        el.classList.add('is-visible');
-                        gsap.fromTo(el,
-                            { y: 16, filter: 'blur(4px)' },
-                            { y: 0, filter: 'blur(0px)', duration: 1.0,
-                              ease: 'expo.out', overwrite: true });
-                        timelineObserver.unobserve(el);
-                    }
+                    gsap.killTweensOf(para);
+                    gsap.to(para,
+                        { opacity: 0, y: 16, filter: 'blur(4px)',
+                          duration: 0.45, ease: 'power2.in', overwrite: true });
                 }
             }
         }, {
             root: timelineScroll,
-            rootMargin: '0px 0px -10% 0px',
-            threshold: 0.25,
+            threshold: 0.55,
         });
 
-        years.forEach(y => timelineObserver.observe(y));
-        paras.forEach(p => timelineObserver.observe(p));
+        entries.forEach(e => timelineObserver.observe(e));
     }
 
     function closeTimeline() {

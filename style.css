@@ -803,16 +803,36 @@ body.item-view-open .menu-archive-back {
     overflow: hidden;
 }
 
-/* Fixed nav on the left, mirrors the people page nav. */
+/* Fixed nav: back arrow + title, on a single row. */
 .timeline-nav {
     position: absolute;
     top: 50%;
     left: 36px;
     transform: translateY(-50%);
     display: flex;
-    flex-direction: column;
-    gap: 24px;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
     z-index: 2;
+}
+
+.timeline-back-btn {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.timeline-back-btn:hover {
+    color: #424242;
 }
 
 .timeline-nav-title {
@@ -828,16 +848,14 @@ body.item-view-open .menu-archive-back {
 }
 
 /* The scrollable container sits inside the fixed stage.
-   The stage itself is fixed; scrolling happens here. */
+   Scroll-snap locks each year to the viewport center. */
 #timeline-scroll {
     position: absolute;
-    top: 0;
-    left: 240px;
-    right: 0;
-    bottom: 0;
-    overflow-y: auto;
+    inset: 0;
+    overflow-y: scroll;
     overflow-x: hidden;
-    padding: 50vh 96px 60vh 0;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
     scrollbar-width: none;
 }
 
@@ -845,21 +863,23 @@ body.item-view-open .menu-archive-back {
     display: none;
 }
 
-/* Each year block — a comfortable vertical rhythm so years
-   enter the viewport one at a time. */
+/* Each entry = one viewport. Year + paragraph centered.
+   scroll-snap-align: center snaps the entry centre to the viewport centre. */
 .timeline-entry {
-    min-height: 70vh;
+    height: 100vh;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: center;
     justify-content: center;
-    gap: 28px;
-    margin-bottom: 14vh;
-    max-width: 720px;
+    text-align: center;
+    gap: 36px;
+    padding: 0 48px;
 }
 
 /* The year — large, 2000s soft type. Starts invisible
-   and is animated in by GSAP / IntersectionObserver. */
+   and is animated in when its entry enters the viewport. */
 .timeline-year {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
@@ -885,11 +905,11 @@ body.item-view-open .menu-archive-back {
 
 /* Flash-out: dissolves up under a motion blur. */
 .timeline-year.flash-out {
-    animation: flashOut 1500ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+    animation: flashOut 1200ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
 }
 
-/* Paragraphs are invisible at start.
-   IntersectionObserver flips .is-visible once each enters the viewport. */
+/* Paragraphs: invisible at start. GSAP drives entry/exit
+   with a delay so the year appears first. */
 .timeline-paragraph {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
@@ -904,16 +924,7 @@ body.item-view-open .menu-archive-back {
     opacity: 0;
     transform: translateY(16px);
     filter: blur(4px);
-    transition: opacity 900ms cubic-bezier(0.19, 1, 0.22, 1),
-                transform 900ms cubic-bezier(0.19, 1, 0.22, 1),
-                filter 900ms cubic-bezier(0.19, 1, 0.22, 1);
     will-change: opacity, transform, filter;
-}
-
-.timeline-paragraph.is-visible {
-    opacity: 1;
-    transform: translateY(0);
-    filter: blur(0);
 }
 
 /* Hide the regular .menu while the timeline page is open. */
