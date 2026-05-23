@@ -696,13 +696,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function reverseSearchAndGoToArchiveItem(item) {
-        // Derive a query that matches a single CSV field so filterByQuery works correctly.
-        // item.text may be a multi-word display label ("1995 obsession for men"); instead
-        // use the raw campaign, description, or year from the manifest's CSV.
         const c = item.manifest?.csv;
-        const query = c
-            ? (c.campaign ? normalize(c.campaign) : c.description || c.year)
-            : item.text;
+        const query = item.queryHint
+            ?? (c ? (c.campaign ? normalize(c.campaign) : c.description || c.year) : item.text);
         reverseSearch(async () => {
             if (!archiveOpen) {
                 await openArchive();
@@ -965,14 +961,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const { csv } = m;
             // Year
             if (csv.year && !seen.has(csv.year)) {
-                SEARCH_DATA.push({ text: csv.year, type: 'archive', manifest: m });
+                SEARCH_DATA.push({ text: csv.year, type: 'archive', manifest: m, queryHint: csv.year });
                 seen.add(csv.year);
             }
             // Campaign
             if (csv.campaign) {
                 const label = normalize(csv.campaign);
                 if (!seen.has(label)) {
-                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m, queryHint: label });
                     seen.add(label);
                 }
             }
@@ -982,7 +978,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const parts = [descPart, csv.campaign].filter(Boolean).map(normalize);
                 const label = parts.join(' ');
                 if (label && !seen.has(label)) {
-                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    const hint = normalize(csv.campaign) || csv.description;
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m, queryHint: hint });
                     seen.add(label);
                 }
             }
@@ -990,8 +987,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (csv.subcategory) {
                 const label = normalize(csv.subcategory);
                 if (!seen.has(label)) {
-                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m, queryHint: label });
                     seen.add(label);
+                }
+            }
+            // Models — supports comma-separated multiple models per entry
+            if (csv.model) {
+                for (const raw of csv.model.split(',')) {
+                    const modelName = normalize(raw.trim());
+                    if (!modelName) continue;
+                    const modelKey = modelName.toLowerCase();
+                    if (!seen.has(modelKey)) {
+                        SEARCH_DATA.push({ text: modelName, type: 'archive', manifest: m, queryHint: modelName });
+                        seen.add(modelKey);
+                    }
                 }
             }
         }
