@@ -696,12 +696,19 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function reverseSearchAndGoToArchiveItem(item) {
+        // Derive a query that matches a single CSV field so filterByQuery works correctly.
+        // item.text may be a multi-word display label ("1995 obsession for men"); instead
+        // use the raw campaign, description, or year from the manifest's CSV.
+        const c = item.manifest?.csv;
+        const query = c
+            ? (c.campaign ? normalize(c.campaign) : c.description || c.year)
+            : item.text;
         reverseSearch(async () => {
             if (!archiveOpen) {
                 await openArchive();
-                setTimeout(() => applyArchiveFilter(item.text), 1200);
+                setTimeout(() => applyArchiveFilter(query), 1200);
             } else {
-                applyArchiveFilter(item.text);
+                applyArchiveFilter(query);
             }
         });
     }
@@ -1241,13 +1248,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function filterByQuery(manifests, query) {
         if (!query) return manifests;
-        const q = query.toLowerCase().trim();
+        const q = normalize(query).toLowerCase().trim();
         return manifests.filter(m => {
             const c = m.csv;
             return [c.year, c.campaign, c.description, c.subcategory,
                     c.photographer, c.model, c.director, c.creative_director,
                     c.art_director, c.publication]
-                .some(f => f && f.toLowerCase().replace(/_/g, ' ').includes(q));
+                .some(f => f && normalize(f).toLowerCase().includes(q));
         });
     }
 
