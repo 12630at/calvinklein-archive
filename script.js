@@ -572,7 +572,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     .filter(Boolean).join(' ').toLowerCase();
                 if (tokens.every(t => bag.includes(t)) && !seen.has(m.filename)) {
                     seen.add(m.filename);
-                    const label = [c.year, c.description, c.campaign?.replace(/_/g, ' ')]
+                    const descPart = c.description === 'fragrance' ? null : c.description;
+                    const label = [c.year, descPart, c.campaign?.replace(/_/g, ' ')]
                         .filter(Boolean).join(' ');
                     results.push({ text: label, type: 'archive', manifest: m });
                 }
@@ -968,9 +969,10 @@ document.addEventListener('DOMContentLoaded', () => {
                     seen.add(label);
                 }
             }
-            // Description + campaign combined
+            // Description + campaign combined (skip description for fragrance)
             if (csv.description || csv.campaign) {
-                const parts = [csv.description, csv.campaign].filter(Boolean).map(s => s.replace(/_/g, ' '));
+                const descPart = csv.description === 'fragrance' ? null : csv.description;
+                const parts = [descPart, csv.campaign].filter(Boolean).map(s => s.replace(/_/g, ' '));
                 const label = parts.join(' ');
                 if (label && !seen.has(label)) {
                     SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
@@ -1500,7 +1502,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let itemViewOpen   = false;
     let itemViewState  = null;
 
-    const prettify = s => s ? s.replace(/_/g, ' ').toUpperCase() : '';
+    const prettify = s => s ? s.replace(/_/g, ' ').replace(/\bformen\b/gi, 'for men').toUpperCase() : '';
 
     const ACRONYM_MAP = {
         'adv': 'advertisement',
