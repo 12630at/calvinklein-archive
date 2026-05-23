@@ -559,7 +559,31 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterResults(query) {
         const q = query.toLowerCase().trim();
         if (!q) return [];
-        return SEARCH_DATA.filter(item => item.text.toLowerCase().includes(q)).slice(0, 8);
+        const tokens = q.split(/\s+/).filter(Boolean);
+
+        // Multi-token: search archive manifests directly across all CSV fields
+        if (tokens.length > 1 && archiveManifest) {
+            const seen = new Set();
+            const results = [];
+            for (const m of archiveManifest) {
+                const c = m.csv;
+                const bag = [c.year, c.season, c.description, normalize(c.campaign),
+                    c.subcategory, c.publication, c.photographer, c.model]
+                    .filter(Boolean).join(' ').toLowerCase();
+                if (tokens.every(t => bag.includes(t)) && !seen.has(m.filename)) {
+                    seen.add(m.filename);
+                    const descPart = c.description === 'fragrance' ? null : c.description;
+                    const label = [c.year, descPart, normalize(c.campaign)]
+                        .filter(Boolean).join(' ');
+                    results.push({ text: label, type: 'archive', manifest: m });
+                }
+                if (results.length >= 8) break;
+            }
+            return results;
+        }
+
+        // Single token: use SEARCH_DATA
+        return SEARCH_DATA.filter(item => item.text.toLowerCase().includes(tokens[0])).slice(0, 8);
     }
 
     function showResults(query) {
@@ -672,12 +696,15 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function reverseSearchAndGoToArchiveItem(item) {
+        const c = item.manifest?.csv;
+        const query = item.queryHint
+            ?? (c ? (c.campaign ? normalize(c.campaign) : c.description || c.year) : item.text);
         reverseSearch(async () => {
             if (!archiveOpen) {
                 await openArchive();
-                setTimeout(() => applyArchiveFilter(item.text), 1200);
+                setTimeout(() => applyArchiveFilter(query), 1200);
             } else {
-                applyArchiveFilter(item.text);
+                applyArchiveFilter(query);
             }
         });
     }
@@ -720,10 +747,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         input.addEventListener('input', () => showResults(input.value));
         input.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') { reverseSearch(); }
-            else if (e.key === 'Enter') {
+            if (e.key === 'Escape') { reverseSearch(); return; }
+            if (e.key === 'Enter') {
                 const matches = filterResults(input.value);
-                if (matches.length && matches[0].type === 'people') reverseSearchAndGoToPeople();
+                if (!matches.length) return;
+                const first = matches[0];
+                if (first.type === 'people')  reverseSearchAndGoToPeople();
+                else if (first.type === 'archive') reverseSearchAndGoToArchiveItem(first);
             }
         });
 
@@ -894,9 +924,10 @@ document.addEventListener('DOMContentLoaded', () => {
             const filename = cols[iFile];
             const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
             if (!dims) return null;
+            const ext = dims[2] || 'webp';
             const path = cols[iSub]
-                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.webp`
-                : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.webp`;
+                ? `assets/index/${cols[iCat]}/${cols[iSub]}/${cols[iYear]}/${filename}.${ext}`
+                : `assets/index/${cols[iCat]}/${cols[iYear]}/${filename}.${ext}`;
             const csv = {};
             for (let k = 0; k < header.length; k++) csv[header[k]] = cols[k] || '';
             return {
@@ -930,32 +961,46 @@ document.addEventListener('DOMContentLoaded', () => {
             const { csv } = m;
             // Year
             if (csv.year && !seen.has(csv.year)) {
-                SEARCH_DATA.push({ text: csv.year, type: 'archive', manifest: m });
+                SEARCH_DATA.push({ text: csv.year, type: 'archive', manifest: m, queryHint: csv.year });
                 seen.add(csv.year);
             }
             // Campaign
             if (csv.campaign) {
-                const label = csv.campaign.replace(/_/g, ' ');
+                const label = normalize(csv.campaign);
                 if (!seen.has(label)) {
-                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m, queryHint: label });
                     seen.add(label);
                 }
             }
-            // Description + campaign combined
+            // Description + campaign combined (skip description for fragrance)
             if (csv.description || csv.campaign) {
-                const parts = [csv.description, csv.campaign].filter(Boolean).map(s => s.replace(/_/g, ' '));
+                const descPart = csv.description === 'fragrance' ? null : csv.description;
+                const parts = [descPart, csv.campaign].filter(Boolean).map(normalize);
                 const label = parts.join(' ');
                 if (label && !seen.has(label)) {
-                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    const hint = normalize(csv.campaign) || csv.description;
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m, queryHint: hint });
                     seen.add(label);
                 }
             }
-            // Subcategory (e.g. "fragrance", "collection")
+            // Subcategory
             if (csv.subcategory) {
-                const label = csv.subcategory.replace(/_/g, ' ');
+                const label = normalize(csv.subcategory);
                 if (!seen.has(label)) {
-                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m });
+                    SEARCH_DATA.push({ text: label, type: 'archive', manifest: m, queryHint: label });
                     seen.add(label);
+                }
+            }
+            // Models — supports comma-separated multiple models per entry
+            if (csv.model) {
+                for (const raw of csv.model.split(',')) {
+                    const modelName = normalize(raw.trim());
+                    if (!modelName) continue;
+                    const modelKey = modelName.toLowerCase();
+                    if (!seen.has(modelKey)) {
+                        SEARCH_DATA.push({ text: modelName, type: 'archive', manifest: m, queryHint: modelName });
+                        seen.add(modelKey);
+                    }
                 }
             }
         }
@@ -1212,13 +1257,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function filterByQuery(manifests, query) {
         if (!query) return manifests;
-        const q = query.toLowerCase().trim();
+        const q = normalize(query).toLowerCase().trim();
         return manifests.filter(m => {
             const c = m.csv;
             return [c.year, c.campaign, c.description, c.subcategory,
                     c.photographer, c.model, c.director, c.creative_director,
                     c.art_director, c.publication]
-                .some(f => f && f.toLowerCase().replace(/_/g, ' ').includes(q));
+                .some(f => f && normalize(f).toLowerCase().includes(q));
         });
     }
 
@@ -1473,7 +1518,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let itemViewOpen   = false;
     let itemViewState  = null;
 
-    const prettify = s => s ? s.replace(/_/g, ' ').toUpperCase() : '';
+    const normalize = s => s ? s.replace(/_/g, ' ').replace(/\bformen\b/gi, 'for men') : '';
+    const prettify  = s => normalize(s).toUpperCase();
 
     const ACRONYM_MAP = {
         'adv': 'advertisement',
@@ -1723,4 +1769,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemViewOpen)      { closeItemView(); }
         else if (archiveOpen)  { closeArchive(); }
     });
+
+    // Preload archive manifest in background so search is always up to date
+    loadArchiveManifest().then(enrichSearchWithArchive).catch(() => {});
 });
