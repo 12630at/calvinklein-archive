@@ -783,3 +783,141 @@ body.item-view-open .menu .menu-item,
 body.item-view-open .menu-archive-back {
     pointer-events: none;
 }
+
+/* ===== TIMELINE PAGE ===== */
+
+/* Hover state for the timeline menu item */
+#timeline:hover {
+    color: #424242;
+}
+
+/* The whole stage is fixed — does not scroll with the page. */
+#timeline-stage {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    z-index: 16;
+    display: none;
+    opacity: 0;
+    transition: opacity 600ms ease-in-out;
+    overflow: hidden;
+}
+
+/* Fixed nav on the left, mirrors the people page nav. */
+.timeline-nav {
+    position: absolute;
+    top: 50%;
+    left: 36px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    z-index: 2;
+}
+
+.timeline-nav-title {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    line-height: 12px;
+}
+
+/* The scrollable container sits inside the fixed stage.
+   The stage itself is fixed; scrolling happens here. */
+#timeline-scroll {
+    position: absolute;
+    top: 0;
+    left: 240px;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 50vh 96px 60vh 0;
+    scrollbar-width: none;
+}
+
+#timeline-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* Each year block — a comfortable vertical rhythm so years
+   enter the viewport one at a time. */
+.timeline-entry {
+    min-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 28px;
+    margin-bottom: 14vh;
+    max-width: 720px;
+}
+
+/* The year — large, 2000s soft type. Starts invisible
+   and is animated in by GSAP / IntersectionObserver. */
+.timeline-year {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: clamp(72px, 14vw, 220px);
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
+    color: rgba(40, 40, 40, 0.85);
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    opacity: 0;
+    transform: translateY(35vh) scale(0.92);
+    filter: blur(8px);
+    transform-origin: 50% 50%;
+    will-change: opacity, transform, filter;
+}
+
+/* Flash-in: same curve as the intro words. */
+.timeline-year.flash-in {
+    animation: flashIn 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+
+/* Flash-out: dissolves up under a motion blur. */
+.timeline-year.flash-out {
+    animation: flashOut 1500ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+}
+
+/* Paragraphs are invisible at start.
+   IntersectionObserver flips .is-visible once each enters the viewport. */
+.timeline-paragraph {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 16px;
+    line-height: 1.45;
+    letter-spacing: -0.2px;
+    color: #424242;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    max-width: 560px;
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(4px);
+    transition: opacity 900ms cubic-bezier(0.19, 1, 0.22, 1),
+                transform 900ms cubic-bezier(0.19, 1, 0.22, 1),
+                filter 900ms cubic-bezier(0.19, 1, 0.22, 1);
+    will-change: opacity, transform, filter;
+}
+
+.timeline-paragraph.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+}
+
+/* Hide the regular .menu while the timeline page is open. */
+body.timeline-open .menu {
+    opacity: 0;
+    pointer-events: none;
+}

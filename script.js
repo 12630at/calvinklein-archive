@@ -1772,4 +1772,92 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Preload archive manifest in background so search is always up to date
     loadArchiveManifest().then(enrichSearchWithArchive).catch(() => {});
+
+    // ===== TIMELINE PAGE =====
+    // The stage itself is fixed; only #timeline-scroll scrolls inside it.
+    // Years use the same flash-in / flash-out keyframes as the intro words
+    // (cubic-bezier(0.19, 1, 0.22, 1), blur, scale) for the 2000s Flash feel.
+    // Paragraphs get an .is-visible class via IntersectionObserver and
+    // GSAP drives the final easing to keep timing in sync with the rest.
+
+    const timelineEl     = document.getElementById('timeline');
+    const timelineStage  = document.getElementById('timeline-stage');
+    const timelineScroll = document.getElementById('timeline-scroll');
+    const timelineClose  = document.getElementById('timeline-close');
+
+    let timelineObserver = null;
+
+    function openTimeline() {
+        document.body.classList.add('timeline-open');
+        timelineStage.removeAttribute('aria-hidden');
+        timelineStage.style.display = 'block';
+        void timelineStage.offsetWidth;
+        timelineStage.style.opacity = '1';
+
+        // Reset scroll + animation state every time the page is opened
+        timelineScroll.scrollTop = 0;
+        const years = timelineStage.querySelectorAll('.timeline-year');
+        const paras = timelineStage.querySelectorAll('.timeline-paragraph');
+        years.forEach(y => y.classList.remove('flash-in', 'flash-out'));
+        paras.forEach(p => p.classList.remove('is-visible'));
+
+        // IntersectionObserver — watches both years and paragraphs inside
+        // the scrollable container so it triggers off the real scroll.
+        timelineObserver = new IntersectionObserver((entries) => {
+            for (const entry of entries) {
+                const el = entry.target;
+                if (el.classList.contains('timeline-year')) {
+                    if (entry.isIntersecting) {
+                        el.classList.remove('flash-out');
+                        el.classList.add('flash-in');
+                    } else if (el.classList.contains('flash-in')) {
+                        // Year has left the viewport — animate out, then
+                        // reset so it can flash-in again on the next pass.
+                        el.classList.remove('flash-in');
+                        el.classList.add('flash-out');
+                    }
+                } else if (el.classList.contains('timeline-paragraph')) {
+                    if (entry.isIntersecting) {
+                        // Paragraphs only animate in once.
+                        el.classList.add('is-visible');
+                        gsap.fromTo(el,
+                            { y: 16, filter: 'blur(4px)' },
+                            { y: 0, filter: 'blur(0px)', duration: 1.0,
+                              ease: 'expo.out', overwrite: true });
+                        timelineObserver.unobserve(el);
+                    }
+                }
+            }
+        }, {
+            root: timelineScroll,
+            rootMargin: '0px 0px -10% 0px',
+            threshold: 0.25,
+        });
+
+        years.forEach(y => timelineObserver.observe(y));
+        paras.forEach(p => timelineObserver.observe(p));
+    }
+
+    function closeTimeline() {
+        timelineStage.style.opacity = '0';
+        setTimeout(() => {
+            timelineStage.style.display = 'none';
+            timelineStage.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('timeline-open');
+            if (timelineObserver) {
+                timelineObserver.disconnect();
+                timelineObserver = null;
+            }
+        }, 650);
+    }
+
+    if (timelineEl) {
+        timelineEl.addEventListener('click', (e) => {
+            e.preventDefault();
+            openTimeline();
+        });
+    }
+    if (timelineClose) {
+        timelineClose.addEventListener('click', closeTimeline);
+    }
 });
