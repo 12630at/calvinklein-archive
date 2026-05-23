@@ -1679,7 +1679,16 @@ document.addEventListener('DOMContentLoaded', () => {
             currentManifest: item.manifest,
             isVideo:   itemIsVideo,
             userPaused: false,
+            controlsEnabled: !itemIsVideo, // videos: unlocked after a short delay below
+            controlsTimer: null,
         };
+        if (itemIsVideo) {
+            // Lock the hover speed controls for the first few seconds so the user
+            // sees a chunk of normal playback before the margins start scrubbing.
+            itemViewState.controlsTimer = setTimeout(() => {
+                if (itemViewState) itemViewState.controlsEnabled = true;
+            }, 2500);
+        }
 
         gsap.set(clone, {
             position: 'absolute',
@@ -1736,14 +1745,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function startVideoReverse(video) {
         if (videoReverseRAF) return;
-        video.pause();
+        // Try to pause smoothly; some browsers throttle seeks while playing.
+        try { video.pause(); } catch (_) {}
         let last = performance.now();
+        const REV_RATE = 1.0; // seconds of video time per real second
         const step = (now) => {
-            const dt = (now - last) / 1000;
+            const dt = Math.min(0.1, (now - last) / 1000);
             last = now;
-            let t = video.currentTime - dt * 2;
-            if (t <= 0) t = (video.duration || 0);
-            video.currentTime = t;
+            const dur = video.duration || 0;
+            let t = video.currentTime - dt * REV_RATE;
+            if (!isFinite(t) || t <= 0.05) t = Math.max(0.05, dur - 0.05);
+            if (typeof video.fastSeek === 'function') video.fastSeek(t);
+            else video.currentTime = t;
             videoReverseRAF = requestAnimationFrame(step);
         };
         videoReverseRAF = requestAnimationFrame(step);
@@ -1762,7 +1775,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function buildVideoControls() {
-        // Remove any prior overlay (defensive — should have been cleaned by closeItemView)
         if (videoZonesEl) { videoZonesEl.remove(); videoZonesEl = null; }
 
         videoZonesEl = document.createElement('div');
@@ -1772,10 +1784,9 @@ document.addEventListener('DOMContentLoaded', () => {
         const center = document.createElement('div'); center.className = 'iv-zone iv-zone-center';
         const right  = document.createElement('div'); right.className  = 'iv-zone iv-zone-right';
 
-        // Inline SVG icons — cursor-style chevrons + stop square
-        left.innerHTML   = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="4,5 14,12 4,19" fill="currentColor" stroke="none"/><polygon points="13,5 22,12 13,19" fill="currentColor" stroke="none"/></svg></span>';
-        right.innerHTML  = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="20,5 10,12 20,19" fill="currentColor" stroke="none"/><polygon points="11,5 2,12 11,19" fill="currentColor" stroke="none"/></svg></span>';
-        center.innerHTML = '<span class="iv-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></span>';
+        // Only side zones show an icon (chevrons). Centre uses a custom cursor (stop/play) only.
+        left.innerHTML  = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><polygon points="20,5 10,12 20,19"/><polygon points="11,5 2,12 11,19"/></svg></span>';
+        right.innerHTML = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="currentColor"><polygon points="4,5 14,12 4,19"/><polygon points="13,5 22,12 13,19"/></svg></span>';
 
         videoZonesEl.appendChild(left);
         videoZonesEl.appendChild(center);
@@ -1783,15 +1794,18 @@ document.addEventListener('DOMContentLoaded', () => {
         itemView.appendChild(videoZonesEl);
 
         const videoEl = () => itemViewState && itemViewState.cloneImg;
+        const controlsReady = () => itemViewState && itemViewState.controlsEnabled && !itemViewState.userPaused;
 
-        left.addEventListener('mouseenter',  () => { const v = videoEl(); if (v && !itemViewState.userPaused) setVideoSpeed(v, 'fast'); });
-        right.addEventListener('mouseenter', () => { const v = videoEl(); if (v && !itemViewState.userPaused) setVideoSpeed(v, 'reverse'); });
-        center.addEventListener('mouseenter',() => { const v = videoEl(); if (v && !itemViewState.userPaused) setVideoSpeed(v, 'normal'); });
-        // Reset to normal whenever the cursor leaves any side zone — handled by re-entering center
+        // Left margin = reverse, right margin = fast forward.
+        left.addEventListener('mouseenter',  () => { const v = videoEl(); if (controlsReady()) setVideoSpeed(v, 'reverse'); });
+        right.addEventListener('mouseenter', () => { const v = videoEl(); if (controlsReady()) setVideoSpeed(v, 'fast'); });
+        center.addEventListener('mouseenter',() => { const v = videoEl(); if (controlsReady()) setVideoSpeed(v, 'normal'); });
+
         center.addEventListener('click', () => {
             const v = videoEl(); if (!v) return;
             itemViewState.userPaused = !itemViewState.userPaused;
             setVideoSpeed(v, itemViewState.userPaused ? 'paused' : 'normal');
+            itemView.classList.toggle('video-paused', itemViewState.userPaused);
         });
     }
 
@@ -1866,6 +1880,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // out in parallel with the shrink animation to avoid an abrupt cut.
         if (st.isVideo) {
             stopVideoReverse();
+            if (st.controlsTimer) { clearTimeout(st.controlsTimer); st.controlsTimer = null; }
             clone.playbackRate = 1;
             fadeOutVideoAudio(clone, 700);
         }
@@ -1879,7 +1894,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 clone.remove();
                 if (videoZonesEl) { videoZonesEl.remove(); videoZonesEl = null; }
-                itemView.classList.remove('is-video');
+                itemView.classList.remove('is-video', 'video-paused');
                 st.sourceEl.classList.remove('is-hidden');
                 itemViewState = null;
                 document.body.classList.remove('item-view-open');

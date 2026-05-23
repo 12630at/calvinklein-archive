@@ -789,12 +789,10 @@ video.archive-img {
     object-fit: cover;
 }
 
-/* Item view in video mode: hide info panel + numbers (no UI over the video) */
-#item-view.is-video #item-view-info {
-    display: none;
-}
-
-/* Hover zones overlaid on top of the playing video in item view */
+/* Hover zones overlaid on top of the playing video in item view.
+   The container is positioned to exactly match the video rect (via JS) so
+   the speed controls are confined to the video area, never the surrounding
+   item-view chrome. */
 #item-view-video-zones {
     position: fixed;
     z-index: 3;
@@ -804,17 +802,23 @@ video.archive-img {
 }
 
 #item-view-video-zones .iv-zone {
-    flex: 1;
     pointer-events: auto;
     display: flex;
     align-items: center;
     justify-content: center;
-    cursor: pointer;
 }
 
-#item-view-video-zones .iv-zone-left   { flex: 0 0 22%; }
-#item-view-video-zones .iv-zone-right  { flex: 0 0 22%; }
+#item-view-video-zones .iv-zone-left   { flex: 0 0 22%; cursor: pointer; }
+#item-view-video-zones .iv-zone-right  { flex: 0 0 22%; cursor: pointer; }
 #item-view-video-zones .iv-zone-center { flex: 1 1 auto; }
+
+/* Centre zone — custom cursor: stop square while playing, play triangle while paused. */
+#item-view.is-video #item-view-video-zones .iv-zone-center {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><rect x='8' y='8' width='12' height='12' fill='white' stroke='black' stroke-width='1.6'/></svg>") 14 14, pointer;
+}
+#item-view.is-video.video-paused #item-view-video-zones .iv-zone-center {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='9,6 22,14 9,22' fill='white' stroke='black' stroke-width='1.6' stroke-linejoin='round'/></svg>") 14 14, pointer;
+}
 
 #item-view-video-zones .iv-icon {
     opacity: 0;
