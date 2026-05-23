@@ -1053,7 +1053,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const aspect = img.dw / img.dh;
             const w = COL_W;
             const h = w / aspect;
-            const rot = (rand01(img.path, 'r') - 0.5) * 1.2;       // ±0.6deg — safe vs GAP=32
+            // No rotation on videos: even ±0.6° causes severe edge aliasing
+            // because the browser rasterises the video texture into the
+            // rotated layer at low quality.
+            const rot = isVideoSrc(img.path)
+                ? 0
+                : (rand01(img.path, 'r') - 0.5) * 1.2;
 
             let minCol = 0;
             for (let c = 1; c < cols; c++) {
@@ -1811,7 +1816,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const center = document.createElement('div'); center.className = 'iv-zone iv-zone-center';
         const right  = document.createElement('div'); right.className = 'iv-zone iv-zone-right';
 
-        // No icon elements — the cursor shape IS the affordance for all three zones.
         videoZonesEl.appendChild(left);
         videoZonesEl.appendChild(center);
         videoZonesEl.appendChild(right);
@@ -1820,9 +1824,35 @@ document.addEventListener('DOMContentLoaded', () => {
         const getVid = () => itemViewState && itemViewState.cloneImg;
         const ready  = () => itemViewState && itemViewState.controlsEnabled && !itemViewState.userPaused;
 
-        left.addEventListener('mouseenter',   () => { const v = getVid(); if (ready()) setVideoSpeed(v, 'reverse'); });
-        right.addEventListener('mouseenter',  () => { const v = getVid(); if (ready()) setVideoSpeed(v, 'fast'); });
-        center.addEventListener('mouseenter', () => { const v = getVid(); if (ready()) setVideoSpeed(v, 'normal'); });
+        // Dwell delay: side zones only activate after the cursor stays inside
+        // for ~260 ms, so a quick transit between back-button and credits
+        // panel doesn't trigger reverse / fast-forward in passing.
+        let dwellTimer = null;
+        const DWELL_MS = 260;
+        const cancelDwell = () => { if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = null; } };
+
+        const armDwell = (mode) => () => {
+            cancelDwell();
+            dwellTimer = setTimeout(() => {
+                dwellTimer = null;
+                const v = getVid(); if (v && ready()) setVideoSpeed(v, mode);
+            }, DWELL_MS);
+        };
+
+        const leaveSide = () => {
+            cancelDwell();
+            const v = getVid(); if (v && ready()) setVideoSpeed(v, 'normal');
+        };
+
+        left.addEventListener('mouseenter',   armDwell('reverse'));
+        right.addEventListener('mouseenter',  armDwell('fast'));
+        left.addEventListener('mouseleave',   leaveSide);
+        right.addEventListener('mouseleave',  leaveSide);
+
+        center.addEventListener('mouseenter', () => {
+            cancelDwell();
+            const v = getVid(); if (v && ready()) setVideoSpeed(v, 'normal');
+        });
 
         center.addEventListener('click', () => {
             const v = getVid(); if (!v) return;
