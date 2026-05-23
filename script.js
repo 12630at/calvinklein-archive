@@ -1104,11 +1104,32 @@ document.addEventListener('DOMContentLoaded', () => {
         requestAnimationFrame(() => { syncQueued = false; syncMounted(); });
     }
 
+    const VIDEO_EXTS = ['mp4', 'webm', 'mov'];
+    function isVideoSrc(src) {
+        const dot = src.lastIndexOf('.');
+        if (dot < 0) return false;
+        return VIDEO_EXTS.includes(src.slice(dot + 1).toLowerCase());
+    }
+
     function createImgEl(it, wx, wy) {
-        const el = document.createElement('img');
+        const isVideo = isVideoSrc(it.src);
+        const el = document.createElement(isVideo ? 'video' : 'img');
         el.className   = 'archive-img';
-        el.src         = it.src;
-        el.decoding    = 'async';
+        if (isVideo) {
+            el.src         = it.src;
+            el.muted       = true;
+            el.loop        = true;
+            el.autoplay    = true;
+            el.playsInline = true;
+            el.setAttribute('muted', '');
+            el.setAttribute('playsinline', '');
+            // Some browsers need an explicit play() after metadata
+            el.addEventListener('loadedmetadata', () => { el.play().catch(() => {}); });
+            el.play().catch(() => {});
+        } else {
+            el.src       = it.src;
+            el.decoding  = 'async';
+        }
         el.draggable   = false;
         el.onerror     = () => el.remove();
         el.style.width  = it.w + 'px';
@@ -1117,6 +1138,7 @@ document.addEventListener('DOMContentLoaded', () => {
         el.style.top    = wy + 'px';
         el.dataset.rot    = it.rot;
         el.dataset.itemId = it.id;
+        if (isVideo) el.dataset.video = '1';
         gsap.set(el, { rotation: it.rot });
         return el;
     }
@@ -1221,9 +1243,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const elapsed = performance.now() - downTime;
 
         // Treat as click if pointer barely moved and target was an archive image
-        if (dist < 6 && elapsed < 400 && downTarget && downTarget.classList && downTarget.classList.contains('archive-img')) {
+        if (dist < 6 && elapsed < 400 && downTarget && downTarget.classList && (downTarget.classList.contains('archive-img'))) {
             openItemView(downTarget);
             return;
+        }
+        // <video> elements may report the inner shadow DOM as target — climb up.
+        if (dist < 6 && elapsed < 400 && downTarget) {
+            const tile = downTarget.closest && downTarget.closest('.archive-img');
+            if (tile) { openItemView(tile); return; }
         }
 
         if (Math.abs(velocity.x) > 0.3 || Math.abs(velocity.y) > 0.3) {
@@ -1614,17 +1641,32 @@ document.addEventListener('DOMContentLoaded', () => {
         const group = (campaignGroups.get(item.manifest.campaignKey) || [item.manifest]).slice();
         const currentIdx = Math.max(0, group.findIndex(m => m.path === item.manifest.path));
 
-        // Preload all sibling images to eliminate lag on photo switch
-        group.forEach(m => { if (m.path !== item.src) { const i = new Image(); i.src = m.path; } });
+        const itemIsVideo = isVideoSrc(item.src);
+
+        // Preload all sibling images (not videos) to eliminate lag on photo switch
+        group.forEach(m => { if (m.path !== item.src && !isVideoSrc(m.path)) { const i = new Image(); i.src = m.path; } });
 
         const r = imgEl.getBoundingClientRect();
         const origRect = { x: r.left, y: r.top, w: r.width, h: r.height };
 
         imgEl.classList.add('is-hidden');
 
-        const clone = document.createElement('img');
+        const clone = document.createElement(itemIsVideo ? 'video' : 'img');
         clone.src       = item.src;
         clone.draggable = false;
+        if (itemIsVideo) {
+            clone.loop        = true;
+            clone.playsInline = true;
+            clone.setAttribute('playsinline', '');
+            clone.muted       = false;
+            clone.volume      = 1;
+            clone.currentTime = 0;
+            clone.play().catch(() => {});
+            itemView.classList.add('is-video');
+            buildVideoControls();
+        } else {
+            itemView.classList.remove('is-video');
+        }
         itemViewImgWrap.appendChild(clone);
 
         itemViewState = {
@@ -1635,6 +1677,8 @@ document.addEventListener('DOMContentLoaded', () => {
             cloneImg:  clone,
             origRect,
             currentManifest: item.manifest,
+            isVideo:   itemIsVideo,
+            userPaused: false,
         };
 
         gsap.set(clone, {
@@ -1652,6 +1696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         itemViewTitleEl.textContent = buildTitle(item.manifest.csv);
         renderItemMeta(item.manifest.csv);
         renderItemNumbers(group, currentIdx);
+        if (itemIsVideo) positionVideoZones(tgt);
 
         itemView.removeAttribute('aria-hidden');
         itemView.style.display = 'block';
@@ -1679,6 +1724,101 @@ document.addEventListener('DOMContentLoaded', () => {
         tl.fromTo(itemViewInfo,
             { x: 30, opacity: 0 },
             { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+    }
+
+    // ----- Video item view controls (hover zones + reverse / fast-forward / stop) -----
+    let videoReverseRAF = null;
+    let videoZonesEl    = null;
+
+    function stopVideoReverse() {
+        if (videoReverseRAF) { cancelAnimationFrame(videoReverseRAF); videoReverseRAF = null; }
+    }
+
+    function startVideoReverse(video) {
+        if (videoReverseRAF) return;
+        video.pause();
+        let last = performance.now();
+        const step = (now) => {
+            const dt = (now - last) / 1000;
+            last = now;
+            let t = video.currentTime - dt * 2;
+            if (t <= 0) t = (video.duration || 0);
+            video.currentTime = t;
+            videoReverseRAF = requestAnimationFrame(step);
+        };
+        videoReverseRAF = requestAnimationFrame(step);
+    }
+
+    function setVideoSpeed(video, mode) {
+        // mode: 'normal' | 'fast' | 'reverse' | 'paused'
+        if (mode === 'reverse') {
+            startVideoReverse(video);
+            return;
+        }
+        stopVideoReverse();
+        if (mode === 'paused') { video.pause(); return; }
+        video.playbackRate = (mode === 'fast') ? 3 : 1;
+        video.play().catch(() => {});
+    }
+
+    function buildVideoControls() {
+        // Remove any prior overlay (defensive — should have been cleaned by closeItemView)
+        if (videoZonesEl) { videoZonesEl.remove(); videoZonesEl = null; }
+
+        videoZonesEl = document.createElement('div');
+        videoZonesEl.id = 'item-view-video-zones';
+
+        const left   = document.createElement('div'); left.className   = 'iv-zone iv-zone-left';
+        const center = document.createElement('div'); center.className = 'iv-zone iv-zone-center';
+        const right  = document.createElement('div'); right.className  = 'iv-zone iv-zone-right';
+
+        // Inline SVG icons — cursor-style chevrons + stop square
+        left.innerHTML   = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="4,5 14,12 4,19" fill="currentColor" stroke="none"/><polygon points="13,5 22,12 13,19" fill="currentColor" stroke="none"/></svg></span>';
+        right.innerHTML  = '<span class="iv-icon" aria-hidden="true"><svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="20,5 10,12 20,19" fill="currentColor" stroke="none"/><polygon points="11,5 2,12 11,19" fill="currentColor" stroke="none"/></svg></span>';
+        center.innerHTML = '<span class="iv-icon" aria-hidden="true"><svg width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="6" width="12" height="12" rx="1.5"/></svg></span>';
+
+        videoZonesEl.appendChild(left);
+        videoZonesEl.appendChild(center);
+        videoZonesEl.appendChild(right);
+        itemView.appendChild(videoZonesEl);
+
+        const videoEl = () => itemViewState && itemViewState.cloneImg;
+
+        left.addEventListener('mouseenter',  () => { const v = videoEl(); if (v && !itemViewState.userPaused) setVideoSpeed(v, 'fast'); });
+        right.addEventListener('mouseenter', () => { const v = videoEl(); if (v && !itemViewState.userPaused) setVideoSpeed(v, 'reverse'); });
+        center.addEventListener('mouseenter',() => { const v = videoEl(); if (v && !itemViewState.userPaused) setVideoSpeed(v, 'normal'); });
+        // Reset to normal whenever the cursor leaves any side zone — handled by re-entering center
+        center.addEventListener('click', () => {
+            const v = videoEl(); if (!v) return;
+            itemViewState.userPaused = !itemViewState.userPaused;
+            setVideoSpeed(v, itemViewState.userPaused ? 'paused' : 'normal');
+        });
+    }
+
+    function positionVideoZones(rect) {
+        if (!videoZonesEl) return;
+        Object.assign(videoZonesEl.style, {
+            position: 'fixed',
+            left:   rect.x + 'px',
+            top:    rect.y + 'px',
+            width:  rect.w + 'px',
+            height: rect.h + 'px',
+        });
+    }
+
+    function fadeOutVideoAudio(video, ms) {
+        return new Promise(resolve => {
+            if (!video || video.muted) { resolve(); return; }
+            const startVol = video.volume;
+            const start = performance.now();
+            const step = (now) => {
+                const k = Math.min(1, (now - start) / ms);
+                video.volume = startVol * (1 - k);
+                if (k < 1) requestAnimationFrame(step);
+                else resolve();
+            };
+            requestAnimationFrame(step);
+        });
     }
 
     function switchItemPhoto(idx) {
@@ -1720,13 +1860,26 @@ document.addEventListener('DOMContentLoaded', () => {
         const target = st.origRect;
 
         const sourceItem = items[parseInt(st.sourceEl.dataset.itemId, 10)];
-        const photoSwitched = st.currentManifest.path !== sourceItem.src;
+        const photoSwitched = !st.isVideo && st.currentManifest.path !== sourceItem.src;
+
+        // For video: stop any reverse simulation, restore normal rate, then fade audio
+        // out in parallel with the shrink animation to avoid an abrupt cut.
+        if (st.isVideo) {
+            stopVideoReverse();
+            clone.playbackRate = 1;
+            fadeOutVideoAudio(clone, 700);
+        }
 
         const tl = gsap.timeline({
             onComplete: () => {
                 itemView.style.display = 'none';
                 itemView.setAttribute('aria-hidden', 'true');
+                if (st.isVideo) {
+                    try { clone.pause(); } catch (_) {}
+                }
                 clone.remove();
+                if (videoZonesEl) { videoZonesEl.remove(); videoZonesEl = null; }
+                itemView.classList.remove('is-video');
                 st.sourceEl.classList.remove('is-hidden');
                 itemViewState = null;
                 document.body.classList.remove('item-view-open');

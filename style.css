@@ -784,6 +784,53 @@ body.item-view-open .menu-archive-back {
     pointer-events: none;
 }
 
+/* Video tiles inside the infinite canvas: same look as image tiles */
+video.archive-img {
+    object-fit: cover;
+}
+
+/* Item view in video mode: hide info panel + numbers (no UI over the video) */
+#item-view.is-video #item-view-info {
+    display: none;
+}
+
+/* Hover zones overlaid on top of the playing video in item view */
+#item-view-video-zones {
+    position: fixed;
+    z-index: 3;
+    display: flex;
+    flex-direction: row;
+    pointer-events: none;
+}
+
+#item-view-video-zones .iv-zone {
+    flex: 1;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+}
+
+#item-view-video-zones .iv-zone-left   { flex: 0 0 22%; }
+#item-view-video-zones .iv-zone-right  { flex: 0 0 22%; }
+#item-view-video-zones .iv-zone-center { flex: 1 1 auto; }
+
+#item-view-video-zones .iv-icon {
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity 220ms ease-out, transform 220ms ease-out;
+    color: #ffffff;
+    filter: drop-shadow(0 1px 6px rgba(0,0,0,0.45));
+    pointer-events: none;
+    display: inline-flex;
+}
+
+#item-view-video-zones .iv-zone:hover .iv-icon {
+    opacity: 0.92;
+    transform: translateY(0);
+}
+
 /* ===== TIMELINE PAGE ===== */
 
 /* Hover state for the timeline menu item */
