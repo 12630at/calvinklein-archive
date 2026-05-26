@@ -171,17 +171,7 @@ body {
 }
 
 .menu-secondary {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 300ms ease-out, visibility 300ms ease-out;
-}
-
-.menu.hover-active .menu-secondary {
-    opacity: 1;
-    visibility: visible;
+    display: none;
 }
 
 .menu-item {
@@ -437,10 +427,17 @@ body {
     pointer-events: none;
 }
 
-/* Hide all menu items except #search when search is active */
-.menu.search-active .menu-item:not(#search) {
+/* Hide all menu items except #search / #archive-search when search is active */
+.menu.search-active .menu-item:not(#search):not(#archive-search) {
     opacity: 0;
     pointer-events: none;
+}
+
+/* Hide archive back arrow when search is active */
+.menu.search-active .menu-archive-back {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 200ms ease-out;
 }
 
 /* Search results list */
@@ -471,6 +468,549 @@ body {
     color: #424242;
 }
 
-.search-result[data-type="people"]:hover {
-    color: #000;
+#search-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(32px);
+    opacity: 0;
+    pointer-events: none;
+    will-change: opacity;
+}
+
+/* ===== ARCHIVE PAGE ===== */
+
+/* Archive-mode menu: replaces default primary + hides secondary.
+   The .menu container keeps its original fixed position on the left. */
+.menu-primary-archive {
+    display: none;
+    flex-direction: column;
+    gap: 10px;
+    flex: 1;
+}
+
+.menu.archive-active .menu-primary:not(.menu-primary-archive) {
+    display: none;
+}
+
+.menu.archive-active .menu-secondary {
+    display: none;
+}
+
+.menu.archive-active .menu-primary-archive {
+    display: flex;
+}
+
+/* Menu must sit above the archive stage so it stays interactive */
+.menu.archive-active {
+    z-index: 14;
+}
+
+/* "archive" entry: always dark on archive page; click = show all images */
+.menu-item-archive-active {
+    color: #bbbdc0;
+    cursor: pointer;
+}
+
+.menu-item-archive-active:hover,
+.menu-item-archive-active.cat-all-active {
+    color: #424242;
+}
+
+.menu-cat:hover {
+    color: #424242;
+}
+
+.menu-cat.active {
+    color: #424242;
+}
+
+/* Archive stage */
+#archive-stage {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    z-index: 12;
+    display: none;
+    opacity: 0;
+    overflow: hidden;
+}
+
+#archive-viewport {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    cursor: grab;
+    touch-action: none;
+}
+
+#archive-viewport.dragging {
+    cursor: grabbing;
+}
+
+#archive-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    will-change: transform;
+}
+
+.archive-tile {
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+
+.archive-img {
+    position: absolute;
+    display: block;
+    background: #f4f4f4;
+    user-select: none;
+    -webkit-user-drag: none;
+    cursor: pointer;
+}
+
+/* Video wrapper inside the canvas — no rotation is applied to videos
+   (set to 0 in buildItems) so the inner <video> renders flat with crisp edges.
+   Compositing hints below keep the GPU layer at full resolution. */
+.archive-video-wrap {
+    background: transparent;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.archive-video-wrap video {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: fill;
+    pointer-events: none;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.archive-img.is-hidden {
+    visibility: hidden;
+}
+
+#archive-canvas {
+    will-change: transform, opacity;
+}
+
+#archive-empty {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #bbbdc0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 400ms ease-out;
+}
+
+#archive-empty.visible {
+    opacity: 1;
+}
+
+.menu-archive-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
+}
+
+.menu-archive-back {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.menu-archive-back:hover {
+    color: #424242;
+}
+
+/* ===== ITEM VIEW ===== */
+
+#item-view {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: none;
+    perspective: 1400px;
+}
+
+#item-view-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(32px);
+    -webkit-backdrop-filter: blur(28px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+#item-view-img-wrap {
+    position: absolute;
+    inset: 0;
+    transform-style: preserve-3d;
+    pointer-events: none;
+}
+
+#item-view-img-wrap img {
+    position: absolute;
+    display: block;
+    will-change: transform, opacity;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.12);
+    background: #f4f4f4;
+}
+
+#item-view-info {
+    position: absolute;
+    right: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 14px;
+    opacity: 0;
+    pointer-events: auto;
+    text-align: right;
+}
+
+.item-view-numbers {
+    display: flex;
+    flex-direction: row;
+    justify-content: flex-end;
+    gap: 10px;
+    min-height: 14px;
+}
+
+.item-view-num {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.item-view-num:hover,
+.item-view-num.active {
+    color: #424242;
+}
+
+.item-view-back {
+    position: absolute;
+    left: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+    z-index: 1;
+}
+
+.item-view-back:hover {
+    color: #424242;
+}
+
+.item-view-title {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    margin: 0;
+}
+
+.item-view-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.item-view-meta-row {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.item-view-meta-label {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 11px;
+    line-height: 12px;
+    text-transform: uppercase;
+    letter-spacing: -0.2px;
+    color: #bbbdc0;
+    -webkit-font-smoothing: antialiased;
+}
+
+.item-view-meta-value {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 13px;
+    line-height: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.3px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* While item view is open, menu stays visible but un-clickable */
+body.item-view-open .menu .menu-item,
+body.item-view-open .menu-archive-back {
+    pointer-events: none;
+}
+
+/* Hover zones overlaid on the video in item view.
+   Positioned via JS to exactly match the video element rect,
+   so controls never extend beyond the video boundaries. */
+#item-view-video-zones {
+    position: fixed;
+    z-index: 3;
+    display: flex;
+    flex-direction: row;
+    pointer-events: none;
+}
+
+#item-view-video-zones .iv-zone {
+    pointer-events: auto;
+}
+
+#item-view-video-zones .iv-zone-left  { flex: 0 0 22%; }
+#item-view-video-zones .iv-zone-right { flex: 0 0 22%; }
+#item-view-video-zones .iv-zone-center { flex: 1 1 auto; }
+
+/* Rewind cursor — left zone */
+#item-view-video-zones .iv-zone-left {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='16,6 6,14 16,22' fill='white' stroke='black' stroke-width='1.5' stroke-linejoin='round'/><polygon points='25,6 15,14 25,22' fill='white' stroke='black' stroke-width='1.5' stroke-linejoin='round'/></svg>") 14 14, w-resize;
+}
+
+/* Fast-forward cursor — right zone */
+#item-view-video-zones .iv-zone-right {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='3,6 13,14 3,22' fill='white' stroke='black' stroke-width='1.5' stroke-linejoin='round'/><polygon points='12,6 22,14 12,22' fill='white' stroke='black' stroke-width='1.5' stroke-linejoin='round'/></svg>") 14 14, e-resize;
+}
+
+/* Centre zone — stop cursor while playing, play cursor while paused */
+#item-view.is-video #item-view-video-zones .iv-zone-center {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><rect x='8' y='8' width='12' height='12' fill='white' stroke='black' stroke-width='1.5'/></svg>") 14 14, pointer;
+}
+#item-view.is-video.video-paused #item-view-video-zones .iv-zone-center {
+    cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='9,6 22,14 9,22' fill='white' stroke='black' stroke-width='1.5' stroke-linejoin='round'/></svg>") 14 14, pointer;
+}
+
+/* ===== TIMELINE PAGE ===== */
+
+/* Hover state for the timeline menu item */
+#timeline:hover {
+    color: #424242;
+}
+
+/* The whole stage is fixed — does not scroll with the page. */
+#timeline-stage {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    z-index: 16;
+    display: none;
+    opacity: 0;
+    transition: opacity 600ms ease-in-out;
+    overflow: hidden;
+}
+
+/* Fixed nav: back arrow + title, on a single row. */
+.timeline-nav {
+    position: absolute;
+    top: 50%;
+    left: 36px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    z-index: 2;
+}
+
+.timeline-back-btn {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.timeline-back-btn:hover {
+    color: #424242;
+}
+
+.timeline-nav-title {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    line-height: 12px;
+}
+
+/* The scrollable container sits inside the fixed stage.
+   Scroll-snap locks each year to the viewport center. */
+#timeline-scroll {
+    position: absolute;
+    inset: 0;
+    overflow-y: scroll;
+    overflow-x: hidden;
+    scroll-snap-type: y mandatory;
+    scroll-behavior: smooth;
+    scrollbar-width: none;
+}
+
+#timeline-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* Each entry = one viewport. Year + paragraph centered.
+   scroll-snap-align: center snaps the entry centre to the viewport centre. */
+.timeline-entry {
+    height: 100vh;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 36px;
+    padding: 0 48px;
+}
+
+/* The year — large, 2000s soft type. Starts invisible
+   and is animated in when its entry enters the viewport.
+   Clickable: zooms into the archive page filtered to that year. */
+.timeline-year {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: clamp(72px, 14vw, 220px);
+    line-height: 0.9;
+    letter-spacing: -0.06em;
+    text-transform: uppercase;
+    color: rgba(40, 40, 40, 0.85);
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    opacity: 0;
+    transform: translateY(35vh) scale(0.92);
+    filter: blur(8px);
+    transform-origin: 50% 50%;
+    will-change: opacity, transform, filter;
+    cursor: pointer;
+    transition: color 200ms ease-out;
+}
+
+.timeline-year:hover {
+    color: #424242;
+}
+
+/* Scroll-down (default): enters from below, exits upward. */
+.timeline-year.flash-in {
+    animation: flashIn 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+.timeline-year.flash-out {
+    animation: flashOut 1200ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+}
+
+/* Scroll-up: enters from above, exits downward. */
+.timeline-year.flash-in.from-above {
+    animation: flashInFromAbove 1100ms cubic-bezier(0.19, 1, 0.22, 1) forwards;
+}
+.timeline-year.flash-out.to-below {
+    animation: flashOutToBelow 1200ms cubic-bezier(0.55, 0, 0.45, 1) forwards;
+}
+
+@keyframes flashInFromAbove {
+    0%   { opacity: 0; transform: translateY(-35vh) scale(0.92); filter: blur(8px); }
+    55%  { opacity: 1; }
+    100% { opacity: 1; transform: translateY(0) scale(1);        filter: blur(0); }
+}
+
+@keyframes flashOutToBelow {
+    0%   { opacity: 1; transform: translateY(0) scale(1);     filter: blur(0); }
+    100% { opacity: 0; transform: translateY(5px) scale(1.04); filter: blur(6px); }
+}
+
+/* Paragraphs: invisible at start. GSAP drives entry/exit
+   with a delay so the year appears first. */
+.timeline-paragraph {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 16px;
+    line-height: 1.45;
+    letter-spacing: -0.2px;
+    color: #424242;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    max-width: 560px;
+    opacity: 0;
+    transform: translateY(16px);
+    filter: blur(4px);
+    will-change: opacity, transform, filter;
+}
+
+/* Hide the regular .menu while the timeline page is open. */
+body.timeline-open .menu {
+    opacity: 0;
+    pointer-events: none;
 }
