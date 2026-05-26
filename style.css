@@ -703,6 +703,7 @@ body {
 .item-view-numbers {
     display: flex;
     flex-direction: row;
+    flex-wrap: wrap;
     justify-content: flex-end;
     gap: 10px;
     min-height: 14px;
