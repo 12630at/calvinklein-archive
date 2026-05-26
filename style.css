@@ -1014,3 +1014,32 @@ body.timeline-open .menu {
     opacity: 0;
     pointer-events: none;
 }
+
+/* ===== MOBILE ===== */
+@media (max-width: 600px) {
+    /* Page gutters reduced to 28px */
+    .menu        { left: 28px; }
+    .skip-intro-btn { bottom: 28px; }
+    .people-nav  { left: 28px; }
+    .timeline-nav { left: 28px; }
+
+    /* Item view: single column — large image on top, credits underneath.
+       --iv-info-top is set per item by JS to the image's bottom edge. */
+    body.item-view-open .menu { display: none; }
+
+    #item-view-info {
+        top: var(--iv-info-top, 62%);
+        left: 28px;
+        right: 28px;
+        width: auto;
+        transform: none;
+        max-height: 34vh;
+        overflow-y: auto;
+    }
+
+    .item-view-back {
+        top: var(--iv-info-top, 62%);
+        left: 28px;
+        transform: none;
+    }
+}

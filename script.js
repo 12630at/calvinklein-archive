@@ -1637,14 +1637,39 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    const isMobileView = () => window.innerWidth <= 600;
+
+    // On mobile the credits sit directly under the image; feed their top edge to CSS.
+    function positionMobileInfo(tgt) {
+        if (isMobileView()) {
+            itemView.style.setProperty('--iv-info-top', (tgt.y + tgt.h + 24) + 'px');
+        } else {
+            itemView.style.removeProperty('--iv-info-top');
+        }
+    }
+
     function computeTargetRect(naturalW, naturalH) {
         const vw = window.innerWidth, vh = window.innerHeight;
+        const aspect = naturalW / naturalH;
+
+        // Mobile: single column, large image pinned to the top, credits below.
+        if (isMobileView()) {
+            const M = 28;                 // page gutter
+            const topGap = 28;
+            const maxW = vw - 2 * M;
+            const maxH = vh * 0.6;        // leave the lower 40% for the credits
+            let w = maxW, h = w / aspect;
+            if (h > maxH) { h = maxH; w = h * aspect; }
+            const x = (vw - w) / 2;
+            const y = topGap;
+            return { x, y, w, h };
+        }
+
         const marginY = 60;
         const marginR = 284;            // info panel (240) + right gap (36) + breathing room (8)
         const marginL = marginR;        // symmetric → image perfectly centered in viewport
         const maxH = vh - 2 * marginY;
         const maxW = vw - marginL - marginR;
-        const aspect = naturalW / naturalH;
         let h = maxH, w = h * aspect;
         if (w > maxW) { w = maxW; h = w / aspect; }
         const x = marginL + (maxW - w) / 2;
@@ -1724,6 +1749,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         const tgt = computeTargetRect(item.manifest.dw, item.manifest.dh);
+        positionMobileInfo(tgt);
 
         itemViewTitleEl.textContent = buildTitle(item.manifest.csv);
         renderItemMeta(item.manifest.csv);
@@ -1902,6 +1928,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const clone = itemViewState.cloneImg;
         const tgt   = computeTargetRect(m.dw, m.dh);
+        positionMobileInfo(tgt);
         const nextIsVideo = isVideoSrc(m.path);
 
         // Cross-fade: shrink + fade out, swap src, expand + fade in
