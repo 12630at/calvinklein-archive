@@ -1113,14 +1113,14 @@ body.timeline-open .menu {
 .archive-list-row td:last-child  { padding-right: 0; }
 .archive-list-row:hover td       { color: #424242; }
 
-/* Column widths */
-.archive-list-row td.col-cat    { width: 140px; }
-.archive-list-row td.col-sub    { width: 100px; }
-.archive-list-row td.col-line   { width: 160px; }
-/* col-campaign — flexible, takes remaining space */
-.archive-list-row td.col-year   { width: 55px;  }
-.archive-list-row td.col-num    { width: 48px;  }
-.archive-list-row td.col-season { width: 55px;  }
+/* Column widths — # | Campaign | Year | Season | Line | Category | Sub */
+.archive-list-row td.col-num      { width: 48px;  }
+/* col-campaign — flexible */
+.archive-list-row td.col-year     { width: 55px;  }
+.archive-list-row td.col-season   { width: 55px;  }
+.archive-list-row td.col-line     { width: 150px; }
+.archive-list-row td.col-cat      { width: 150px; }
+.archive-list-row td.col-sub      { width: 90px;  }
 
 /* ===== MOBILE ===== */
 @media (max-width: 600px) {

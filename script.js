@@ -1612,8 +1612,22 @@ document.addEventListener('DOMContentLoaded', () => {
         return '';
     }
 
+    // Deduplicate manifests to one representative per campaignKey
+    function uniqueCampaigns(manifests) {
+        const seen = new Set();
+        const result = [];
+        for (const m of manifests) {
+            if (seen.has(m.campaignKey)) continue;
+            seen.add(m.campaignKey);
+            const group = campaignGroups.get(m.campaignKey);
+            result.push(group ? group[0] : m);  // always use first of group
+        }
+        return result;
+    }
+
     function buildListView(manifests) {
-        const sorted = [...manifests].sort((a, b) => {
+        const unique = uniqueCampaigns(manifests);
+        const sorted = unique.sort((a, b) => {
             const va = _listVal(a, listSortCol);
             const vb = _listVal(b, listSortCol);
             if (va < vb) return listSortAsc ? -1 : 1;
@@ -1625,18 +1639,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const table = document.createElement('table');
         table.className = 'archive-list-table';
 
-        // Header: category | subcategory | line | campaign | year | # | season
+        // Header: # | Campaign | Year | Season | Line | Category | Sub
         const thead = document.createElement('thead');
         thead.className = 'archive-list-thead';
         const hRow = document.createElement('tr');
         const colDefs = [
-            { key: 'category', label: 'Category', cls: 'th-cat',      sortable: true  },
-            { key: 'sub',      label: 'Sub',       cls: 'th-sub',      sortable: false },
-            { key: 'line',     label: 'Line',      cls: 'th-line',     sortable: true  },
+            { key: 'num',      label: '#',        cls: 'th-num',      sortable: false },
             { key: 'campaign', label: 'Campaign',  cls: 'th-campaign', sortable: true  },
             { key: 'year',     label: 'Year',      cls: 'th-year',     sortable: true  },
-            { key: 'num',      label: '#',         cls: 'th-num',      sortable: false },
             { key: 'season',   label: 'Season',    cls: 'th-season',   sortable: true  },
+            { key: 'line',     label: 'Line',      cls: 'th-line',     sortable: true  },
+            { key: 'category', label: 'Category',  cls: 'th-cat',      sortable: true  },
+            { key: 'sub',      label: 'Sub',       cls: 'th-sub',      sortable: false },
         ];
         for (const cd of colDefs) {
             const th = document.createElement('th');
@@ -1656,8 +1670,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     buildListView(listManifests);
                     const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
                     gsap.fromTo(rows,
-                        { opacity: 0, x: -14 },
-                        { opacity: 1, x: 0, duration: 0.32, ease: 'power2.out', stagger: { amount: 0.25, from: 'start' } }
+                        { opacity: 0, y: 4 },
+                        { opacity: 1, y: 0, duration: 0.22, ease: 'power2.out', stagger: { amount: 0.18, from: 'start' } }
                     );
                 });
             }
@@ -1666,18 +1680,16 @@ document.addEventListener('DOMContentLoaded', () => {
         thead.appendChild(hRow);
         table.appendChild(thead);
 
-        // Body
         const tbody = document.createElement('tbody');
         sorted.forEach((m, idx) => {
-            const catLabel  = CAT_LABEL[m.csv.category]  || m.csv.category  || '—';
-            const subLabel  = SUB_LABEL[m.csv.subcategory] || m.csv.subcategory || '—';
+            const campStr   = m.csv.campaign    ? m.csv.campaign.replace(/_/g, ' ')    : m.csv.description ? m.csv.description.replace(/_/g, ' ') : '—';
             const lineStr   = m.csv.description ? m.csv.description.replace(/_/g, ' ') : '—';
-            const campStr   = m.csv.campaign    ? m.csv.campaign.replace(/_/g, ' ')    : '—';
+            const catLabel  = CAT_LABEL[m.csv.category]    || m.csv.category    || '—';
+            const subLabel  = SUB_LABEL[m.csv.subcategory] || m.csv.subcategory || '—';
             const seasonStr = SEA_LABEL[m.csv.season] || '—';
 
             const tr = document.createElement('tr');
             tr.className = 'archive-list-row';
-            tr._manifest = m;  // store for click handler
 
             const mkTd = (cls, text) => {
                 const td = document.createElement('td');
@@ -1685,28 +1697,25 @@ document.addEventListener('DOMContentLoaded', () => {
                 td.textContent = text.toUpperCase();
                 return td;
             };
-            tr.appendChild(mkTd('col-cat',      catLabel));
-            tr.appendChild(mkTd('col-sub',      subLabel));
-            tr.appendChild(mkTd('col-line',     lineStr));
+            tr.appendChild(mkTd('col-num',      String(idx + 1).padStart(3, '0')));
             tr.appendChild(mkTd('col-campaign', campStr));
             tr.appendChild(mkTd('col-year',     m.csv.year || '—'));
-            tr.appendChild(mkTd('col-num',      String(idx + 1).padStart(3, '0')));
             tr.appendChild(mkTd('col-season',   seasonStr));
+            tr.appendChild(mkTd('col-line',     lineStr));
+            tr.appendChild(mkTd('col-cat',      catLabel));
+            tr.appendChild(mkTd('col-sub',      subLabel));
 
-            // Click → item view with Flash animation
             tr.addEventListener('click', () => {
                 if (itemViewOpen) return;
                 const rowRect = tr.getBoundingClientRect();
                 const fromRect = { x: rowRect.left, y: rowRect.top + rowRect.height / 2, w: rowRect.width, h: 2 };
 
-                // Flash: other rows dissolve, clicked row pulses
-                gsap.to(tr, { scaleY: 1.5, opacity: 0.6, duration: 0.08, ease: 'power2.out',
-                    onComplete: () => gsap.set(tr, { scaleY: 1, opacity: 1 }) });
-                const others = Array.from(archiveListInner.querySelectorAll('.archive-list-row')).filter(r => r !== tr);
-                gsap.to(others, { opacity: 0, x: () => (Math.random() > 0.5 ? 1 : -1) * (30 + Math.random() * 40),
-                    duration: 0.22, ease: 'power2.in', stagger: { amount: 0.1 } });
+                // Dim all rows, highlight the selected one
+                const allRows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                gsap.to(allRows, { opacity: 0, duration: 0.18, ease: 'power2.in' });
+                gsap.to(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, duration: 0.12 });
 
-                setTimeout(() => openItemViewFromList(m, fromRect), 130);
+                setTimeout(() => openItemViewFromList(m, fromRect), 150);
             });
 
             tbody.appendChild(tr);
@@ -1726,45 +1735,41 @@ document.addEventListener('DOMContentLoaded', () => {
         const oldEls = Array.from(mounted.values());
         const tl = gsap.timeline();
 
-        // 1. Scatter tiles outward — chaotic Flash explosion
+        // 1. Canvas tiles fade out cleanly
         if (oldEls.length) {
             tl.to(oldEls, {
-                x:        () => (Math.random() - 0.5) * 2600,
-                y:        () => (Math.random() - 0.5) * 2000,
-                rotation: () => (Math.random() - 0.5) * 480,
-                scale:    () => 0.05 + Math.random() * 0.15,
-                opacity:  0,
-                duration: 0.4,
-                ease:     'power3.in',
-                stagger:  { amount: 0.22, from: 'random' },
+                opacity: 0, scale: 0.97,
+                duration: 0.28,
+                ease: 'power2.in',
+                stagger: { amount: 0.1, from: 'center' },
             });
         }
 
-        // 2. Stamp the list layer in — Flash "frame swap"
+        // 2. Swap to list panel
         tl.call(() => {
             archiveViewport.style.pointerEvents = 'none';
             archiveList.removeAttribute('aria-hidden');
             archiveList.style.display = 'flex';
             archiveList.style.opacity = '0';
-            gsap.set(archiveListInner.querySelectorAll('.archive-list-row'), { opacity: 0, x: -40 });
-            gsap.set(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, y: -12 });
+            gsap.set(archiveListInner.querySelectorAll('.archive-list-row'), { opacity: 0, y: 6 });
+            gsap.set(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, y: 8 });
         });
 
-        // 3. Whole list panel blinks in (steps = binary/digital)
-        tl.to(archiveList, { opacity: 1, duration: 0.08, ease: 'steps(1)' });
+        // 3. Panel fades in
+        tl.to(archiveList, { opacity: 1, duration: 0.2, ease: 'power2.out' });
 
-        // 4. Header drops down
+        // 4. Header
         tl.to(archiveListInner.querySelectorAll('.archive-list-thead th'), {
-            opacity: 1, y: 0, duration: 0.3, ease: 'power2.out',
-            stagger: { amount: 0.15, from: 'start' },
-        }, '+=0.04');
+            opacity: 1, y: 0, duration: 0.22, ease: 'power2.out',
+            stagger: { amount: 0.1, from: 'start' },
+        }, '-=0.08');
 
-        // 5. Rows beam in from left — elastic pop, staggered like old Flash loading bars
+        // 5. Rows stream in top-to-bottom
         tl.to(archiveListInner.querySelectorAll('.archive-list-row'), {
-            opacity: 1, x: 0,
-            duration: 0.55,
-            ease: 'back.out(1.3)',
-            stagger: { amount: 0.7, from: 'start' },
+            opacity: 1, y: 0,
+            duration: 0.18,
+            ease: 'power2.out',
+            stagger: { amount: 0.45, from: 'start' },
         }, '-=0.1');
     }
 
@@ -1777,21 +1782,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const headers = Array.from(archiveListInner.querySelectorAll('.archive-list-thead th'));
         const tl = gsap.timeline();
 
-        // 1. Rows shoot right — classic Flash "exit right" wipe
+        // 1. Rows fade out quickly
         if (rows.length) {
             tl.to(rows, {
-                opacity: 0, x: 80,
-                duration: 0.28,
+                opacity: 0, y: -3,
+                duration: 0.14,
                 ease: 'power2.in',
-                stagger: { amount: 0.18, from: 'end' },
+                stagger: { amount: 0.15, from: 'start' },
             });
         }
         if (headers.length) {
-            tl.to(headers, { opacity: 0, y: -10, duration: 0.18, ease: 'power2.in' }, 0);
+            tl.to(headers, { opacity: 0, duration: 0.1, ease: 'power2.in' }, 0);
         }
 
-        // 2. Panel blinks out
-        tl.to(archiveList, { opacity: 0, duration: 0.08, ease: 'steps(1)' });
+        // 2. Panel fades out
+        tl.to(archiveList, { opacity: 0, duration: 0.15, ease: 'power2.in' }, '-=0.05');
 
         // 3. Restore canvas — unmountAll first so scattered elements are recreated fresh
         tl.call(() => {
@@ -1801,21 +1806,21 @@ document.addEventListener('DOMContentLoaded', () => {
             unmountAll();
             syncMounted();
             const fresh = Array.from(mounted.values());
-            gsap.set(fresh, { scale: 0.15, opacity: 0, rotation: () => (Math.random() - 0.5) * 120 });
+            gsap.set(fresh, { scale: 0.94, opacity: 0, y: -10 });
         });
 
-        // 4. Canvas tiles rematerialize — back.out pop
+        // 4. Canvas tiles drop in cleanly
         tl.add(() => {
             const fresh = Array.from(mounted.values());
             if (!fresh.length) return;
             gsap.to(fresh, {
-                scale: 1, opacity: 1,
+                scale: 1, opacity: 1, y: 0,
                 rotation: (i, el) => parseFloat(el.dataset.rot || 0),
-                duration: 0.75,
-                ease: 'back.out(1.5)',
-                stagger: { amount: 0.5, from: 'center' },
+                duration: 0.38,
+                ease: 'power3.out',
+                stagger: { amount: 0.3, from: 'center' },
             });
-        }, '+=0.06');
+        }, '+=0.04');
     }
 
     listViewBtn.addEventListener('click', () => {
