@@ -1130,7 +1130,7 @@ body.timeline-open .menu {
 #mobile-trigger {
     display: none;
     position: fixed;
-    bottom: 32px;
+    bottom: 28px;
     left: 50%;
     transform: translateX(-50%);
     background: none;
@@ -1142,21 +1142,23 @@ body.timeline-open .menu {
 }
 
 #mobile-trigger-img {
-    width: 72px;
+    width: 40px;
     height: auto;
     display: block;
 }
 
 #mobile-overlay {
     position: fixed;
-    inset: 0;
-    background: #ffffff;
+    bottom: 96px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: transparent;
     z-index: 55;
     display: none;           /* JS switches to flex */
     flex-direction: column;
-    justify-content: center;
     align-items: center;
     gap: 0;
+    width: max-content;
 }
 
 .mobile-overlay-nav {
@@ -1190,9 +1192,10 @@ body.timeline-open .menu {
 
 /* ===== MOBILE ===== */
 @media (max-width: 600px) {
-    /* Hide desktop menu; show mobile trigger */
-    .menu             { display: none !important; }
-    #mobile-trigger   { display: block; }
+    /* Home: show desktop menu, hide trigger.
+       Page open: hide menu, show trigger. */
+    body.page-open .menu          { display: none !important; }
+    body.page-open #mobile-trigger { display: block; }
 
     .skip-intro-btn { bottom: 28px; }
     .people-nav     { left: 28px; }

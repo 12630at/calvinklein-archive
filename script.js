@@ -477,6 +477,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function playPeopleTransition() {
+        document.body.classList.add('page-open');
         const peopleStage = document.getElementById('people-stage');
         const bottle      = document.getElementById('people-bottle');
         const orbitEl     = document.getElementById('people-orbit');
@@ -532,6 +533,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         peopleStage.style.display = 'none';
         peopleStage.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('page-open');
     }
 
     peopleEl.addEventListener('click', (e) => {
@@ -1491,6 +1493,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function openArchive() {
         if (archiveOpen) return;
         archiveOpen = true;
+        document.body.classList.add('page-open');
 
         await loadArchiveManifest();
         enrichSearchWithArchive();
@@ -1531,6 +1534,7 @@ document.addEventListener('DOMContentLoaded', () => {
     async function closeArchive() {
         if (!archiveOpen) return;
         archiveOpen = false;
+        document.body.classList.remove('page-open');
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
 
         // If list view is open, force-close it silently first
@@ -2414,7 +2418,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }, { passive: true });
 
     function openTimeline() {
-        document.body.classList.add('timeline-open');
+        document.body.classList.add('timeline-open', 'page-open');
         timelineStage.removeAttribute('aria-hidden');
         timelineStage.style.display = 'block';
         void timelineStage.offsetWidth;
@@ -2482,7 +2486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => {
             timelineStage.style.display = 'none';
             timelineStage.setAttribute('aria-hidden', 'true');
-            document.body.classList.remove('timeline-open');
+            document.body.classList.remove('timeline-open', 'page-open');
             if (timelineObserver) {
                 timelineObserver.disconnect();
                 timelineObserver = null;
@@ -2575,30 +2579,33 @@ document.addEventListener('DOMContentLoaded', () => {
     function openMobileOverlay() {
         mobileOverlayOpen = true;
         mobileTrigger.setAttribute('aria-expanded', 'true');
-        const activeNav  = archiveOpen ? mobileNavArchive : mobileNavDefault;
+        const activeNav   = archiveOpen ? mobileNavArchive : mobileNavDefault;
         const inactiveNav = archiveOpen ? mobileNavDefault : mobileNavArchive;
         activeNav.style.display   = 'flex';
         inactiveNav.style.display = 'none';
 
         mobileOverlay.style.display = 'flex';
         mobileOverlay.removeAttribute('aria-hidden');
-        gsap.fromTo(mobileOverlay,
-            { opacity: 0, y: 16 },
-            { opacity: 1, y: 0, duration: 0.3, ease: 'power3.out' }
-        );
+
         const items = activeNav.querySelectorAll('.mobile-nav-item');
-        gsap.fromTo(items,
-            { opacity: 0, y: 10 },
-            { opacity: 1, y: 0, duration: 0.28, ease: 'power2.out', stagger: 0.04, delay: 0.08 }
-        );
+        gsap.set(items, { opacity: 0, y: 10 });
+        gsap.to(items, {
+            opacity: 1, y: 0,
+            duration: 0.22, ease: 'power2.out',
+            stagger: { each: 0.04, from: 'end' },
+        });
     }
 
     function closeMobileOverlay(cb) {
         if (!mobileOverlayOpen) { if (cb) cb(); return; }
         mobileOverlayOpen = false;
         mobileTrigger.setAttribute('aria-expanded', 'false');
-        gsap.to(mobileOverlay, {
-            opacity: 0, y: 8, duration: 0.18, ease: 'power2.in',
+        const activeNav = archiveOpen ? mobileNavArchive : mobileNavDefault;
+        const items = activeNav.querySelectorAll('.mobile-nav-item');
+        gsap.to(items, {
+            opacity: 0, y: 8,
+            duration: 0.14, ease: 'power2.in',
+            stagger: { each: 0.03, from: 'start' },
             onComplete: () => {
                 mobileOverlay.style.display = 'none';
                 mobileOverlay.setAttribute('aria-hidden', 'true');
@@ -2606,6 +2613,15 @@ document.addEventListener('DOMContentLoaded', () => {
             },
         });
     }
+
+    // Close popup on outside click
+    document.addEventListener('click', (e) => {
+        if (mobileOverlayOpen &&
+            !mobileTrigger.contains(e.target) &&
+            !mobileOverlay.contains(e.target)) {
+            closeMobileOverlay();
+        }
+    });
 
     mobileTrigger.addEventListener('click', () => {
         if (mobileOverlayOpen) closeMobileOverlay();
