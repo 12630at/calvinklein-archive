@@ -1597,12 +1597,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let listSortAsc   = false;  // year descending by default = most recent first
     let listManifests = [];
 
+    const CAT_LABEL = { adv: 'Advertisement', edi: 'Editorial' };
+    const SUB_LABEL = { print: 'Print', billboard: 'Billboard', tv: 'TV' };
+    const SEA_LABEL = { ss: 'S/S', fw: 'F/W' };
+
     function _listVal(m, col) {
         switch (col) {
-            case 'num':      { const mm = m.filename.match(/_(\d+)$/); return mm ? parseInt(mm[1]) : 0; }
             case 'year':     return parseInt(m.csv.year) || 0;
             case 'season':   return m.csv.season || '';
-            case 'category': return (m.csv.category || '') + (m.csv.subcategory || '');
+            case 'category': return m.csv.category || '';
+            case 'line':     return (m.csv.description || '').toLowerCase();
             case 'campaign': return (m.csv.campaign || m.csv.description || '').toLowerCase();
         }
         return '';
@@ -1621,37 +1625,42 @@ document.addEventListener('DOMContentLoaded', () => {
         const table = document.createElement('table');
         table.className = 'archive-list-table';
 
-        // Header
+        // Header: category | subcategory | line | campaign | year | # | season
         const thead = document.createElement('thead');
         thead.className = 'archive-list-thead';
         const hRow = document.createElement('tr');
         const colDefs = [
-            { key: 'num',      label: '#',        cls: 'th-num'      },
-            { key: 'year',     label: 'Year',     cls: 'th-year'     },
-            { key: 'season',   label: 'Season',   cls: 'th-season'   },
-            { key: 'category', label: 'Category', cls: 'th-cat'      },
-            { key: 'campaign', label: 'Campaign', cls: 'th-campaign'  },
+            { key: 'category', label: 'Category', cls: 'th-cat',      sortable: true  },
+            { key: 'sub',      label: 'Sub',       cls: 'th-sub',      sortable: false },
+            { key: 'line',     label: 'Line',      cls: 'th-line',     sortable: true  },
+            { key: 'campaign', label: 'Campaign',  cls: 'th-campaign', sortable: true  },
+            { key: 'year',     label: 'Year',      cls: 'th-year',     sortable: true  },
+            { key: 'num',      label: '#',         cls: 'th-num',      sortable: false },
+            { key: 'season',   label: 'Season',    cls: 'th-season',   sortable: true  },
         ];
         for (const cd of colDefs) {
             const th = document.createElement('th');
             th.textContent = cd.label;
             th.className = cd.cls;
-            th.classList.toggle('sort-active', cd.key === listSortCol);
-            if (cd.key === listSortCol) th.classList.add(listSortAsc ? 'sort-asc' : 'sort-desc');
-            th.addEventListener('click', () => {
-                if (listSortCol === cd.key) {
-                    listSortAsc = !listSortAsc;
-                } else {
-                    listSortCol = cd.key;
-                    listSortAsc = true;
-                }
-                buildListView(listManifests);
-                const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
-                gsap.fromTo(rows,
-                    { opacity: 0, x: -16 },
-                    { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.3, from: 'start' } }
-                );
-            });
+            if (cd.sortable) {
+                th.classList.add('sortable');
+                th.classList.toggle('sort-active', cd.key === listSortCol);
+                if (cd.key === listSortCol) th.classList.add(listSortAsc ? 'sort-asc' : 'sort-desc');
+                th.addEventListener('click', () => {
+                    if (listSortCol === cd.key) {
+                        listSortAsc = !listSortAsc;
+                    } else {
+                        listSortCol = cd.key;
+                        listSortAsc = true;
+                    }
+                    buildListView(listManifests);
+                    const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                    gsap.fromTo(rows,
+                        { opacity: 0, x: -14 },
+                        { opacity: 1, x: 0, duration: 0.32, ease: 'power2.out', stagger: { amount: 0.25, from: 'start' } }
+                    );
+                });
+            }
             hRow.appendChild(th);
         }
         thead.appendChild(hRow);
@@ -1660,41 +1669,45 @@ document.addEventListener('DOMContentLoaded', () => {
         // Body
         const tbody = document.createElement('tbody');
         sorted.forEach((m, idx) => {
-            const seasonMap = { ss: 'S/S', fw: 'F/W' };
-            const season   = seasonMap[m.csv.season] || '—';
-            const catRaw   = m.csv.category || '';
-            const subRaw   = m.csv.subcategory || '';
-            const category = catRaw === 'edi' ? 'editorial'
-                : [catRaw, subRaw].filter(Boolean).join(' ');
-            const campaignStr = m.csv.campaign || m.csv.description || '—';
+            const catLabel  = CAT_LABEL[m.csv.category]  || m.csv.category  || '—';
+            const subLabel  = SUB_LABEL[m.csv.subcategory] || m.csv.subcategory || '—';
+            const lineStr   = m.csv.description ? m.csv.description.replace(/_/g, ' ') : '—';
+            const campStr   = m.csv.campaign    ? m.csv.campaign.replace(/_/g, ' ')    : '—';
+            const seasonStr = SEA_LABEL[m.csv.season] || '—';
 
             const tr = document.createElement('tr');
             tr.className = 'archive-list-row';
+            tr._manifest = m;  // store for click handler
 
-            const tdNum = document.createElement('td');
-            tdNum.className = 'col-num';
-            tdNum.textContent = String(idx + 1).padStart(3, '0');
-            tr.appendChild(tdNum);
+            const mkTd = (cls, text) => {
+                const td = document.createElement('td');
+                td.className = cls;
+                td.textContent = text.toUpperCase();
+                return td;
+            };
+            tr.appendChild(mkTd('col-cat',      catLabel));
+            tr.appendChild(mkTd('col-sub',      subLabel));
+            tr.appendChild(mkTd('col-line',     lineStr));
+            tr.appendChild(mkTd('col-campaign', campStr));
+            tr.appendChild(mkTd('col-year',     m.csv.year || '—'));
+            tr.appendChild(mkTd('col-num',      String(idx + 1).padStart(3, '0')));
+            tr.appendChild(mkTd('col-season',   seasonStr));
 
-            const tdYear = document.createElement('td');
-            tdYear.className = 'col-year';
-            tdYear.textContent = m.csv.year || '—';
-            tr.appendChild(tdYear);
+            // Click → item view with Flash animation
+            tr.addEventListener('click', () => {
+                if (itemViewOpen) return;
+                const rowRect = tr.getBoundingClientRect();
+                const fromRect = { x: rowRect.left, y: rowRect.top + rowRect.height / 2, w: rowRect.width, h: 2 };
 
-            const tdSeason = document.createElement('td');
-            tdSeason.className = 'col-season';
-            tdSeason.textContent = season;
-            tr.appendChild(tdSeason);
+                // Flash: other rows dissolve, clicked row pulses
+                gsap.to(tr, { scaleY: 1.5, opacity: 0.6, duration: 0.08, ease: 'power2.out',
+                    onComplete: () => gsap.set(tr, { scaleY: 1, opacity: 1 }) });
+                const others = Array.from(archiveListInner.querySelectorAll('.archive-list-row')).filter(r => r !== tr);
+                gsap.to(others, { opacity: 0, x: () => (Math.random() > 0.5 ? 1 : -1) * (30 + Math.random() * 40),
+                    duration: 0.22, ease: 'power2.in', stagger: { amount: 0.1 } });
 
-            const tdCat = document.createElement('td');
-            tdCat.className = 'col-cat';
-            tdCat.textContent = category.toUpperCase();
-            tr.appendChild(tdCat);
-
-            const tdCamp = document.createElement('td');
-            tdCamp.className = 'col-campaign';
-            tdCamp.textContent = campaignStr.replace(/_/g, ' ').toUpperCase();
-            tr.appendChild(tdCamp);
+                setTimeout(() => openItemViewFromList(m, fromRect), 130);
+            });
 
             tbody.appendChild(tr);
         });
@@ -1731,7 +1744,7 @@ document.addEventListener('DOMContentLoaded', () => {
         tl.call(() => {
             archiveViewport.style.pointerEvents = 'none';
             archiveList.removeAttribute('aria-hidden');
-            archiveList.style.display = 'block';
+            archiveList.style.display = 'flex';
             archiveList.style.opacity = '0';
             gsap.set(archiveListInner.querySelectorAll('.archive-list-row'), { opacity: 0, x: -40 });
             gsap.set(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, y: -12 });
@@ -1780,11 +1793,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // 2. Panel blinks out
         tl.to(archiveList, { opacity: 0, duration: 0.08, ease: 'steps(1)' });
 
-        // 3. Restore canvas
+        // 3. Restore canvas — unmountAll first so scattered elements are recreated fresh
         tl.call(() => {
             archiveList.style.display = 'none';
             archiveList.setAttribute('aria-hidden', 'true');
             archiveViewport.style.pointerEvents = '';
+            unmountAll();
             syncMounted();
             const fresh = Array.from(mounted.values());
             gsap.set(fresh, { scale: 0.15, opacity: 0, rotation: () => (Math.random() - 0.5) * 120 });
@@ -2205,6 +2219,86 @@ document.addEventListener('DOMContentLoaded', () => {
         tl.to(clone, { opacity: 1, duration: 0.35, ease: 'power2.out' });
     }
 
+    // Open item view when originating from the list view (no canvas element)
+    function openItemViewFromList(manifest, fromRect) {
+        if (itemViewOpen) return;
+        itemViewOpen = true;
+        document.body.classList.add('item-view-open');
+
+        const group = (campaignGroups.get(manifest.campaignKey) || [manifest]).slice();
+        const currentIdx = Math.max(0, group.findIndex(m2 => m2.filename === manifest.filename));
+        const isVideo = isVideoSrc(manifest.path);
+
+        group.forEach(m2 => {
+            if (m2.path !== manifest.path && !isVideoSrc(m2.path)) {
+                const im = new Image(); im.src = m2.path;
+            }
+        });
+
+        const origRect = fromRect || { x: window.innerWidth / 2, y: window.innerHeight / 2, w: 4, h: 4 };
+
+        const clone = document.createElement(isVideo ? 'video' : 'img');
+        clone.src       = manifest.path;
+        clone.draggable = false;
+        if (isVideo) {
+            clone.loop = true; clone.playsInline = true;
+            clone.setAttribute('playsinline', '');
+            clone.muted = false; clone.volume = 1; clone.currentTime = 0;
+            clone.play().catch(() => {});
+            itemView.classList.add('is-video');
+            buildVideoControls();
+        } else {
+            itemView.classList.remove('is-video');
+        }
+        itemViewImgWrap.appendChild(clone);
+
+        itemViewState = {
+            group, currentIdx,
+            sourceEl:        null,
+            fromList:        true,
+            sourceRot:       0,
+            cloneImg:        clone,
+            origRect,
+            currentManifest: manifest,
+            isVideo,
+            userPaused:      false,
+            controlsEnabled: !isVideo,
+            controlsTimer:   null,
+        };
+        if (isVideo) {
+            itemViewState.controlsTimer = setTimeout(() => {
+                if (itemViewState) itemViewState.controlsEnabled = true;
+            }, 2500);
+        }
+
+        gsap.set(clone, {
+            position: 'absolute',
+            left: origRect.x, top: origRect.y,
+            width: origRect.w, height: origRect.h,
+            rotation: 0, transformOrigin: 'center center',
+        });
+
+        const tgt = computeTargetRect(manifest.dw, manifest.dh);
+        positionMobileInfo(tgt);
+
+        itemViewTitleEl.textContent = buildTitle(manifest.csv);
+        renderItemMeta(manifest.csv);
+        renderItemNumbers(group, currentIdx);
+        if (isVideo) positionVideoZones(tgt);
+
+        itemView.removeAttribute('aria-hidden');
+        itemView.style.display = 'block';
+
+        const tl = gsap.timeline();
+        tl.fromTo(itemViewBackdrop, { opacity: 0 }, { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0);
+        tl.fromTo(clone, { z: -180 }, { z: 0, duration: 0.95, ease: 'power3.out' }, 0);
+        tl.to(clone, {
+            left: tgt.x, top: tgt.y, width: tgt.w, height: tgt.h,
+            rotation: 0, duration: 0.9, ease: 'power3.inOut',
+        }, 0);
+        tl.fromTo(itemViewInfo, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+    }
+
     function closeItemView() {
         if (!itemViewOpen) return;
         itemViewOpen = false;
@@ -2213,8 +2307,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const clone = st.cloneImg;
         const target = st.origRect;
 
-        const sourceItem = items[parseInt(st.sourceEl.dataset.itemId, 10)];
-        const photoSwitched = !st.isVideo && st.currentManifest.path !== sourceItem.src;
+        const sourceItem = st.sourceEl ? items[parseInt(st.sourceEl.dataset.itemId, 10)] : null;
+        const photoSwitched = !st.isVideo && sourceItem && st.currentManifest.path !== sourceItem.src;
 
         // For video: stop any reverse simulation, restore normal rate, then fade audio
         // out in parallel with the shrink animation to avoid an abrupt cut.
@@ -2229,13 +2323,16 @@ document.addEventListener('DOMContentLoaded', () => {
             onComplete: () => {
                 itemView.style.display = 'none';
                 itemView.setAttribute('aria-hidden', 'true');
-                if (st.isVideo) {
-                    try { clone.pause(); } catch (_) {}
-                }
+                if (st.isVideo) { try { clone.pause(); } catch (_) {} }
                 clone.remove();
                 if (videoZonesEl) { videoZonesEl.remove(); videoZonesEl = null; }
                 itemView.classList.remove('is-video', 'video-paused');
-                st.sourceEl.classList.remove('is-hidden');
+                if (st.sourceEl) st.sourceEl.classList.remove('is-hidden');
+                // Restore list rows if we came from list view
+                if (st.fromList && listViewOpen) {
+                    const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                    gsap.to(rows, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.2 } });
+                }
                 itemViewState = null;
                 document.body.classList.remove('item-view-open');
             },
@@ -2253,17 +2350,26 @@ document.addEventListener('DOMContentLoaded', () => {
             tl.to(clone, { opacity: 1, duration: 0.15 }, 0.18);
         }
 
-        // Shrink back to canvas position — z animation removed to avoid stretch artifact
         gsap.set(clone, { z: 0 });
-        tl.to(clone, {
-            left:     target.x,
-            top:      target.y,
-            width:    target.w,
-            height:   target.h,
-            rotation: st.sourceRot,
-            duration: 0.75,
-            ease:     'power3.inOut',
-        }, photoSwitched ? 0.3 : 0.15);
+
+        if (st.fromList) {
+            // Flash collapse: scale down to center — classic Flash "closing" effect
+            tl.to(clone, {
+                scale: 0.08, opacity: 0,
+                duration: 0.45, ease: 'power3.in',
+            }, 0.05);
+        } else {
+            // Shrink back to canvas position
+            tl.to(clone, {
+                left:     target.x,
+                top:      target.y,
+                width:    target.w,
+                height:   target.h,
+                rotation: st.sourceRot,
+                duration: 0.75,
+                ease:     'power3.inOut',
+            }, photoSwitched ? 0.3 : 0.15);
+        }
 
         tl.to(itemViewBackdrop, { opacity: 0, duration: 0.4, ease: 'power2.in' }, '-=0.45');
     }
