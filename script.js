@@ -2614,14 +2614,59 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Close popup on outside click
-    document.addEventListener('click', (e) => {
+    // Close popup on any touch/click outside
+    const _closeIfOutside = (e) => {
         if (mobileOverlayOpen &&
             !mobileTrigger.contains(e.target) &&
             !mobileOverlay.contains(e.target)) {
             closeMobileOverlay();
         }
-    });
+    };
+    document.addEventListener('touchstart', _closeIfOutside, { passive: true });
+    document.addEventListener('click',      _closeIfOutside);
+
+    // ===== MOBILE SCROLL HIDE =====
+    let mobileTriggerHidden = false;
+    let mobileScrollTimer   = null;
+
+    function hideMobileTrigger() {
+        if (mobileTriggerHidden || !document.body.classList.contains('page-open')) return;
+        mobileTriggerHidden = true;
+        if (mobileOverlayOpen) closeMobileOverlay();
+        gsap.killTweensOf(mobileTrigger);
+        gsap.to(mobileTrigger, {
+            opacity: 0, scale: 0.7, y: 6,
+            duration: 0.18, ease: 'power2.in',
+        });
+    }
+
+    function showMobileTrigger() {
+        if (!mobileTriggerHidden) return;
+        mobileTriggerHidden = false;
+        gsap.killTweensOf(mobileTrigger);
+        gsap.to(mobileTrigger, {
+            opacity: 1, scale: 1, y: 0,
+            duration: 0.55, ease: 'back.out(2.2)',
+        });
+    }
+
+    function onMobileScrollActivity() {
+        hideMobileTrigger();
+        clearTimeout(mobileScrollTimer);
+        mobileScrollTimer = setTimeout(showMobileTrigger, 480);
+    }
+
+    // Infinite canvas pan (touch drag)
+    const archiveViewportEl = document.getElementById('archive-viewport');
+    if (archiveViewportEl) {
+        archiveViewportEl.addEventListener('touchmove', onMobileScrollActivity, { passive: true });
+    }
+
+    // List view scroll
+    const archiveListEl = document.getElementById('archive-list');
+    if (archiveListEl) {
+        archiveListEl.addEventListener('scroll', onMobileScrollActivity, { passive: true });
+    }
 
     mobileTrigger.addEventListener('click', () => {
         if (mobileOverlayOpen) closeMobileOverlay();

@@ -177,10 +177,10 @@ body {
 .menu-item {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 11px;
     text-transform: uppercase;
     text-rendering: geometricPrecision;
-    letter-spacing: -0.35px;
+    letter-spacing: -0.28px;
     line-height: 12px;
     color: #bbbdc0;
     text-decoration: none;
@@ -1130,7 +1130,7 @@ body.timeline-open .menu {
 #mobile-trigger {
     display: none;
     position: fixed;
-    bottom: 28px;
+    bottom: 22px;
     left: 50%;
     transform: translateX(-50%);
     background: none;
@@ -1142,14 +1142,14 @@ body.timeline-open .menu {
 }
 
 #mobile-trigger-img {
-    width: 40px;
+    width: 28px;
     height: auto;
     display: block;
 }
 
 #mobile-overlay {
     position: fixed;
-    bottom: 96px;
+    bottom: 70px;
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
@@ -1165,16 +1165,16 @@ body.timeline-open .menu {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 18px;
+    gap: 10px;
 }
 
 .mobile-nav-item {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 16px;
-    line-height: 1;
+    font-size: 11px;
+    line-height: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.4px;
+    letter-spacing: -0.28px;
     color: #bbbdc0;
     text-decoration: none;
     background: none;
@@ -1197,17 +1197,17 @@ body.timeline-open .menu {
     body.page-open .menu          { display: none !important; }
     body.page-open #mobile-trigger { display: block; }
 
-    .skip-intro-btn { bottom: 28px; }
-    .people-nav     { left: 28px; }
-    .timeline-nav   { left: 28px; }
+    .skip-intro-btn { bottom: 22px; }
+    .people-nav     { left: 22px; }
+    .timeline-nav   { left: 22px; }
 
     /* Item view: single column — large image on top, credits underneath. */
     body.item-view-open .menu { display: none; }
 
     #item-view-info {
         top: var(--iv-info-top, 62%);
-        left: 28px;
-        right: 28px;
+        left: 22px;
+        right: 22px;
         width: auto;
         transform: none;
         max-height: 34vh;
@@ -1216,21 +1216,17 @@ body.timeline-open .menu {
 
     .item-view-back {
         top: var(--iv-info-top, 62%);
-        left: 28px;
+        left: 22px;
         transform: none;
     }
 
-    #list-view-btn { right: 28px; }
-
-    #archive-list {
-        padding: 64px 20px 100px 20px;
-    }
+    #list-view-btn { right: 22px; }
 
     /* List view: keep only #, Campaign, Year, Category on mobile */
-    #archive-list { padding: 0 16px 80px 16px; }
+    #archive-list { padding: 0 22px 80px 22px; }
 
-    .archive-list-thead th { padding-top: 56px; padding-right: 14px; }
-    .archive-list-row td   { padding-right: 14px; }
+    .archive-list-thead th { padding-top: 22px; padding-right: 12px; }
+    .archive-list-row td   { padding-right: 12px; }
 
     .archive-list-row td.col-season,
     .archive-list-row td.col-sub,
