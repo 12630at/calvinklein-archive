@@ -1368,15 +1368,30 @@ document.addEventListener('DOMContentLoaded', () => {
     function setCategory(catLabel) {
         const queryActive = currentSearchQuery !== '';
         if ((catLabel === currentCategory && !queryActive) || switching) return;
-        switching = true;
-        currentSearchQuery = '';
-        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
-        currentCategory = catLabel;
 
         document.querySelectorAll('.menu-cat').forEach(el => {
             el.classList.toggle('active', el.dataset.cat === catLabel);
         });
         archiveShowAll.classList.toggle('cat-all-active', catLabel === 'all');
+
+        // If list view is open, rebuild the list for the new category
+        if (listViewOpen) {
+            currentCategory    = catLabel;
+            currentSearchQuery = '';
+            listManifests = filterImages(catLabel);
+            buildListView(listManifests);
+            const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+            gsap.fromTo(rows,
+                { opacity: 0, x: -24 },
+                { opacity: 1, x: 0, duration: 0.4, ease: 'back.out(1.2)', stagger: { amount: 0.4, from: 'start' } }
+            );
+            return;
+        }
+
+        switching = true;
+        currentSearchQuery = '';
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        currentCategory = catLabel;
 
         const oldEls = Array.from(mounted.values());
         const cx = window.innerWidth  / 2;
@@ -1508,12 +1523,25 @@ document.addEventListener('DOMContentLoaded', () => {
             stagger: { amount: 0.6, from: 'center' },
             delay: 0.25,
         });
+
+        // Show list view toggle button (CSS transition handles opacity)
+        setTimeout(() => document.getElementById('list-view-btn').classList.add('visible'), 500);
     }
 
     async function closeArchive() {
         if (!archiveOpen) return;
         archiveOpen = false;
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+
+        // If list view is open, force-close it silently first
+        if (listViewOpen) {
+            listViewOpen = false;
+            listViewBtn.textContent = 'LIST VIEW';
+            archiveList.style.display = 'none';
+            archiveList.setAttribute('aria-hidden', 'true');
+            archiveViewport.style.pointerEvents = '';
+        }
+        document.getElementById('list-view-btn').classList.remove('visible');
 
         // Run stage fade + menu morph in parallel
         gsap.to(archiveStage, {
@@ -1545,6 +1573,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!archiveOpen) return;
         clearTimeout(resizeTimer);
         resizeTimer = setTimeout(() => {
+            if (listViewOpen) {
+                buildListView(listManifests);
+                return;
+            }
             unmountAll();
             items = buildItems(filterImages(currentCategory));
             canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
@@ -1552,6 +1584,229 @@ document.addEventListener('DOMContentLoaded', () => {
             applyCanvasTransform();
             syncMounted();
         }, 150);
+    });
+
+    // ===== LIST VIEW =====
+
+    const listViewBtn      = document.getElementById('list-view-btn');
+    const archiveList      = document.getElementById('archive-list');
+    const archiveListInner = document.getElementById('archive-list-inner');
+
+    let listViewOpen  = false;
+    let listSortCol   = 'year';
+    let listSortAsc   = false;  // year descending by default = most recent first
+    let listManifests = [];
+
+    function _listVal(m, col) {
+        switch (col) {
+            case 'num':      { const mm = m.filename.match(/_(\d+)$/); return mm ? parseInt(mm[1]) : 0; }
+            case 'year':     return parseInt(m.csv.year) || 0;
+            case 'season':   return m.csv.season || '';
+            case 'category': return (m.csv.category || '') + (m.csv.subcategory || '');
+            case 'campaign': return (m.csv.campaign || m.csv.description || '').toLowerCase();
+        }
+        return '';
+    }
+
+    function buildListView(manifests) {
+        const sorted = [...manifests].sort((a, b) => {
+            const va = _listVal(a, listSortCol);
+            const vb = _listVal(b, listSortCol);
+            if (va < vb) return listSortAsc ? -1 : 1;
+            if (va > vb) return listSortAsc ? 1 : -1;
+            return 0;
+        });
+
+        archiveListInner.innerHTML = '';
+        const table = document.createElement('table');
+        table.className = 'archive-list-table';
+
+        // Header
+        const thead = document.createElement('thead');
+        thead.className = 'archive-list-thead';
+        const hRow = document.createElement('tr');
+        const colDefs = [
+            { key: 'num',      label: '#',        cls: 'th-num'      },
+            { key: 'year',     label: 'Year',     cls: 'th-year'     },
+            { key: 'season',   label: 'Season',   cls: 'th-season'   },
+            { key: 'category', label: 'Category', cls: 'th-cat'      },
+            { key: 'campaign', label: 'Campaign', cls: 'th-campaign'  },
+        ];
+        for (const cd of colDefs) {
+            const th = document.createElement('th');
+            th.textContent = cd.label;
+            th.className = cd.cls;
+            th.classList.toggle('sort-active', cd.key === listSortCol);
+            if (cd.key === listSortCol) th.classList.add(listSortAsc ? 'sort-asc' : 'sort-desc');
+            th.addEventListener('click', () => {
+                if (listSortCol === cd.key) {
+                    listSortAsc = !listSortAsc;
+                } else {
+                    listSortCol = cd.key;
+                    listSortAsc = true;
+                }
+                buildListView(listManifests);
+                const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                gsap.fromTo(rows,
+                    { opacity: 0, x: -16 },
+                    { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.3, from: 'start' } }
+                );
+            });
+            hRow.appendChild(th);
+        }
+        thead.appendChild(hRow);
+        table.appendChild(thead);
+
+        // Body
+        const tbody = document.createElement('tbody');
+        sorted.forEach((m, idx) => {
+            const seasonMap = { ss: 'S/S', fw: 'F/W' };
+            const season   = seasonMap[m.csv.season] || '—';
+            const catRaw   = m.csv.category || '';
+            const subRaw   = m.csv.subcategory || '';
+            const category = catRaw === 'edi' ? 'editorial'
+                : [catRaw, subRaw].filter(Boolean).join(' ');
+            const campaignStr = m.csv.campaign || m.csv.description || '—';
+
+            const tr = document.createElement('tr');
+            tr.className = 'archive-list-row';
+
+            const tdNum = document.createElement('td');
+            tdNum.className = 'col-num';
+            tdNum.textContent = String(idx + 1).padStart(3, '0');
+            tr.appendChild(tdNum);
+
+            const tdYear = document.createElement('td');
+            tdYear.className = 'col-year';
+            tdYear.textContent = m.csv.year || '—';
+            tr.appendChild(tdYear);
+
+            const tdSeason = document.createElement('td');
+            tdSeason.className = 'col-season';
+            tdSeason.textContent = season;
+            tr.appendChild(tdSeason);
+
+            const tdCat = document.createElement('td');
+            tdCat.className = 'col-cat';
+            tdCat.textContent = category.toUpperCase();
+            tr.appendChild(tdCat);
+
+            const tdCamp = document.createElement('td');
+            tdCamp.className = 'col-campaign';
+            tdCamp.textContent = campaignStr.replace(/_/g, ' ').toUpperCase();
+            tr.appendChild(tdCamp);
+
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        archiveListInner.appendChild(table);
+    }
+
+    function openListView() {
+        if (listViewOpen || switching) return;
+        listViewOpen = true;
+        listViewBtn.textContent = 'INFINITE VIEW';
+
+        listManifests = filterImages(currentCategory);
+        buildListView(listManifests);
+
+        const oldEls = Array.from(mounted.values());
+        const tl = gsap.timeline();
+
+        // 1. Scatter tiles outward — chaotic Flash explosion
+        if (oldEls.length) {
+            tl.to(oldEls, {
+                x:        () => (Math.random() - 0.5) * 2600,
+                y:        () => (Math.random() - 0.5) * 2000,
+                rotation: () => (Math.random() - 0.5) * 480,
+                scale:    () => 0.05 + Math.random() * 0.15,
+                opacity:  0,
+                duration: 0.4,
+                ease:     'power3.in',
+                stagger:  { amount: 0.22, from: 'random' },
+            });
+        }
+
+        // 2. Stamp the list layer in — Flash "frame swap"
+        tl.call(() => {
+            archiveViewport.style.pointerEvents = 'none';
+            archiveList.removeAttribute('aria-hidden');
+            archiveList.style.display = 'block';
+            archiveList.style.opacity = '0';
+            gsap.set(archiveListInner.querySelectorAll('.archive-list-row'), { opacity: 0, x: -40 });
+            gsap.set(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, y: -12 });
+        });
+
+        // 3. Whole list panel blinks in (steps = binary/digital)
+        tl.to(archiveList, { opacity: 1, duration: 0.08, ease: 'steps(1)' });
+
+        // 4. Header drops down
+        tl.to(archiveListInner.querySelectorAll('.archive-list-thead th'), {
+            opacity: 1, y: 0, duration: 0.3, ease: 'power2.out',
+            stagger: { amount: 0.15, from: 'start' },
+        }, '+=0.04');
+
+        // 5. Rows beam in from left — elastic pop, staggered like old Flash loading bars
+        tl.to(archiveListInner.querySelectorAll('.archive-list-row'), {
+            opacity: 1, x: 0,
+            duration: 0.55,
+            ease: 'back.out(1.3)',
+            stagger: { amount: 0.7, from: 'start' },
+        }, '-=0.1');
+    }
+
+    function closeListView() {
+        if (!listViewOpen) return;
+        listViewOpen = false;
+        listViewBtn.textContent = 'LIST VIEW';
+
+        const rows    = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+        const headers = Array.from(archiveListInner.querySelectorAll('.archive-list-thead th'));
+        const tl = gsap.timeline();
+
+        // 1. Rows shoot right — classic Flash "exit right" wipe
+        if (rows.length) {
+            tl.to(rows, {
+                opacity: 0, x: 80,
+                duration: 0.28,
+                ease: 'power2.in',
+                stagger: { amount: 0.18, from: 'end' },
+            });
+        }
+        if (headers.length) {
+            tl.to(headers, { opacity: 0, y: -10, duration: 0.18, ease: 'power2.in' }, 0);
+        }
+
+        // 2. Panel blinks out
+        tl.to(archiveList, { opacity: 0, duration: 0.08, ease: 'steps(1)' });
+
+        // 3. Restore canvas
+        tl.call(() => {
+            archiveList.style.display = 'none';
+            archiveList.setAttribute('aria-hidden', 'true');
+            archiveViewport.style.pointerEvents = '';
+            syncMounted();
+            const fresh = Array.from(mounted.values());
+            gsap.set(fresh, { scale: 0.15, opacity: 0, rotation: () => (Math.random() - 0.5) * 120 });
+        });
+
+        // 4. Canvas tiles rematerialize — back.out pop
+        tl.add(() => {
+            const fresh = Array.from(mounted.values());
+            if (!fresh.length) return;
+            gsap.to(fresh, {
+                scale: 1, opacity: 1,
+                rotation: (i, el) => parseFloat(el.dataset.rot || 0),
+                duration: 0.75,
+                ease: 'back.out(1.5)',
+                stagger: { amount: 0.5, from: 'center' },
+            });
+        }, '+=0.06');
+    }
+
+    listViewBtn.addEventListener('click', () => {
+        if (listViewOpen) closeListView();
+        else openListView();
     });
 
     // ===== ITEM VIEW (single image + info) =====
