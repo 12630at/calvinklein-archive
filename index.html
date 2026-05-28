@@ -198,6 +198,32 @@
         <div id="search-results"></div>
     </div>
 
+    <!-- Mobile menu trigger (monogram logo, bottom-center, mobile only) -->
+    <button id="mobile-trigger" aria-label="Menu" aria-expanded="false">
+        <img src="assets/monogram_logo.svg" alt="CK" id="mobile-trigger-img">
+    </button>
+
+    <!-- Mobile overlay menu -->
+    <div id="mobile-overlay" aria-hidden="true">
+        <nav class="mobile-overlay-nav" id="mobile-nav-default">
+            <a href="#" class="mobile-nav-item" id="m-archive">Archive</a>
+            <a href="#" class="mobile-nav-item" id="m-people">People</a>
+            <a href="#" class="mobile-nav-item" id="m-timeline">Timeline</a>
+            <a href="#" class="mobile-nav-item">Profile</a>
+            <a href="#" class="mobile-nav-item" id="m-search">Search</a>
+            <a href="#" class="mobile-nav-item">About</a>
+        </nav>
+        <nav class="mobile-overlay-nav" id="mobile-nav-archive">
+            <button class="mobile-nav-item" id="m-archive-back">← Back</button>
+            <a href="#" class="mobile-nav-item" id="m-archive-all">All</a>
+            <a href="#" class="mobile-nav-item mobile-cat-item" data-cat="collections">Collections</a>
+            <a href="#" class="mobile-nav-item mobile-cat-item" data-cat="advertising">Advertising</a>
+            <a href="#" class="mobile-nav-item mobile-cat-item" data-cat="editorials">Editorials</a>
+            <a href="#" class="mobile-nav-item mobile-cat-item" data-cat="ephemera">Ephemera</a>
+            <a href="#" class="mobile-nav-item" id="m-archive-search">Search</a>
+        </nav>
+    </div>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="archive_dims.js"></script>
     <script src="script.js"></script>

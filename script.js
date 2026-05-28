@@ -2276,15 +2276,16 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 2500);
         }
 
-        gsap.set(clone, {
-            position: 'absolute',
-            left: origRect.x, top: origRect.y,
-            width: origRect.w, height: origRect.h,
-            rotation: 0, transformOrigin: 'center center',
-        });
-
         const tgt = computeTargetRect(manifest.dw, manifest.dh);
         positionMobileInfo(tgt);
+
+        // Start at target position, collapsed — mirrors the exit collapse animation
+        gsap.set(clone, {
+            position: 'absolute',
+            left: tgt.x, top: tgt.y, width: tgt.w, height: tgt.h,
+            scale: 0.08, opacity: 0,
+            rotation: 0, transformOrigin: 'center center',
+        });
 
         itemViewTitleEl.textContent = buildTitle(manifest.csv);
         renderItemMeta(manifest.csv);
@@ -2295,13 +2296,9 @@ document.addEventListener('DOMContentLoaded', () => {
         itemView.style.display = 'block';
 
         const tl = gsap.timeline();
-        tl.fromTo(itemViewBackdrop, { opacity: 0 }, { opacity: 1, duration: 0.55, ease: 'power2.out' }, 0);
-        tl.fromTo(clone, { z: -180 }, { z: 0, duration: 0.95, ease: 'power3.out' }, 0);
-        tl.to(clone, {
-            left: tgt.x, top: tgt.y, width: tgt.w, height: tgt.h,
-            rotation: 0, duration: 0.9, ease: 'power3.inOut',
-        }, 0);
-        tl.fromTo(itemViewInfo, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+        tl.fromTo(itemViewBackdrop, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' }, 0);
+        tl.to(clone, { scale: 1, opacity: 1, duration: 0.45, ease: 'power3.out' }, 0);
+        tl.fromTo(itemViewInfo, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: 'power2.out' }, 0.18);
     }
 
     function closeItemView() {
@@ -2567,4 +2564,91 @@ document.addEventListener('DOMContentLoaded', () => {
     if (timelineClose) {
         timelineClose.addEventListener('click', closeTimeline);
     }
+
+    // ===== MOBILE BURGER MENU =====
+    const mobileTrigger    = document.getElementById('mobile-trigger');
+    const mobileOverlay    = document.getElementById('mobile-overlay');
+    const mobileNavDefault = document.getElementById('mobile-nav-default');
+    const mobileNavArchive = document.getElementById('mobile-nav-archive');
+    let mobileOverlayOpen  = false;
+
+    function openMobileOverlay() {
+        mobileOverlayOpen = true;
+        mobileTrigger.setAttribute('aria-expanded', 'true');
+        const activeNav  = archiveOpen ? mobileNavArchive : mobileNavDefault;
+        const inactiveNav = archiveOpen ? mobileNavDefault : mobileNavArchive;
+        activeNav.style.display   = 'flex';
+        inactiveNav.style.display = 'none';
+
+        mobileOverlay.style.display = 'flex';
+        mobileOverlay.removeAttribute('aria-hidden');
+        gsap.fromTo(mobileOverlay,
+            { opacity: 0, y: 16 },
+            { opacity: 1, y: 0, duration: 0.3, ease: 'power3.out' }
+        );
+        const items = activeNav.querySelectorAll('.mobile-nav-item');
+        gsap.fromTo(items,
+            { opacity: 0, y: 10 },
+            { opacity: 1, y: 0, duration: 0.28, ease: 'power2.out', stagger: 0.04, delay: 0.08 }
+        );
+    }
+
+    function closeMobileOverlay(cb) {
+        if (!mobileOverlayOpen) { if (cb) cb(); return; }
+        mobileOverlayOpen = false;
+        mobileTrigger.setAttribute('aria-expanded', 'false');
+        gsap.to(mobileOverlay, {
+            opacity: 0, y: 8, duration: 0.18, ease: 'power2.in',
+            onComplete: () => {
+                mobileOverlay.style.display = 'none';
+                mobileOverlay.setAttribute('aria-hidden', 'true');
+                if (cb) cb();
+            },
+        });
+    }
+
+    mobileTrigger.addEventListener('click', () => {
+        if (mobileOverlayOpen) closeMobileOverlay();
+        else openMobileOverlay();
+    });
+
+    // Wire mobile items to existing desktop handlers
+    const _mobileGo = (id, delay) => (e) => {
+        e.preventDefault();
+        closeMobileOverlay(() => setTimeout(() => document.getElementById(id).click(), delay || 0));
+    };
+
+    const mArchive = document.getElementById('m-archive');
+    if (mArchive) mArchive.addEventListener('click', _mobileGo('archive', 50));
+
+    const mPeople = document.getElementById('m-people');
+    if (mPeople) mPeople.addEventListener('click', _mobileGo('people', 50));
+
+    const mTimeline = document.getElementById('m-timeline');
+    if (mTimeline) mTimeline.addEventListener('click', _mobileGo('timeline', 50));
+
+    const mSearch = document.getElementById('m-search');
+    if (mSearch) mSearch.addEventListener('click', _mobileGo('search', 50));
+
+    const mArchiveBack = document.getElementById('m-archive-back');
+    if (mArchiveBack) mArchiveBack.addEventListener('click', () => {
+        closeMobileOverlay(() => setTimeout(() => document.getElementById('archive-back').click(), 50));
+    });
+
+    const mArchiveAll = document.getElementById('m-archive-all');
+    if (mArchiveAll) mArchiveAll.addEventListener('click', _mobileGo('archive-show-all', 50));
+
+    const mArchiveSearch = document.getElementById('m-archive-search');
+    if (mArchiveSearch) mArchiveSearch.addEventListener('click', _mobileGo('archive-search', 50));
+
+    document.querySelectorAll('.mobile-cat-item').forEach(el => {
+        el.addEventListener('click', (e) => {
+            e.preventDefault();
+            const cat = el.dataset.cat;
+            closeMobileOverlay(() => setTimeout(() => {
+                const desktop = document.querySelector(`.menu-cat[data-cat="${cat}"]`);
+                if (desktop) desktop.click();
+            }, 50));
+        });
+    });
 });

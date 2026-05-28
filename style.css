@@ -1053,12 +1053,12 @@ body.timeline-open .menu {
     display: none;           /* JS switches to flex when open */
     justify-content: center;
     align-items: flex-start;
-    padding: 78px 40px 120px 40px;
+    padding: 0 28px 100px 28px;
 }
 
 #archive-list-inner {
     width: 100%;
-    max-width: 880px;
+    max-width: 900px;
 }
 
 .archive-list-table {
@@ -1067,16 +1067,20 @@ body.timeline-open .menu {
     table-layout: fixed;
 }
 
-/* Header */
+/* Header — sticky so it stays visible on scroll */
 .archive-list-thead th {
+    position: sticky;
+    top: 0;
+    background: #ffffff;
+    z-index: 2;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 12px;
+    font-size: 11px;
     text-transform: uppercase;
     letter-spacing: -0.3px;
     color: #bbbdc0;
     text-align: left;
-    padding: 0 22px 20px 0;
+    padding: 68px 22px 16px 0;
     user-select: none;
     white-space: nowrap;
     transition: color 200ms ease-out;
@@ -1088,8 +1092,8 @@ body.timeline-open .menu {
 .archive-list-thead th.sortable:hover,
 .archive-list-thead th.sort-active         { color: #424242; }
 
-.archive-list-thead th.sort-asc::after  { content: ' ↑'; font-size: 10px; }
-.archive-list-thead th.sort-desc::after { content: ' ↓'; font-size: 10px; }
+.archive-list-thead th.sort-asc::after  { content: ' ↑'; font-size: 9px; }
+.archive-list-thead th.sort-desc::after { content: ' ↓'; font-size: 9px; }
 
 /* Rows */
 .archive-list-row { cursor: pointer; }
@@ -1097,11 +1101,11 @@ body.timeline-open .menu {
 .archive-list-row td {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 13px;
+    font-size: 11px;
     letter-spacing: -0.3px;
     text-transform: uppercase;
     color: #bbbdc0;
-    padding: 9px 22px 9px 0;
+    padding: 8px 22px 8px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1114,24 +1118,87 @@ body.timeline-open .menu {
 .archive-list-row:hover td       { color: #424242; }
 
 /* Column widths — # | Campaign | Year | Season | Line | Category | Sub */
-.archive-list-row td.col-num      { width: 48px;  }
+.archive-list-row td.col-num      { width: 44px;  }
 /* col-campaign — flexible */
-.archive-list-row td.col-year     { width: 55px;  }
-.archive-list-row td.col-season   { width: 55px;  }
-.archive-list-row td.col-line     { width: 150px; }
-.archive-list-row td.col-cat      { width: 150px; }
-.archive-list-row td.col-sub      { width: 90px;  }
+.archive-list-row td.col-year     { width: 50px;  }
+.archive-list-row td.col-season   { width: 50px;  }
+.archive-list-row td.col-line     { width: 140px; }
+.archive-list-row td.col-cat      { width: 140px; }
+.archive-list-row td.col-sub      { width: 80px;  }
+
+/* ===== MOBILE BURGER MENU ===== */
+#mobile-trigger {
+    display: none;
+    position: fixed;
+    bottom: 32px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    z-index: 60;
+    padding: 10px;
+    -webkit-tap-highlight-color: transparent;
+}
+
+#mobile-trigger-img {
+    width: 72px;
+    height: auto;
+    display: block;
+}
+
+#mobile-overlay {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    z-index: 55;
+    display: none;           /* JS switches to flex */
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 0;
+}
+
+.mobile-overlay-nav {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 18px;
+}
+
+.mobile-nav-item {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 16px;
+    line-height: 1;
+    text-transform: uppercase;
+    letter-spacing: -0.4px;
+    color: #bbbdc0;
+    text-decoration: none;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.mobile-nav-item:hover,
+.mobile-nav-item:active { color: #424242; }
 
 /* ===== MOBILE ===== */
 @media (max-width: 600px) {
-    /* Page gutters reduced to 28px */
-    .menu        { left: 28px; }
-    .skip-intro-btn { bottom: 28px; }
-    .people-nav  { left: 28px; }
-    .timeline-nav { left: 28px; }
+    /* Hide desktop menu; show mobile trigger */
+    .menu             { display: none !important; }
+    #mobile-trigger   { display: block; }
 
-    /* Item view: single column — large image on top, credits underneath.
-       --iv-info-top is set per item by JS to the image's bottom edge. */
+    .skip-intro-btn { bottom: 28px; }
+    .people-nav     { left: 28px; }
+    .timeline-nav   { left: 28px; }
+
+    /* Item view: single column — large image on top, credits underneath. */
     body.item-view-open .menu { display: none; }
 
     #item-view-info {
@@ -1156,9 +1223,15 @@ body.timeline-open .menu {
         padding: 64px 20px 100px 20px;
     }
 
+    /* List view: keep only #, Campaign, Year, Category on mobile */
+    #archive-list { padding: 0 16px 80px 16px; }
+
+    .archive-list-thead th { padding-top: 56px; padding-right: 14px; }
+    .archive-list-row td   { padding-right: 14px; }
+
     .archive-list-row td.col-season,
     .archive-list-row td.col-sub,
-    .archive-list-row td.col-line { display: none; }
+    .archive-list-row td.col-line   { display: none; }
     .archive-list-thead th.th-season,
     .archive-list-thead th.th-sub,
     .archive-list-thead th.th-line  { display: none; }
