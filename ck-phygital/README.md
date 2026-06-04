@@ -17,6 +17,9 @@ Un print d'archivio CK sfocato viene "svelato" da un filtro AR.
   schermo): MindAR riconosce il target → reveal → CTA archivio.
 - Fallback senza target: se il `.mind` non c'è, compare il pulsante
   **"▶ Simula riconoscimento"** (in modalità AR reale è nascosto).
+- **Solo mobile:** la fotocamera parte unicamente da smartphone. Su desktop
+  `camera.html` mostra un gate "apri da smartphone" con un'**anteprima reveal**
+  (senza camera) per la presentazione.
 
 ## Asset
 
