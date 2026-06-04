@@ -195,6 +195,9 @@ html, body {
 .post .meta .caption { font-size: 14px; line-height: 1.35; margin-top: 4px; }
 .post .meta .caption b { font-weight: 600; }
 .post .meta .caption .tag { color: #00376b; }
+.post .meta .comments { font-size: 14px; color: var(--ig-muted); margin-top: 6px; }
+.post .meta .comment-line { font-size: 14px; line-height: 1.35; margin-top: 4px; }
+.post .meta .comment-line b { font-weight: 600; }
 .post .meta .time { font-size: 11px; color: var(--ig-muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .03em; }
 
 /* ---- bottom nav ---- */

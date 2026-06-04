@@ -21,13 +21,14 @@ La root smista per dispositivo:
 ## Come testare
 
 - Aprire su **smartphone** (o GitHub Pages) — la camera richiede **https/localhost**.
+- `camera.html` replica la **fotocamera di Instagram** (story/effetto AR): feed live
+  via `getUserMedia`, con MindAR che gira sul video (`vendor/` locale, niente CDN).
 - Inquadrare il print `assets/print_1999_ss_adv_print_jeans_001.jpg` (stampato o a
-  schermo): MindAR riconosce il target → reveal → CTA archivio.
-- Fallback senza target: se il `.mind` non c'è, compare il pulsante
-  **"▶ Simula riconoscimento"** (in modalità AR reale è nascosto).
+  schermo): al riconoscimento parte il reveal → CTA archivio.
+- **Fallback sempre disponibile:** un tap sullo **shutter** avvia il reveal (utile in
+  aula o se il riconoscimento è incerto).
 - **Solo mobile:** la fotocamera parte unicamente da smartphone. Su desktop
-  `camera.html` mostra un gate "apri da smartphone" con un'**anteprima reveal**
-  (senza camera) per la presentazione.
+  `camera.html` mostra un gate "apri da smartphone" con un'**anteprima reveal**.
 
 ## Asset
 
