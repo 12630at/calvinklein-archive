@@ -15,35 +15,39 @@ La root smista per dispositivo:
 
 1. `ck-phygital/index.html` — mock Instagram 1:1 (390×844). Post `@calvinklein` con il
    print sfocato e il CTA **"Prova il filtro →"** che apre la camera.
-2. `camera.html` — Screen 2 (camera AR / MindAR) + Screen 3 (reveal animation) con
-   CTA finale **"Scopri l'archivio"** → `../index.html?archive=1`.
+2. `camera.html` — **fotocamera di Instagram 1:1** (story/effetto AR). Inquadri il print
+   sfocato e MindAR ci **sovrappone in AR**, ancorata al target, la versione nitida:
+   il print si "trasforma" sul posto (nessuno shutter da premere).
+3. Esce un popup **"Click to discover the archive"** dalla foto → tap → archivio
+   (`../index.html?archive=1`).
+
+## Nomenclatura asset
+
+- Print/billboard reale (nitido):  `print_<nome>.jpg`  → es. `print_1999_ss_adv_print_jeans_001.jpg`
+- Versione sfocata (target AR):    `blur_print_<nome>` → `.jpg` (immagine) + `.mind` (target)
 
 ## Come testare
 
 - Aprire su **smartphone** (o GitHub Pages) — la camera richiede **https/localhost**.
-- `camera.html` replica la **fotocamera di Instagram** (story/effetto AR): feed live
-  via `getUserMedia`, con MindAR che gira sul video (`vendor/` locale, niente CDN).
-- Inquadrare il print `assets/print_1999_ss_adv_print_jeans_001.jpg` (stampato o a
-  schermo): al riconoscimento parte il reveal → CTA archivio.
-- **Fallback sempre disponibile:** un tap sullo **shutter** avvia il reveal (utile in
-  aula o se il riconoscimento è incerto).
+- Stampare/mostrare a schermo `assets/blur_print_1999_ss_adv_print_jeans_001.jpg` e
+  inquadrarlo: al riconoscimento la foto si rivela in AR + popup archivio.
 - **Solo mobile:** la fotocamera parte unicamente da smartphone. Su desktop
-  `camera.html` mostra un gate "apri da smartphone" con un'**anteprima reveal**.
+  `camera.html` mostra un gate con un'**anteprima** della rivelazione.
 
 ## Asset
 
-| File | Origine |
+| File | Ruolo |
 |---|---|
-| `assets/print_1999_ss_adv_print_jeans_001.jpg` | print sfocato fornito (logo cK nitido) |
-| `assets/print_1999_ss_adv_print_jeans_001.mind` | target MindAR **compilato** da quell'immagine |
-| `assets/ck-revealed.webp` | `1999_ss_adv_print_jeans_001.webp` del repo (versione nitida) |
-| `assets/ck-logo.svg` | `monogram_logo.svg` del repo |
-| `fonts/Klein-*.woff2` | font Klein del repo |
+| `assets/blur_print_1999_ss_adv_print_jeans_001.jpg` | print **sfocato** — ciò che si stampa/inquadra |
+| `assets/blur_print_1999_ss_adv_print_jeans_001.mind` | target MindAR (compilato dallo sfocato) |
+| `assets/print_1999_ss_adv_print_jeans_001.jpg` | print **nitido** rivelato in AR |
+| `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
+| `vendor/` | MindAR + Three.js **in locale** (niente CDN) |
 
 ## Ricompilare il target (solo se cambia il print)
 
-Compilatore: https://hiukim.github.io/mind-ar-js-doc/tools/compile → caricare il `.jpg`
-→ salvare il `.mind` con lo stesso nome del print. `camera.html` lo rileva da solo.
+Compilatore: https://hiukim.github.io/mind-ar-js-doc/tools/compile → caricare lo
+**sfocato** → salvare il `.mind` come `blur_print_<nome>.mind`.
 
 ## Config
 

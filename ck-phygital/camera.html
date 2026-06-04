@@ -5,6 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
   <title>Calvin Klein · Instagram Camera</title>
   <meta name="theme-color" content="#000000" />
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three.module.js",
+        "three/addons/": "./vendor/three-addons/"
+      }
+    }
+  </script>
+
   <style>
     @font-face { font-family:"Klein"; src:url("fonts/Klein-Medium.woff2") format("woff2"); font-weight:500; font-display:swap; }
     @font-face { font-family:"Klein"; src:url("fonts/Klein-Light.woff2")  format("woff2"); font-weight:300; font-display:swap; }
@@ -13,133 +23,101 @@
     html, body { height:100%; background:#000; overflow:hidden;
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 
-    .stage {
-      position:relative; width:100vw; height:100vh;
-      max-width:390px; max-height:844px; margin:0 auto; background:#000; overflow:hidden;
-    }
+    .stage { position:relative; width:100vw; height:100vh; max-width:390px; max-height:844px;
+      margin:0 auto; background:#000; overflow:hidden; }
     @media (min-width:430px){
       body{ display:flex; align-items:center; justify-content:center; }
       .stage{ border-radius:38px; border:10px solid #000; box-shadow:0 30px 80px rgba(0,0,0,.6); }
     }
 
-    /* live camera feed */
-    #cam { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; background:#0a0a0a; z-index:1; transform:translateZ(0); }
+    /* MindAR mette qui video + canvas */
+    #ar { position:absolute; inset:0; z-index:1; }
+    #ar video, #ar canvas { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; object-fit:cover!important; }
 
-    /* ================= Instagram camera chrome ================= */
-    .ig { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; justify-content:space-between; }
+    /* scrims */
+    .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:2;
+      background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; }
+    .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:2;
+      background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0)); pointer-events:none; }
 
-    /* top bar */
+    /* ============ Instagram camera chrome ============ */
+    .ig { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; justify-content:space-between;
+      transition:opacity .6s ease; }
+    .ig.dim { opacity:0; pointer-events:none; }
     .ig-top { display:flex; align-items:flex-start; justify-content:space-between; padding:14px 16px 0; }
     .ig-top .right { display:flex; flex-direction:column; gap:22px; align-items:center; padding-top:2px; }
     .icbtn { width:26px; height:26px; display:grid; place-items:center; color:#fff; background:none; border:none; cursor:pointer;
-             filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
-    .icbtn svg{ width:26px; height:26px; }
-    .ig-top .close svg{ width:24px; height:24px; }
+      filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
+    .icbtn svg{ width:26px; height:26px; } .ig-top .close svg{ width:24px; height:24px; }
 
-    /* hint pill */
-    .hint { position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:4;
-            background:rgba(0,0,0,.45); color:#fff; font-size:12.5px; letter-spacing:.01em;
-            padding:8px 14px; border-radius:18px; backdrop-filter:blur(6px); white-space:nowrap;
-            transition:opacity .6s ease; }
-    .hint.hide{ opacity:0; }
-
-    /* bottom block */
     .ig-bottom { position:relative; padding-bottom:18px; }
-
     .filter-label { text-align:center; color:#fff; margin-bottom:12px; filter:drop-shadow(0 1px 4px rgba(0,0,0,.6)); }
-    .filter-label b { display:block; font-size:14px; font-weight:600; letter-spacing:.01em; }
+    .filter-label b { display:block; font-size:14px; font-weight:600; }
     .filter-label span { display:inline-block; font-size:12px; opacity:.85; margin-top:2px; }
-
-    /* effects carousel + shutter */
     .tray { position:relative; height:96px; display:flex; align-items:center; justify-content:center; }
     .effects { display:flex; align-items:center; gap:12px; }
     .eff { width:36px; height:36px; border-radius:50%; flex:0 0 auto; overflow:hidden;
-           background:#3a3a3a center/cover no-repeat; border:1.5px solid rgba(255,255,255,.35); opacity:.92; }
-    .eff img{ width:100%; height:100%; object-fit:cover; }
-
-    /* central shutter = active effect */
-    .shutter { position:relative; width:74px; height:74px; flex:0 0 auto; border:none; background:none; cursor:pointer; }
-    .shutter .ring {
-      position:absolute; inset:0; border-radius:50%; padding:3px;
+      background:#3a3a3a center/cover no-repeat; border:1.5px solid rgba(255,255,255,.35); opacity:.92; }
+    .shutter { position:relative; width:74px; height:74px; flex:0 0 auto; border:none; background:none; }
+    .shutter .ring { position:absolute; inset:0; border-radius:50%; padding:3px;
       background:conic-gradient(from 0deg,#f09433,#dc2743,#bc1888,#f09433);
       -webkit-mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
-              mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px));
-    }
-    .shutter .core {
-      position:absolute; inset:7px; border-radius:50%; overflow:hidden;
-      border:3px solid #000; background:#222 center/cover no-repeat;
-      box-shadow:0 0 0 3px #fff;
-    }
+              mask:radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
+    .shutter .core { position:absolute; inset:7px; border-radius:50%; overflow:hidden; border:3px solid #000;
+      background:#222 center/cover no-repeat; box-shadow:0 0 0 3px #fff; }
     .shutter .core img{ width:100%; height:100%; object-fit:cover; }
-    .shutter:active { transform:scale(.95); }
-
-    .gallery { position:absolute; left:22px; top:50%; transform:translateY(-50%);
-               width:34px; height:34px; border-radius:9px; overflow:hidden; border:1.5px solid rgba(255,255,255,.7);
-               background:#333 center/cover no-repeat; }
+    .gallery { position:absolute; left:22px; top:50%; transform:translateY(-50%); width:34px; height:34px;
+      border-radius:9px; overflow:hidden; border:1.5px solid rgba(255,255,255,.7); background:#333 center/cover; }
     .gallery img{ width:100%; height:100%; object-fit:cover; }
-    .flip { position:absolute; right:22px; top:50%; transform:translateY(-50%);
-            width:34px; height:34px; color:#fff; background:none; border:none; cursor:pointer;
-            filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
+    .flip { position:absolute; right:22px; top:50%; transform:translateY(-50%); width:34px; height:34px;
+      color:#fff; background:none; border:none; filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
     .flip svg{ width:32px; height:32px; }
-
-    /* mode selector */
     .modes { display:flex; align-items:center; justify-content:center; gap:22px; margin-top:14px;
-             color:#fff; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
-    .modes span{ opacity:.6; }
-    .modes span.on{ opacity:1; font-weight:700; }
+      color:#fff; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
+    .modes span{ opacity:.6; } .modes span.on{ opacity:1; font-weight:700; }
 
-    /* gradients to lift the chrome off the feed */
-    .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:2;
-                 background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; }
-    .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:2;
-                 background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0)); pointer-events:none; }
+    /* hint */
+    .hint { position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:4;
+      background:rgba(0,0,0,.45); color:#fff; font-size:12.5px; padding:8px 14px; border-radius:18px;
+      backdrop-filter:blur(6px); white-space:nowrap; transition:opacity .6s ease; }
+    .hint.hide{ opacity:0; }
 
-    /* shutter flash on capture */
-    .flash { position:absolute; inset:0; z-index:9; background:#fff; opacity:0; pointer-events:none; }
-    .flash.go{ animation:flash .35s ease-out; }
-    @keyframes flash{ 0%{opacity:0} 25%{opacity:.85} 100%{opacity:0} }
+    /* ============ popup "discover the archive" ============ */
+    .discover { position:absolute; left:50%; bottom:120px; transform:translate(-50%, 30px) scale(.85);
+      z-index:6; opacity:0; pointer-events:none; transition:opacity .5s ease, transform .55s cubic-bezier(.2,.9,.25,1.2);
+      display:flex; flex-direction:column; align-items:center; gap:10px; }
+    .discover.in { opacity:1; transform:translate(-50%, 0) scale(1); pointer-events:auto; }
+    .discover .bubble { background:rgba(255,255,255,.96); color:#000; font-family:"Klein",serif; font-weight:500;
+      font-size:14px; letter-spacing:.14em; text-transform:uppercase; padding:14px 26px; border-radius:30px;
+      box-shadow:0 10px 40px rgba(0,0,0,.5); white-space:nowrap; cursor:pointer; }
+    .discover .bubble:active { transform:scale(.97); }
+    .discover .stem { width:2px; height:0; background:rgba(255,255,255,.85); transition:height .4s ease .15s; }
+    .discover.in .stem { height:26px; }
+    .discover .dot { width:10px; height:10px; border-radius:50%; background:#fff; box-shadow:0 0 0 5px rgba(255,255,255,.25); }
 
-    /* ================= Screen 3 — reveal ================= */
-    .reveal { position:absolute; inset:0; z-index:10; display:none; align-items:center; justify-content:center; background:#000; overflow:hidden; }
-    .reveal.on { display:flex; }
-    .reveal-image { position:absolute; inset:0; width:100%; height:100%; object-fit:cover;
-      filter:blur(40px); transform:scale(1.05); transition:filter 1.2s ease-out, transform 1.4s ease-in-out; }
-    .reveal-image.revealed{ filter:blur(0); transform:scale(1); }
-    .reveal-image.pulse{ transform:scale(1.04); }
-    .reveal-dark{ position:absolute; inset:0; background:rgba(0,0,0,.55); opacity:1; transition:opacity 1s ease; }
-    .reveal-dark.clear{ opacity:0; }
-    .reveal-title{ position:absolute; left:0; right:0; top:38%; text-align:center; color:#fff;
-      font-family:"Klein",serif; font-weight:300; font-size:22px; text-transform:uppercase;
-      letter-spacing:.12em; opacity:0; text-shadow:0 2px 30px rgba(0,0,0,.7); z-index:2;
-      transition:opacity 1s ease, letter-spacing 1.2s ease; }
-    .reveal-title.in{ opacity:1; letter-spacing:.34em; }
-    .reveal-cta{ position:absolute; left:16px; right:16px; bottom:28px; z-index:2; display:block; width:calc(100% - 32px);
-      background:#fff; color:#000; font-family:"Klein",serif; font-weight:500; font-size:15px; text-transform:uppercase;
-      letter-spacing:.15em; text-align:center; text-decoration:none; padding:16px 32px; border:none; cursor:pointer;
-      transform:translateY(80px); opacity:0; transition:transform .6s cubic-bezier(.2,.8,.2,1), opacity .6s ease; }
-    .reveal-cta.in{ transform:translateY(0); opacity:1; }
-    .reveal-cta:active{ background:#eee; }
+    /* desktop sim image */
+    .sim { position:absolute; inset:0; z-index:5; display:none; }
+    .sim.on { display:block; }
+    .sim img { width:100%; height:100%; object-fit:cover; }
 
-    /* ================= desktop gate ================= */
+    /* ============ desktop gate ============ */
     .gate{ position:absolute; inset:0; z-index:12; display:none; flex-direction:column;
       align-items:center; justify-content:center; text-align:center; color:#fff; background:#000; padding:0 38px; gap:16px; }
     .gate.on{ display:flex; }
-    .gate .ph{ font-size:42px; line-height:1; }
-    .gate h2{ font-family:"Klein",serif; font-weight:300; font-size:18px; text-transform:uppercase; letter-spacing:.18em; }
+    .gate .ph{ font-size:42px; } .gate h2{ font-family:"Klein",serif; font-weight:300; font-size:18px; text-transform:uppercase; letter-spacing:.18em; }
     .gate p{ font-size:13px; line-height:1.55; color:#bbb; max-width:270px; }
-    .gate button{ margin-top:6px; display:inline-flex; align-items:center; gap:8px;
-      background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.4); color:#fff;
-      font-family:"Klein",serif; font-size:12px; letter-spacing:.12em; text-transform:uppercase;
-      padding:11px 20px; border-radius:30px; cursor:pointer; }
+    .gate button{ margin-top:6px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.4); color:#fff;
+      font-family:"Klein",serif; font-size:12px; letter-spacing:.12em; text-transform:uppercase; padding:11px 20px; border-radius:30px; cursor:pointer; }
   </style>
 </head>
 <body>
   <div class="stage" id="stage">
-
-    <!-- live camera feed -->
-    <video id="cam" autoplay muted playsinline></video>
+    <div id="ar"></div>
     <div class="scrim-top"></div>
     <div class="scrim-bot"></div>
+
+    <!-- desktop simulation image (sotto la chrome) -->
+    <div class="sim" id="sim"><img src="assets/print_1999_ss_adv_print_jeans_001.jpg" alt=""></div>
 
     <!-- Instagram camera chrome -->
     <div class="ig" id="ig">
@@ -154,47 +132,34 @@
       </div>
 
       <div class="ig-bottom">
-        <div class="filter-label">
-          <b>Calvin Klein Archive</b>
-          <span>@calvinklein</span>
-        </div>
-
+        <div class="filter-label"><b>Calvin Klein Archive</b><span>@calvinklein</span></div>
         <div class="tray">
-          <div class="gallery"><img src="assets/print_1999_ss_adv_print_jeans_001.jpg" alt=""></div>
-
+          <div class="gallery"><img src="assets/blur_print_1999_ss_adv_print_jeans_001.jpg" alt=""></div>
           <div class="effects">
             <div class="eff" style="background:#5a4a44"></div>
             <div class="eff" style="background:#3d4b55"></div>
-            <button class="shutter" id="shutter" aria-label="Scatta">
+            <button class="shutter" aria-label="Effetto attivo">
               <span class="ring"></span>
-              <span class="core"><img src="assets/print_1999_ss_adv_print_jeans_001.jpg" alt=""></span>
+              <span class="core"><img src="assets/blur_print_1999_ss_adv_print_jeans_001.jpg" alt=""></span>
             </button>
             <div class="eff" style="background:#4a4a4a"></div>
             <div class="eff" style="background:#6a5a4a"></div>
           </div>
-
           <button class="flip" id="flip" aria-label="Cambia camera">
-            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 8a6 6 0 0 1 10-2l2 2M21 16a6 6 0 0 1-10 2l-2-2"/><path d="M15 6h2.5V3.5M9 18H6.5V20.5"/>
-            </svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a6 6 0 0 1 10-2l2 2M21 16a6 6 0 0 1-10 2l-2-2"/><path d="M15 6h2.5V3.5M9 18H6.5V20.5"/></svg>
           </button>
         </div>
-
-        <div class="modes">
-          <span>Post</span><span class="on">Storia</span><span>Reel</span><span>Live</span>
-        </div>
+        <div class="modes"><span>Post</span><span class="on">Storia</span><span>Reel</span><span>Live</span></div>
       </div>
     </div>
 
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
-    <div class="flash" id="flash"></div>
 
-    <!-- Screen 3: reveal -->
-    <div class="reveal" id="reveal">
-      <img class="reveal-image" id="revealImg" src="assets/ck-revealed.webp" alt="Calvin Klein Jeans — campagna d'archivio">
-      <div class="reveal-dark" id="revealDark"></div>
-      <div class="reveal-title" id="revealTitle">Calvin Klein Archive</div>
-      <a class="reveal-cta" id="revealCta" href="#">Scopri l'archivio</a>
+    <!-- popup -->
+    <div class="discover" id="discover">
+      <div class="bubble" id="discoverBtn">Click to discover the archive</div>
+      <div class="stem"></div>
+      <div class="dot"></div>
     </div>
 
     <!-- desktop gate -->
@@ -202,115 +167,94 @@
       <div class="ph">📱</div>
       <h2>Esperienza AR</h2>
       <p>La fotocamera è disponibile solo da smartphone. Apri questa pagina dal
-         telefono per inquadrare il print Calvin Klein.</p>
-      <button id="demoAlt">▶ Anteprima reveal</button>
+         telefono e inquadra il print Calvin Klein.</p>
+      <button id="demoAlt">▶ Anteprima</button>
     </div>
-
   </div>
 
   <script type="module">
+    import * as THREE from 'three';
+    import { MindARThree } from './vendor/mindar-image-three.prod.js';
+
     const ARCHIVE_URL = "../index.html?archive=1";
-    const MIND_URL = "assets/print_1999_ss_adv_print_jeans_001.mind";
+    const MIND_URL = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
+    const REVEAL_IMG = "assets/print_1999_ss_adv_print_jeans_001.jpg";
 
     const $ = (id) => document.getElementById(id);
-    const els = {
-      cam:$('cam'), ig:$('ig'), hint:$('hint'), flash:$('flash'),
-      shutter:$('shutter'), flip:$('flip'), close:$('closeBtn'),
-      reveal:$('reveal'), img:$('revealImg'), dark:$('revealDark'),
-      title:$('revealTitle'), cta:$('revealCta'),
-      gate:$('gate'), demoAlt:$('demoAlt'),
-    };
-    els.cta.href = ARCHIVE_URL;
+    const ui = { ig:$('ig'), hint:$('hint'), discover:$('discover'),
+                 discoverBtn:$('discoverBtn'), gate:$('gate'), demoAlt:$('demoAlt'),
+                 sim:$('sim'), close:$('closeBtn') };
 
-    let revealed = false, controller = null, stream = null, facing = 'environment';
+    const goArchive = () => { window.location.href = ARCHIVE_URL; };
+    ui.discoverBtn.addEventListener('click', goArchive);
+    ui.close.addEventListener('click', goArchive);
 
-    /* ---------- Screen 3: reveal sequence (~2.5s) ---------- */
-    function runReveal() {
-      if (revealed) return; revealed = true;
+    let found = false;
+    function onFound() {
+      if (found) return; found = true;
       if (navigator.vibrate) navigator.vibrate(60);
-      els.flash.classList.add('go');
-      stopAR();
-      setTimeout(() => {
-        els.reveal.classList.add('on');
-        setTimeout(() => els.img.classList.add('revealed'), 300);
-        setTimeout(() => els.img.classList.add('pulse'), 1000);
-        setTimeout(() => els.img.classList.remove('pulse'), 1400);
-        setTimeout(() => els.dark.classList.add('clear'), 1500);
-        setTimeout(() => els.title.classList.add('in'), 1800);
-        setTimeout(() => els.cta.classList.add('in'), 2200);
-      }, 320);
+      ui.hint.classList.add('hide');
+      ui.ig.classList.add('dim');                 // sfuma la chrome, resta l'AR
+      setTimeout(() => ui.discover.classList.add('in'), 700);  // il popup "esce dalla foto"
     }
+    // esposto per il test / anteprima desktop
+    window.__onFound = onFound;
 
-    // tap shutter = scatto/anteprima (e fallback se il riconoscimento non parte)
-    els.shutter.addEventListener('click', runReveal);
-    els.demoAlt.addEventListener('click', runReveal);
-    els.close.addEventListener('click', () => { window.location.href = ARCHIVE_URL; });
-
-    /* ---------- camera ---------- */
-    async function startCamera() {
-      stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode: facing }, audio:false });
-      els.cam.srcObject = stream;
-      await els.cam.play().catch(()=>{});
-      // attendi le dimensioni reali del video
-      if (!els.cam.videoWidth) {
-        await new Promise(res => els.cam.addEventListener('loadedmetadata', res, { once:true }));
-      }
-    }
-    els.flip.addEventListener('click', async () => {
-      facing = (facing === 'environment') ? 'user' : 'environment';
-      stopAR(); if (stream) stream.getTracks().forEach(t=>t.stop());
-      try { await startCamera(); startAR(); } catch(e){}
-    });
-
-    function stopAR() {
-      try { controller && controller.stopProcessVideo && controller.stopProcessVideo(); } catch(e){}
-    }
-
-    /* ---------- MindAR detection sul nostro <video> ---------- */
-    async function startAR() {
-      try {
-        const head = await fetch(MIND_URL, { method:'HEAD' });
-        if (!head.ok) return; // nessun target: resta la cam + tap shutter
-        const { Controller } = await import('./vendor/mindar-image.prod.js');
-        controller = new Controller({
-          inputWidth: els.cam.videoWidth || 640,
-          inputHeight: els.cam.videoHeight || 480,
-          maxTrack: 1,
-          onUpdate: (data) => {
-            if (data && data.type === 'updateMatrix' && data.worldMatrix) runReveal();
-          },
-        });
-        await controller.addImageTargets(MIND_URL);
-        await controller.dummyRun(els.cam);
-        controller.processVideo(els.cam);
-      } catch (e) {
-        // se il riconoscimento non parte, l'esperienza resta usabile via tap sullo shutter
-        console.warn('AR non avviato:', e);
-      }
-    }
-
-    /* ---------- init ---------- */
     function isMobileDevice() {
       const ua = navigator.userAgent || '';
       return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)
         || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
     }
 
+    async function startAR() {
+      const mindar = new MindARThree({
+        container: $('ar'),
+        imageTargetSrc: MIND_URL,
+        uiScanning: 'no', uiLoading: 'no', uiError: 'no',
+        filterMinCF: 0.0001, filterBeta: 0.001,   // tracking un po' più stabile
+      });
+      const { renderer, scene, camera } = mindar;
+      renderer.outputEncoding = THREE.sRGBEncoding;
+
+      const anchor = mindar.addAnchor(0);
+      const tex = new THREE.TextureLoader().load(REVEAL_IMG);
+      tex.encoding = THREE.sRGBEncoding;
+      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0 });
+      const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.625), mat);  // target ratio 1.6:1
+      anchor.group.add(plane);
+
+      let targetOpacity = 0;
+      anchor.onTargetFound = () => { targetOpacity = 1; onFound(); };
+      anchor.onTargetLost  = () => { /* lascia il reveal; il popup resta */ };
+
+      await mindar.start();
+      renderer.setAnimationLoop(() => {
+        mat.opacity += (targetOpacity - mat.opacity) * 0.08;   // dissolve blur→nitido
+        renderer.render(scene, camera);
+      });
+    }
+
+    // anteprima desktop: simula il riconoscimento
+    function simulate() {
+      ui.sim.classList.add('on');
+      onFound();
+    }
+    ui.demoAlt.addEventListener('click', simulate);
+
     async function init() {
-      if (!isMobileDevice()) {           // desktop -> niente camera
-        els.ig.style.display = 'none';
-        els.cam.style.display = 'none';
-        els.gate.classList.add('on');
+      if (!isMobileDevice()) {            // desktop -> gate, niente camera
+        ui.ig.style.display = 'none';
+        ui.gate.classList.add('on');
         return;
       }
-      setTimeout(() => els.hint.classList.add('hide'), 3500);
-      try { await startCamera(); }
-      catch (e) {                         // permesso negato / no camera
-        els.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
-        els.hint.classList.remove('hide');
-        return;
+      setTimeout(() => ui.hint.classList.add('hide'), 4000);
+      try {
+        await startAR();
+      } catch (e) {
+        ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
+        ui.hint.classList.remove('hide');
+        console.error('AR error:', e);
       }
-      startAR();
     }
     init();
   </script>
