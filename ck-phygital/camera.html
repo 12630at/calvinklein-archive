@@ -30,11 +30,11 @@
       .stage{ border-radius:38px; border:10px solid #000; box-shadow:0 30px 80px rgba(0,0,0,.6); }
     }
 
-    /* MindAR mette qui video + canvas */
+    /* MindAR mette qui video + canvas + cssRenderer */
     #ar { position:absolute; inset:0; z-index:1; }
-    #ar video, #ar canvas { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; object-fit:cover!important; }
+    #ar video, #ar canvas, #ar > div { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; }
+    #ar video, #ar canvas { object-fit:cover!important; }
 
-    /* scrims */
     .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:2;
       background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; }
     .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:2;
@@ -46,10 +46,9 @@
     .ig.dim { opacity:0; pointer-events:none; }
     .ig-top { display:flex; align-items:flex-start; justify-content:space-between; padding:14px 16px 0; }
     .ig-top .right { display:flex; flex-direction:column; gap:22px; align-items:center; padding-top:2px; }
-    .icbtn { width:26px; height:26px; display:grid; place-items:center; color:#fff; background:none; border:none; cursor:pointer;
+    .icbtn { width:26px; height:26px; display:grid; place-items:center; color:#fff; background:none; border:none;
       filter:drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
     .icbtn svg{ width:26px; height:26px; } .ig-top .close svg{ width:24px; height:24px; }
-
     .ig-bottom { position:relative; padding-bottom:18px; }
     .filter-label { text-align:center; color:#fff; margin-bottom:12px; filter:drop-shadow(0 1px 4px rgba(0,0,0,.6)); }
     .filter-label b { display:block; font-size:14px; font-weight:600; }
@@ -76,38 +75,37 @@
       color:#fff; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
     .modes span{ opacity:.6; } .modes span.on{ opacity:1; font-weight:700; }
 
-    /* hint */
     .hint { position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:4;
       background:rgba(0,0,0,.45); color:#fff; font-size:12.5px; padding:8px 14px; border-radius:18px;
       backdrop-filter:blur(6px); white-space:nowrap; transition:opacity .6s ease; }
     .hint.hide{ opacity:0; }
 
-    /* ============ popup "discover the archive" ============ */
-    .discover { position:absolute; left:50%; bottom:120px; transform:translate(-50%, 30px) scale(.85);
-      z-index:6; opacity:0; pointer-events:none; transition:opacity .5s ease, transform .55s cubic-bezier(.2,.9,.25,1.2);
-      display:flex; flex-direction:column; align-items:center; gap:10px; }
-    .discover.in { opacity:1; transform:translate(-50%, 0) scale(1); pointer-events:auto; }
-    .discover .bubble { background:rgba(255,255,255,.96); color:#000; font-family:"Klein",serif; font-weight:500;
-      font-size:14px; letter-spacing:.14em; text-transform:uppercase; padding:14px 26px; border-radius:30px;
-      box-shadow:0 10px 40px rgba(0,0,0,.5); white-space:nowrap; cursor:pointer; }
-    .discover .bubble:active { transform:scale(.97); }
-    .discover .stem { width:2px; height:0; background:rgba(255,255,255,.85); transition:height .4s ease .15s; }
-    .discover.in .stem { height:26px; }
-    .discover .dot { width:10px; height:10px; border-radius:50%; background:#fff; box-shadow:0 0 0 5px rgba(255,255,255,.25); }
+    /* ============ AR text "discover" (in CSS3D oppure overlay desktop) ============ */
+    .ar-text {
+      width:260px; text-align:center; opacity:0; transition:opacity .6s ease, transform .6s cubic-bezier(.2,.9,.25,1.2);
+      transform:translateY(14px);
+    }
+    .ar-text.in { opacity:1; transform:translateY(0); }
+    .ar-text .bubble {
+      display:inline-block; background:rgba(255,255,255,.96); color:#000; font-family:"Klein",serif; font-weight:500;
+      font-size:15px; letter-spacing:.13em; text-transform:uppercase; padding:14px 24px; border-radius:30px;
+      box-shadow:0 10px 40px rgba(0,0,0,.55); white-space:nowrap; cursor:pointer;
+    }
+    .ar-text .bubble:active { transform:scale(.97); }
+    /* quando è overlay desktop (non CSS3D) */
+    .ar-text.overlay { position:absolute; left:50%; top:34%; margin-left:-130px; z-index:7; }
 
-    /* desktop sim image */
     .sim { position:absolute; inset:0; z-index:5; display:none; }
     .sim.on { display:block; }
     .sim img { width:100%; height:100%; object-fit:cover; }
 
-    /* ============ desktop gate ============ */
     .gate{ position:absolute; inset:0; z-index:12; display:none; flex-direction:column;
       align-items:center; justify-content:center; text-align:center; color:#fff; background:#000; padding:0 38px; gap:16px; }
     .gate.on{ display:flex; }
     .gate .ph{ font-size:42px; } .gate h2{ font-family:"Klein",serif; font-weight:300; font-size:18px; text-transform:uppercase; letter-spacing:.18em; }
     .gate p{ font-size:13px; line-height:1.55; color:#bbb; max-width:270px; }
     .gate button{ margin-top:6px; background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.4); color:#fff;
-      font-family:"Klein",serif; font-size:12px; letter-spacing:.12em; text-transform:uppercase; padding:11px 20px; border-radius:30px; cursor:pointer; }
+      font-family:"Klein",serif; font-size:12px; letter-spacing:.12em; text-transform:uppercase; padding:11px 20px; border-radius:30px; }
   </style>
 </head>
 <body>
@@ -116,7 +114,6 @@
     <div class="scrim-top"></div>
     <div class="scrim-bot"></div>
 
-    <!-- desktop simulation image (sotto la chrome) -->
     <div class="sim" id="sim"><img src="assets/print_1999_ss_adv_print_jeans_001.jpg" alt=""></div>
 
     <!-- Instagram camera chrome -->
@@ -130,7 +127,6 @@
           <button class="icbtn" aria-label="Impostazioni"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/></svg></button>
         </div>
       </div>
-
       <div class="ig-bottom">
         <div class="filter-label"><b>Calvin Klein Archive</b><span>@calvinklein</span></div>
         <div class="tray">
@@ -138,14 +134,11 @@
           <div class="effects">
             <div class="eff" style="background:#5a4a44"></div>
             <div class="eff" style="background:#3d4b55"></div>
-            <button class="shutter" aria-label="Effetto attivo">
-              <span class="ring"></span>
-              <span class="core"><img src="assets/blur_print_1999_ss_adv_print_jeans_001.jpg" alt=""></span>
-            </button>
+            <button class="shutter" aria-label="Effetto attivo"><span class="ring"></span><span class="core"><img src="assets/blur_print_1999_ss_adv_print_jeans_001.jpg" alt=""></span></button>
             <div class="eff" style="background:#4a4a4a"></div>
             <div class="eff" style="background:#6a5a4a"></div>
           </div>
-          <button class="flip" id="flip" aria-label="Cambia camera">
+          <button class="flip" aria-label="Cambia camera">
             <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8a6 6 0 0 1 10-2l2 2M21 16a6 6 0 0 1-10 2l-2-2"/><path d="M15 6h2.5V3.5M9 18H6.5V20.5"/></svg>
           </button>
         </div>
@@ -155,14 +148,11 @@
 
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
 
-    <!-- popup -->
-    <div class="discover" id="discover">
-      <div class="bubble" id="discoverBtn">Click to discover the archive</div>
-      <div class="stem"></div>
-      <div class="dot"></div>
+    <!-- testo AR (verrà ancorato sopra la campagna in CSS3D; su desktop diventa overlay) -->
+    <div class="ar-text" id="arText">
+      <span class="bubble" id="discoverBtn">Click to discover the archive</span>
     </div>
 
-    <!-- desktop gate -->
     <div class="gate" id="gate">
       <div class="ph">📱</div>
       <h2>Esperienza AR</h2>
@@ -175,30 +165,51 @@
   <script type="module">
     import * as THREE from 'three';
     import { MindARThree } from './vendor/mindar-image-three.prod.js';
+    import { CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
     const ARCHIVE_URL = "../index.html?archive=1";
-    const MIND_URL = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
-    const REVEAL_IMG = "assets/print_1999_ss_adv_print_jeans_001.jpg";
+    const MIND_URL    = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
+    const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
+    const BLUR_IMG    = "assets/blur_print_1999_ss_adv_print_jeans_001.jpg";
+    const PLANE_W = 1, PLANE_H = 0.625;          // ratio target 1.6:1
+    const TEXT_DELAY = 1400;                       // ritardo comparsa testo dopo il reveal
 
     const $ = (id) => document.getElementById(id);
-    const ui = { ig:$('ig'), hint:$('hint'), discover:$('discover'),
-                 discoverBtn:$('discoverBtn'), gate:$('gate'), demoAlt:$('demoAlt'),
-                 sim:$('sim'), close:$('closeBtn') };
+    const ui = { ig:$('ig'), hint:$('hint'), arText:$('arText'), discoverBtn:$('discoverBtn'),
+                 gate:$('gate'), demoAlt:$('demoAlt'), sim:$('sim'), close:$('closeBtn') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
     ui.discoverBtn.addEventListener('click', goArchive);
     ui.close.addEventListener('click', goArchive);
 
-    let found = false;
+    // ---- fotocamera a risoluzione massima: MindAR chiede solo {facingMode}, qui aggiungo l'ideale alto ----
+    if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+      navigator.mediaDevices.getUserMedia = (c) => {
+        if (c && c.video && typeof c.video === 'object') {
+          c.video.width     = { ideal: 1920, max: 1920 };
+          c.video.height    = { ideal: 1080, max: 1080 };
+          c.video.frameRate = { ideal: 30 };
+        }
+        return orig(c);
+      };
+    }
+
+    let found = false, revealStart = null;
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+    function showText() { setTimeout(() => ui.arText.classList.add('in'), TEXT_DELAY); }
+
     function onFound() {
       if (found) return; found = true;
       if (navigator.vibrate) navigator.vibrate(60);
       ui.hint.classList.add('hide');
-      ui.ig.classList.add('dim');                 // sfuma la chrome, resta l'AR
-      setTimeout(() => ui.discover.classList.add('in'), 700);  // il popup "esce dalla foto"
+      ui.ig.classList.add('dim');     // sfuma la chrome, resta l'AR
+      revealStart = performance.now();
+      showText();
     }
-    // esposto per il test / anteprima desktop
-    window.__onFound = onFound;
+    window.__onFound = onFound;        // per test / anteprima
 
     function isMobileDevice() {
       const ua = navigator.userAgent || '';
@@ -211,46 +222,65 @@
         container: $('ar'),
         imageTargetSrc: MIND_URL,
         uiScanning: 'no', uiLoading: 'no', uiError: 'no',
-        filterMinCF: 0.0001, filterBeta: 0.001,   // tracking un po' più stabile
+        filterMinCF: 0.0001, filterBeta: 0.001,
       });
-      const { renderer, scene, camera } = mindar;
-      renderer.outputEncoding = THREE.sRGBEncoding;
+      const { renderer, cssRenderer, scene, cssScene, camera } = mindar;
 
+      // --- anchor immagine: crossfade sfocato -> nitido (animazione reveal) ---
       const anchor = mindar.addAnchor(0);
-      const tex = new THREE.TextureLoader().load(REVEAL_IMG);
-      tex.encoding = THREE.sRGBEncoding;
-      const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0 });
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(1, 0.625), mat);  // target ratio 1.6:1
-      anchor.group.add(plane);
+      const loader = new THREE.TextureLoader();
+      const mk = (url) => { const t = loader.load(url); t.encoding = THREE.sRGBEncoding; return t; };
+      const matBlur  = new THREE.MeshBasicMaterial({ map: mk(BLUR_IMG),  transparent:true, opacity:0 });
+      const matSharp = new THREE.MeshBasicMaterial({ map: mk(SHARP_IMG), transparent:true, opacity:0 });
+      const geo = new THREE.PlaneGeometry(PLANE_W, PLANE_H);
+      const planeBlur  = new THREE.Mesh(geo, matBlur);
+      const planeSharp = new THREE.Mesh(geo, matSharp);
+      planeSharp.position.z = 0.002;
+      anchor.group.add(planeBlur, planeSharp);
 
-      let targetOpacity = 0;
-      anchor.onTargetFound = () => { targetOpacity = 1; onFound(); };
-      anchor.onTargetLost  = () => { /* lascia il reveal; il popup resta */ };
+      anchor.onTargetFound = onFound;
+
+      // --- anchor CSS: testo AR sopra la campagna ---
+      const cssAnchor = mindar.addCSSAnchor(0);
+      const cssObj = new CSS3DObject(ui.arText);
+      cssObj.position.set(0, PLANE_H/2 + 0.16, 0.02);   // sopra il bordo alto della campagna
+      cssObj.scale.setScalar(0.0026);                    // px -> unità mondo
+      cssAnchor.group.add(cssObj);
 
       await mindar.start();
+
       renderer.setAnimationLoop(() => {
-        mat.opacity += (targetOpacity - mat.opacity) * 0.08;   // dissolve blur→nitido
+        if (revealStart !== null) {
+          const t = clamp01((performance.now() - revealStart) / 1600);
+          const e = easeOutCubic(t);
+          matBlur.opacity  = clamp01(t / 0.18);                 // appare subito (soft)
+          matSharp.opacity = clamp01((t - 0.18) / 0.82);        // dissolve verso il nitido
+          const s = 1 + 0.05 * (1 - e);                          // 1.05 -> 1.0
+          planeBlur.scale.setScalar(s); planeSharp.scale.setScalar(s);
+        }
         renderer.render(scene, camera);
+        cssRenderer.render(cssScene, camera);
       });
     }
 
-    // anteprima desktop: simula il riconoscimento
+    // anteprima desktop (no AR): mostra il nitido + testo overlay
     function simulate() {
+      ui.gate.classList.remove('on');     // togli il gate per mostrare l'anteprima
       ui.sim.classList.add('on');
+      ui.arText.classList.add('overlay');
       onFound();
     }
     ui.demoAlt.addEventListener('click', simulate);
 
     async function init() {
-      if (!isMobileDevice()) {            // desktop -> gate, niente camera
+      if (!isMobileDevice()) {
         ui.ig.style.display = 'none';
         ui.gate.classList.add('on');
         return;
       }
       setTimeout(() => ui.hint.classList.add('hide'), 4000);
-      try {
-        await startAR();
-      } catch (e) {
+      try { await startAR(); }
+      catch (e) {
         ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
         ui.hint.classList.remove('hide');
         console.error('AR error:', e);

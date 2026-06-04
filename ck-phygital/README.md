@@ -15,10 +15,12 @@ La root smista per dispositivo:
 
 1. `ck-phygital/index.html` — mock Instagram 1:1 (390×844). Post `@calvinklein` con il
    print sfocato e il CTA **"Prova il filtro →"** che apre la camera.
-2. `camera.html` — **fotocamera di Instagram 1:1** (story/effetto AR). Inquadri il print
-   sfocato e MindAR ci **sovrappone in AR**, ancorata al target, la versione nitida:
-   il print si "trasforma" sul posto (nessuno shutter da premere).
-3. Esce un popup **"Click to discover the archive"** dalla foto → tap → archivio
+2. `camera.html` — **fotocamera di Instagram 1:1** (story/effetto AR), feed a **risoluzione
+   alta** (1920×1080). Inquadri il print sfocato e MindAR ci **sovrappone in AR**, ancorata
+   al target, la versione nitida con un'**animazione di reveal** (dissolvenza sfocato→nitido +
+   settle): il print si "trasforma" sul posto (nessuno shutter).
+3. Con un piccolo **ritardo**, sopra la campagna compare in **AR** il testo
+   **"Click to discover the archive"** (ancorato, via CSS3D) → tap → archivio
    (`../index.html?archive=1`).
 
 ## Nomenclatura asset
