@@ -3,12 +3,20 @@
 Prototipo phygital Calvin Klein Archive (esame IUAD · UX/UI).
 Un print d'archivio CK sfocato viene "svelato" da un filtro AR.
 
-## Flusso
+## Entry point (link unico)
 
-1. `index.html` — mock Instagram 1:1 (390×844). Post `@calvinklein` con il print
-   sfocato e il CTA **"Prova il filtro →"** che apre la camera.
+Il repo ha **un solo URL** (`…/calvinklein-archive/` = root `index.html` = archivio).
+La root smista per dispositivo:
+- **Desktop** → apre direttamente l'**archivio**.
+- **Mobile** → redirect a `ck-phygital/index.html` (esperienza phygital).
+- Ritorno dal reveal: `?archive=1` evita il redirect e mostra l'archivio anche su mobile.
+
+## Flusso (mobile)
+
+1. `ck-phygital/index.html` — mock Instagram 1:1 (390×844). Post `@calvinklein` con il
+   print sfocato e il CTA **"Prova il filtro →"** che apre la camera.
 2. `camera.html` — Screen 2 (camera AR / MindAR) + Screen 3 (reveal animation) con
-   CTA finale **"Scopri l'archivio"** che porta alla pagina archivio.
+   CTA finale **"Scopri l'archivio"** → `../index.html?archive=1`.
 
 ## Come testare
 
