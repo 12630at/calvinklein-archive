@@ -270,9 +270,13 @@
       await loadScript('https://aframe.io/releases/1.4.2/aframe.min.js');
       await loadScript('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js');
 
+      // modalita' AR reale: nascondi i comandi di demo
       els.video.style.display = 'none';
+      els.demo.style.display = 'none';
+      els.notice.classList.add('hide');
+
       const scene = document.createElement('a-scene');
-      scene.setAttribute('mindar-image', 'imageTargetSrc: assets/targets.mind; autoStart: true; uiScanning: no; uiLoading: no; uiError: no;');
+      scene.setAttribute('mindar-image', 'imageTargetSrc: assets/print_1999_ss_adv_print_jeans_001.mind; autoStart: true; uiScanning: no; uiLoading: no; uiError: no;');
       scene.setAttribute('color-space', 'sRGB');
       scene.setAttribute('embedded', '');
       scene.setAttribute('renderer', 'colorManagement: true, physicallyCorrectLights');
@@ -295,7 +299,7 @@
     async function init() {
       try {
         // il target .mind esiste?
-        const head = await fetch('assets/targets.mind', { method: 'HEAD' });
+        const head = await fetch('assets/print_1999_ss_adv_print_jeans_001.mind', { method: 'HEAD' });
         if (head.ok) {
           await startMindAR();
           return;

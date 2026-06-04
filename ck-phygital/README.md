@@ -8,37 +8,36 @@ Un print d'archivio CK sfocato viene "svelato" da un filtro AR.
 1. `index.html` — mock Instagram 1:1 (390×844). Post `@calvinklein` con il print
    sfocato e il CTA **"Prova il filtro →"** che apre la camera.
 2. `camera.html` — Screen 2 (camera AR / MindAR) + Screen 3 (reveal animation) con
-   CTA finale **"Scopri l'archivio"**.
+   CTA finale **"Scopri l'archivio"** che porta alla pagina archivio.
 
 ## Come testare
 
-- Aprire su **smartphone** o in DevTools mobile a **390px**.
-- In `camera.html`, se il target AR non è ancora compilato, usare il pulsante
-  **"▶ Simula riconoscimento"** per far partire il reveal (utile in aula / desktop).
-- Dare i permessi camera al browser per vedere l'anteprima live.
+- Aprire su **smartphone** (o GitHub Pages) — la camera richiede **https/localhost**.
+- Inquadrare il print `assets/print_1999_ss_adv_print_jeans_001.jpg` (stampato o a
+  schermo): MindAR riconosce il target → reveal → CTA archivio.
+- Fallback senza target: se il `.mind` non c'è, compare il pulsante
+  **"▶ Simula riconoscimento"** (in modalità AR reale è nascosto).
 
 ## Asset
 
 | File | Origine |
 |---|---|
-| `assets/ck-blurred.jpg` | print sfocato fornito (`blur_1999_ss_adv_print_jeans_001.png`), con logo cK nitido |
-| `assets/ck-revealed.webp` | `1999_ss_adv_print_jeans_001.webp` del repo archivio (versione nitida) |
+| `assets/print_1999_ss_adv_print_jeans_001.jpg` | print sfocato fornito (logo cK nitido) |
+| `assets/print_1999_ss_adv_print_jeans_001.mind` | target MindAR **compilato** da quell'immagine |
+| `assets/ck-revealed.webp` | `1999_ss_adv_print_jeans_001.webp` del repo (versione nitida) |
 | `assets/ck-logo.svg` | `monogram_logo.svg` del repo |
 | `fonts/Klein-*.woff2` | font Klein del repo |
-| `assets/targets.mind` | **da compilare** (vedi sotto) — non incluso |
 
-## Compilare il target MindAR (prima della presentazione)
+## Ricompilare il target (solo se cambia il print)
 
-1. Compilatore: https://hiukim.github.io/mind-ar-js-doc/tools/compile
-2. Caricare `assets/ck-blurred.jpg` (la stessa immagine del print stampato).
-3. Scaricare il `.mind` e salvarlo come **`assets/targets.mind`**.
-4. `camera.html` rileva da solo il file e passa alla modalità AR reale
-   (evento `targetFound` → reveal). Senza file resta la modalità Demo.
+Compilatore: https://hiukim.github.io/mind-ar-js-doc/tools/compile → caricare il `.jpg`
+→ salvare il `.mind` con lo stesso nome del print. `camera.html` lo rileva da solo.
 
-## Da completare
+## Config
 
-- `ARCHIVE_URL` in `camera.html` (in alto nello `<script>`): URL finale
-  dell'archivio CK (ora punta a `../index.html`).
+- `ARCHIVE_URL` (in alto nello `<script>` di `camera.html`) = `../index.html`:
+  sullo stesso sito GitHub Pages punta alla home dell'archivio. Sostituire con un
+  URL assoluto solo se l'archivio è hostato su un dominio diverso.
 
 ## Nota per il prof
 
