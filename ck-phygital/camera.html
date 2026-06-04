@@ -30,15 +30,17 @@
       .stage{ border-radius:38px; border:10px solid #000; box-shadow:0 30px 80px rgba(0,0,0,.6); }
     }
 
-    /* MindAR mette qui video + canvas + cssRenderer */
     #ar { position:absolute; inset:0; z-index:1; }
-    #ar video, #ar canvas, #ar > div { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; }
-    #ar video, #ar canvas { object-fit:cover!important; }
+    #ar video, #ar canvas { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; object-fit:cover!important; }
 
     .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:2;
       background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; }
     .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:2;
       background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0)); pointer-events:none; }
+
+    /* tap-catcher: attivo quando compare il testo AR -> porta all'archivio */
+    .tapcatch { position:absolute; inset:0; z-index:8; pointer-events:none; }
+    .tapcatch.on { pointer-events:auto; cursor:pointer; }
 
     /* ============ Instagram camera chrome ============ */
     .ig { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; justify-content:space-between;
@@ -80,20 +82,15 @@
       backdrop-filter:blur(6px); white-space:nowrap; transition:opacity .6s ease; }
     .hint.hide{ opacity:0; }
 
-    /* ============ AR text "discover" (in CSS3D oppure overlay desktop) ============ */
-    .ar-text {
-      width:260px; text-align:center; opacity:0; transition:opacity .6s ease, transform .6s cubic-bezier(.2,.9,.25,1.2);
-      transform:translateY(14px);
-    }
+    /* testo per anteprima desktop (overlay HTML) */
+    .ar-text { position:absolute; left:50%; top:34%; margin-left:-135px; width:270px; text-align:center;
+      z-index:9; opacity:0; transform:translateY(14px); transition:opacity .6s ease, transform .6s cubic-bezier(.2,.9,.25,1.2);
+      display:none; }
+    .ar-text.show { display:block; }
     .ar-text.in { opacity:1; transform:translateY(0); }
-    .ar-text .bubble {
-      display:inline-block; background:rgba(255,255,255,.96); color:#000; font-family:"Klein",serif; font-weight:500;
-      font-size:15px; letter-spacing:.13em; text-transform:uppercase; padding:14px 24px; border-radius:30px;
-      box-shadow:0 10px 40px rgba(0,0,0,.55); white-space:nowrap; cursor:pointer;
-    }
-    .ar-text .bubble:active { transform:scale(.97); }
-    /* quando è overlay desktop (non CSS3D) */
-    .ar-text.overlay { position:absolute; left:50%; top:34%; margin-left:-130px; z-index:7; }
+    .ar-text .bubble { display:inline-block; background:rgba(255,255,255,.96); color:#000; font-family:"Klein",serif;
+      font-weight:500; font-size:14px; letter-spacing:.13em; text-transform:uppercase; padding:14px 22px; border-radius:30px;
+      box-shadow:0 10px 40px rgba(0,0,0,.55); cursor:pointer; }
 
     .sim { position:absolute; inset:0; z-index:5; display:none; }
     .sim.on { display:block; }
@@ -113,10 +110,10 @@
     <div id="ar"></div>
     <div class="scrim-top"></div>
     <div class="scrim-bot"></div>
+    <div class="tapcatch" id="tapcatch"></div>
 
     <div class="sim" id="sim"><img src="assets/print_1999_ss_adv_print_jeans_001.jpg" alt=""></div>
 
-    <!-- Instagram camera chrome -->
     <div class="ig" id="ig">
       <div class="ig-top">
         <button class="icbtn close" id="closeBtn" aria-label="Chiudi">
@@ -148,10 +145,8 @@
 
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
 
-    <!-- testo AR (verrà ancorato sopra la campagna in CSS3D; su desktop diventa overlay) -->
-    <div class="ar-text" id="arText">
-      <span class="bubble" id="discoverBtn">Click to discover the archive</span>
-    </div>
+    <!-- testo per anteprima desktop -->
+    <div class="ar-text" id="arText"><span class="bubble" id="discoverBtn">Click to discover the archive</span></div>
 
     <div class="gate" id="gate">
       <div class="ph">📱</div>
@@ -165,51 +160,51 @@
   <script type="module">
     import * as THREE from 'three';
     import { MindARThree } from './vendor/mindar-image-three.prod.js';
-    import { CSS3DObject } from 'three/addons/renderers/CSS3DRenderer.js';
 
     const ARCHIVE_URL = "../index.html?archive=1";
     const MIND_URL    = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
     const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
-    const BLUR_IMG    = "assets/blur_print_1999_ss_adv_print_jeans_001.jpg";
-    const PLANE_W = 1, PLANE_H = 0.625;          // ratio target 1.6:1
-    const TEXT_DELAY = 1400;                       // ritardo comparsa testo dopo il reveal
+    const PLANE_W = 1, PLANE_H = 0.625;
+    const TEXT_DELAY = 1300;
 
     const $ = (id) => document.getElementById(id);
     const ui = { ig:$('ig'), hint:$('hint'), arText:$('arText'), discoverBtn:$('discoverBtn'),
-                 gate:$('gate'), demoAlt:$('demoAlt'), sim:$('sim'), close:$('closeBtn') };
+                 gate:$('gate'), demoAlt:$('demoAlt'), sim:$('sim'), close:$('closeBtn'), tap:$('tapcatch') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
     ui.discoverBtn.addEventListener('click', goArchive);
     ui.close.addEventListener('click', goArchive);
+    ui.tap.addEventListener('click', goArchive);
 
-    // ---- fotocamera a risoluzione massima: MindAR chiede solo {facingMode}, qui aggiungo l'ideale alto ----
+    // fotocamera ad alta risoluzione (MindAR di default usa il valore di default del browser)
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       navigator.mediaDevices.getUserMedia = (c) => {
         if (c && c.video && typeof c.video === 'object') {
-          c.video.width     = { ideal: 1920, max: 1920 };
-          c.video.height    = { ideal: 1080, max: 1080 };
+          c.video.width = { ideal: 1920, max: 1920 };
+          c.video.height = { ideal: 1080, max: 1080 };
           c.video.frameRate = { ideal: 30 };
         }
         return orig(c);
       };
     }
 
-    let found = false, revealStart = null;
     const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
     const clamp01 = (v) => Math.max(0, Math.min(1, v));
+    let found = false, revealStart = null, textStart = null;
 
-    function showText() { setTimeout(() => ui.arText.classList.add('in'), TEXT_DELAY); }
-
+    function showTextLater() {
+      setTimeout(() => { textStart = performance.now(); ui.tap.classList.add('on'); }, TEXT_DELAY);
+    }
     function onFound() {
       if (found) return; found = true;
       if (navigator.vibrate) navigator.vibrate(60);
       ui.hint.classList.add('hide');
-      ui.ig.classList.add('dim');     // sfuma la chrome, resta l'AR
+      ui.ig.classList.add('dim');
       revealStart = performance.now();
-      showText();
+      showTextLater();
     }
-    window.__onFound = onFound;        // per test / anteprima
+    window.__onFound = onFound;
 
     function isMobileDevice() {
       const ua = navigator.userAgent || '';
@@ -217,73 +212,93 @@
         || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
     }
 
+    // crea una texture col testo "Click to discover the archive" (pillola bianca)
+    async function makeTextTexture(text) {
+      try { await document.fonts.load('500 60px "Klein"'); } catch (e) {}
+      const c = document.createElement('canvas'); c.width = 1280; c.height = 224;
+      const x = c.getContext('2d');
+      const W = c.width, H = c.height, pad = 26, r = (H - pad*2)/2;
+      x.fillStyle = 'rgba(255,255,255,0.96)';
+      if (x.roundRect) { x.beginPath(); x.roundRect(pad, pad, W - pad*2, H - pad*2, r); x.fill(); }
+      else { x.fillRect(pad, pad, W - pad*2, H - pad*2); }
+      x.fillStyle = '#000';
+      x.textAlign = 'center'; x.textBaseline = 'middle';
+      try { x.letterSpacing = '5px'; } catch (e) {}
+      const T = text.toUpperCase(), maxW = W - pad*2 - 70;
+      let fs = 64; x.font = `500 ${fs}px "Klein", Georgia, serif`;
+      while (x.measureText(T).width > maxW && fs > 22) { fs -= 2; x.font = `500 ${fs}px "Klein", Georgia, serif`; }
+      x.fillText(T, W/2, H/2 + 2);
+      const tex = new THREE.CanvasTexture(c);
+      tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
+      return { tex, ratio: W / H };
+    }
+
     async function startAR() {
       const mindar = new MindARThree({
-        container: $('ar'),
-        imageTargetSrc: MIND_URL,
+        container: $('ar'), imageTargetSrc: MIND_URL,
         uiScanning: 'no', uiLoading: 'no', uiError: 'no',
         filterMinCF: 0.0001, filterBeta: 0.001,
       });
-      const { renderer, cssRenderer, scene, cssScene, camera } = mindar;
-
-      // --- anchor immagine: crossfade sfocato -> nitido (animazione reveal) ---
+      const { renderer, scene, camera } = mindar;
       const anchor = mindar.addAnchor(0);
-      const loader = new THREE.TextureLoader();
-      const mk = (url) => { const t = loader.load(url); t.encoding = THREE.sRGBEncoding; return t; };
-      const matBlur  = new THREE.MeshBasicMaterial({ map: mk(BLUR_IMG),  transparent:true, opacity:0 });
-      const matSharp = new THREE.MeshBasicMaterial({ map: mk(SHARP_IMG), transparent:true, opacity:0 });
-      const geo = new THREE.PlaneGeometry(PLANE_W, PLANE_H);
-      const planeBlur  = new THREE.Mesh(geo, matBlur);
-      const planeSharp = new THREE.Mesh(geo, matSharp);
-      planeSharp.position.z = 0.002;
-      anchor.group.add(planeBlur, planeSharp);
+
+      // --- piano reveal: focus pull (shader) sfocato -> nitido ---
+      const tex = new THREE.TextureLoader().load(SHARP_IMG);
+      tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
+      tex.generateMipmaps = true;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
+      const revealMat = new THREE.ShaderMaterial({
+        uniforms: { map:{value:tex}, uBias:{value:4.5}, uOpacity:{value:0} },
+        transparent: true,
+        vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+        fragmentShader: `uniform sampler2D map; uniform float uBias; uniform float uOpacity; varying vec2 vUv;
+          void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin, c.a*uOpacity);} `,
+      });
+      const revealPlane = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_W, PLANE_H), revealMat);
+      anchor.group.add(revealPlane);
+
+      // --- piano testo AR ancorato sopra la campagna ---
+      const { tex: textTex, ratio } = await makeTextTexture('Click to discover the archive');
+      const textMat = new THREE.MeshBasicMaterial({ map:textTex, transparent:true, opacity:0, depthTest:false });
+      const tW = 0.92, tH = tW / ratio;
+      const textPlane = new THREE.Mesh(new THREE.PlaneGeometry(tW, tH), textMat);
+      textPlane.position.set(0, PLANE_H/2 + tH/2 + 0.05, 0.03);
+      textPlane.renderOrder = 20;
+      anchor.group.add(textPlane);
 
       anchor.onTargetFound = onFound;
 
-      // --- anchor CSS: testo AR sopra la campagna ---
-      const cssAnchor = mindar.addCSSAnchor(0);
-      const cssObj = new CSS3DObject(ui.arText);
-      cssObj.position.set(0, PLANE_H/2 + 0.16, 0.02);   // sopra il bordo alto della campagna
-      cssObj.scale.setScalar(0.0026);                    // px -> unità mondo
-      cssAnchor.group.add(cssObj);
-
       await mindar.start();
-
       renderer.setAnimationLoop(() => {
         if (revealStart !== null) {
-          const t = clamp01((performance.now() - revealStart) / 1600);
+          const t = clamp01((performance.now() - revealStart) / 1300);
           const e = easeOutCubic(t);
-          matBlur.opacity  = clamp01(t / 0.18);                 // appare subito (soft)
-          matSharp.opacity = clamp01((t - 0.18) / 0.82);        // dissolve verso il nitido
-          const s = 1 + 0.05 * (1 - e);                          // 1.05 -> 1.0
-          planeBlur.scale.setScalar(s); planeSharp.scale.setScalar(s);
+          revealMat.uniforms.uOpacity.value = clamp01(t / 0.18);
+          revealMat.uniforms.uBias.value = 4.5 * (1 - e);
+        }
+        if (textStart !== null) {
+          textMat.opacity = easeOutCubic(clamp01((performance.now() - textStart) / 600));
         }
         renderer.render(scene, camera);
-        cssRenderer.render(cssScene, camera);
       });
     }
 
-    // anteprima desktop (no AR): mostra il nitido + testo overlay
     function simulate() {
-      ui.gate.classList.remove('on');     // togli il gate per mostrare l'anteprima
+      ui.gate.classList.remove('on');
       ui.sim.classList.add('on');
-      ui.arText.classList.add('overlay');
+      ui.arText.classList.add('show');
       onFound();
+      setTimeout(() => ui.arText.classList.add('in'), TEXT_DELAY);
     }
     ui.demoAlt.addEventListener('click', simulate);
 
     async function init() {
-      if (!isMobileDevice()) {
-        ui.ig.style.display = 'none';
-        ui.gate.classList.add('on');
-        return;
-      }
+      if (!isMobileDevice()) { ui.ig.style.display = 'none'; ui.gate.classList.add('on'); return; }
       setTimeout(() => ui.hint.classList.add('hide'), 4000);
       try { await startAR(); }
       catch (e) {
         ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
-        ui.hint.classList.remove('hide');
-        console.error('AR error:', e);
+        ui.hint.classList.remove('hide'); console.error('AR error:', e);
       }
     }
     init();
