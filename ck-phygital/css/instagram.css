@@ -1,0 +1,214 @@
+/* ===========================================================
+   Calvin Klein Archive — Phygital Prototype
+   Screen 1: mock Instagram 1:1 (iPhone 14 — 390 x 844)
+   =========================================================== */
+
+@font-face {
+  font-family: "Klein";
+  src: url("../fonts/Klein-Medium.woff2") format("woff2");
+  font-weight: 500;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Klein";
+  src: url("../fonts/Klein-Light.woff2") format("woff2");
+  font-weight: 300;
+  font-display: swap;
+}
+
+:root {
+  --ig-bg: #ffffff;
+  --ig-text: #000000;
+  --ig-muted: #737373;
+  --ig-border: #dbdbdb;
+  --ig-blue: #0095f6;
+  --vw: 390px;   /* viewport mock width  */
+  --vh: 844px;   /* viewport mock height */
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+html, body {
+  height: 100%;
+  background: #111;        /* fuori dal "telefono" su desktop */
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  color: var(--ig-text);
+}
+
+/* ---- contenitore "telefono": 1:1 su mobile, centrato su desktop ---- */
+.phone {
+  position: relative;
+  width: 100vw;
+  max-width: var(--vw);
+  height: 100vh;
+  max-height: var(--vh);
+  margin: 0 auto;
+  background: var(--ig-bg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+@media (min-width: 430px) {
+  body { display: flex; align-items: center; justify-content: center; }
+  .phone {
+    width: var(--vw);
+    height: var(--vh);
+    border-radius: 38px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55);
+    border: 10px solid #000;
+  }
+}
+
+/* ---- status bar ---- */
+.statusbar {
+  flex: 0 0 auto;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.statusbar .icons { display: flex; gap: 6px; align-items: center; }
+.statusbar svg { display: block; }
+
+/* ---- top app bar ---- */
+.topbar {
+  flex: 0 0 auto;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 16px;
+  border-bottom: .5px solid var(--ig-border);
+}
+.topbar .logo {
+  font-family: "Grand Hotel", "Snell Roundhand", cursive;
+  font-size: 28px;
+  line-height: 1;
+}
+.topbar .actions { display: flex; gap: 22px; }
+
+/* ---- stories ---- */
+.stories {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 14px;
+  padding: 12px 14px;
+  overflow-x: auto;
+  border-bottom: .5px solid var(--ig-border);
+  scrollbar-width: none;
+}
+.stories::-webkit-scrollbar { display: none; }
+.story { width: 64px; text-align: center; flex: 0 0 auto; }
+.story .ring {
+  width: 62px; height: 62px; border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888);
+  display: flex; align-items: center; justify-content: center;
+}
+.story .ring.seen { background: var(--ig-border); }
+.story .ring.ck { background: linear-gradient(45deg,#000,#444); }
+.story .av {
+  width: 100%; height: 100%; border-radius: 50%;
+  border: 2px solid #fff; background: #efefef center/cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+}
+.story .av img { width: 64%; }
+.story .name {
+  font-size: 11px; color: var(--ig-text);
+  margin-top: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* ---- feed (scrollable) ---- */
+.feed { flex: 1 1 auto; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+.feed::-webkit-scrollbar { display: none; }
+
+/* ---- post ---- */
+.post { border-bottom: .5px solid var(--ig-border); }
+.post .head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px;
+}
+.post .head .av {
+  width: 34px; height: 34px; border-radius: 50%;
+  padding: 2px;
+  background: linear-gradient(45deg,#f09433,#dc2743,#bc1888);
+}
+.post .head .av .inner {
+  width: 100%; height: 100%; border-radius: 50%;
+  background: #fff; border: 2px solid #fff;
+  display: flex; align-items: center; justify-content: center;
+}
+.post .head .av img { width: 70%; }
+.post .head .who { flex: 1 1 auto; line-height: 1.2; }
+.post .head .who b { font-size: 14px; }
+.post .head .who .verified { color: var(--ig-blue); font-size: 12px; }
+.post .head .who span { display: block; font-size: 12px; color: var(--ig-muted); }
+.post .head .more { font-size: 20px; letter-spacing: 1px; }
+
+/* media + CTA overlay */
+.post .media {
+  position: relative;
+  width: 100%;
+  background: #000;
+  overflow: hidden;
+}
+.post .media img.shot {
+  width: 100%; height: auto;
+  display: block;
+}
+.post .media .badge {
+  position: absolute; top: 12px; right: 12px;
+  background: rgba(0,0,0,.55); color: #fff;
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  padding: 6px 10px; border-radius: 4px;
+  backdrop-filter: blur(4px);
+}
+.post .media .filter-cta {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; justify-content: center;
+  padding: 18px 14px 22px;
+  background: linear-gradient(to top, rgba(0,0,0,.65), rgba(0,0,0,0));
+}
+.post .media .filter-cta a {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #fff; color: #000;
+  font-family: "Klein", serif; font-weight: 500;
+  font-size: 14px; letter-spacing: .04em;
+  padding: 13px 26px; border-radius: 28px;
+  text-decoration: none;
+  box-shadow: 0 6px 20px rgba(0,0,0,.35);
+}
+.post .media .filter-cta a .arrow { font-size: 16px; transition: transform .2s; }
+.post .media .filter-cta a:active { transform: scale(.97); }
+
+/* action row */
+.post .actions {
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 14px 4px;
+}
+.post .actions .spacer { flex: 1 1 auto; }
+.post .meta { padding: 2px 14px 12px; }
+.post .meta .likes { font-size: 14px; font-weight: 600; }
+.post .meta .caption { font-size: 14px; line-height: 1.35; margin-top: 4px; }
+.post .meta .caption b { font-weight: 600; }
+.post .meta .caption .tag { color: #00376b; }
+.post .meta .time { font-size: 11px; color: var(--ig-muted); margin-top: 6px; text-transform: uppercase; letter-spacing: .03em; }
+
+/* ---- bottom nav ---- */
+.nav {
+  flex: 0 0 auto;
+  height: 52px;
+  display: flex; align-items: center; justify-content: space-around;
+  border-top: .5px solid var(--ig-border);
+  background: var(--ig-bg);
+}
+.nav .av {
+  width: 26px; height: 26px; border-radius: 50%;
+  border: 1.5px solid #000; background: #efefef center/cover;
+}
+
+svg.ic { width: 26px; height: 26px; stroke: #000; fill: none; stroke-width: 1.8; }
+svg.ic.fill { fill: #000; stroke: none; }

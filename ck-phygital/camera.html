@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Calvin Klein · AR Filter</title>
+  <meta name="theme-color" content="#000000" />
+
+  <!-- MindAR + A-Frame (caricati solo se il target .mind esiste, vedi script in fondo) -->
+
+  <style>
+    @font-face {
+      font-family: "Klein";
+      src: url("fonts/Klein-Medium.woff2") format("woff2");
+      font-weight: 500; font-display: swap;
+    }
+    @font-face {
+      font-family: "Klein";
+      src: url("fonts/Klein-Light.woff2") format("woff2");
+      font-weight: 300; font-display: swap;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { height: 100%; background: #000; overflow: hidden; font-family: "Klein", serif; }
+
+    /* contenitore 390x844 centrato su desktop, fullscreen su mobile */
+    .stage {
+      position: relative;
+      width: 100vw; height: 100vh;
+      max-width: 390px; max-height: 844px;
+      margin: 0 auto;
+      background: #000;
+      overflow: hidden;
+    }
+    @media (min-width: 430px) {
+      body { display: flex; align-items: center; justify-content: center; }
+      .stage { border-radius: 38px; border: 10px solid #000; box-shadow: 0 30px 80px rgba(0,0,0,.6); }
+    }
+
+    /* ---- feed camera (video demo o canvas MindAR) ---- */
+    #camera-feed, .stage video, .stage canvas, .stage a-scene {
+      position: absolute; inset: 0;
+      width: 100% !important; height: 100% !important;
+      object-fit: cover; z-index: 1;
+    }
+    #camera-feed { background: #0a0a0a; }
+
+    /* ---- vignette ai bordi ---- */
+    .vignette {
+      position: absolute; inset: 0; z-index: 2; pointer-events: none;
+      background: radial-gradient(ellipse at center,
+                  rgba(0,0,0,0) 38%, rgba(0,0,0,.55) 78%, rgba(0,0,0,.85) 100%);
+    }
+
+    /* ---- mirino centrale ---- */
+    .crosshair {
+      position: absolute; top: 50%; left: 50%; z-index: 3;
+      width: 60px; height: 60px; transform: translate(-50%, -50%);
+      opacity: .6; pointer-events: none;
+      transition: stroke .3s ease, opacity .3s ease, transform .3s ease;
+    }
+    .crosshair path, .crosshair line { stroke: #fff; transition: stroke .3s ease; }
+    .crosshair.locked { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+    .crosshair.locked path, .crosshair.locked line { stroke: #19d36b; }
+
+    /* ---- hint in basso ---- */
+    .hint {
+      position: absolute; left: 0; right: 0; bottom: 96px; z-index: 3;
+      text-align: center; color: #fff; font-size: 13px; font-weight: 300;
+      letter-spacing: .02em; padding: 0 32px;
+      transition: opacity .8s ease;
+    }
+    .hint.hide { opacity: 0; }
+
+    /* ---- pulsante demo ---- */
+    .demo {
+      position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%);
+      z-index: 4;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(255,255,255,.12); border: 1px solid rgba(255,255,255,.4);
+      color: #fff; font-family: "Klein", serif; font-size: 12px;
+      letter-spacing: .12em; text-transform: uppercase;
+      padding: 11px 20px; border-radius: 30px;
+      backdrop-filter: blur(8px); cursor: pointer;
+    }
+    .demo:active { transform: translateX(-50%) scale(.97); }
+
+    /* notice se il target non e' compilato */
+    .notice {
+      position: absolute; top: 18px; left: 50%; transform: translateX(-50%);
+      z-index: 4; max-width: 88%;
+      background: rgba(0,0,0,.55); color: #fff; font-size: 11px; line-height: 1.4;
+      letter-spacing: .02em; text-align: center;
+      padding: 8px 14px; border-radius: 8px; backdrop-filter: blur(6px);
+    }
+    .notice.hide { display: none; }
+
+    /* =========================================================
+       SCREEN 3 — REVEAL
+       ========================================================= */
+    .reveal {
+      position: absolute; inset: 0; z-index: 10;
+      display: none; align-items: center; justify-content: center;
+      background: #000; overflow: hidden;
+    }
+    .reveal.on { display: flex; }
+
+    .reveal-image {
+      position: absolute; inset: 0;
+      width: 100%; height: 100%; object-fit: cover;
+      filter: blur(40px); transform: scale(1.05);
+      transition: filter 1.2s ease-out, transform 1.4s ease-in-out;
+    }
+    .reveal-image.revealed { filter: blur(0px); transform: scale(1); }
+    .reveal-image.pulse   { transform: scale(1.04); }
+
+    .reveal-dark {
+      position: absolute; inset: 0;
+      background: rgba(0,0,0,.55);
+      transition: opacity 1s ease; opacity: 1;
+    }
+    .reveal-dark.clear { opacity: 0; }
+
+    .reveal-title {
+      position: absolute; left: 0; right: 0; top: 38%;
+      text-align: center; color: #fff;
+      font-family: "Klein", serif; font-weight: 300;
+      font-size: 22px; text-transform: uppercase;
+      letter-spacing: .12em; opacity: 0;
+      text-shadow: 0 2px 30px rgba(0,0,0,.7);
+      transition: opacity 1s ease, letter-spacing 1.2s ease;
+      z-index: 2;
+    }
+    .reveal-title.in { opacity: 1; letter-spacing: .34em; }
+
+    .reveal-cta {
+      position: absolute; left: 16px; right: 16px; bottom: 28px;
+      z-index: 2;
+      display: block; width: calc(100% - 32px);
+      background: #fff; color: #000;
+      font-family: "Klein", serif; font-weight: 500;
+      font-size: 15px; text-transform: uppercase; letter-spacing: .15em;
+      text-align: center; text-decoration: none;
+      padding: 16px 32px; border: none; cursor: pointer;
+      transform: translateY(80px); opacity: 0;
+      transition: transform .6s cubic-bezier(.2,.8,.2,1), opacity .6s ease;
+    }
+    .reveal-cta.in { transform: translateY(0); opacity: 1; }
+    .reveal-cta:active { background: #eee; }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+
+    <!-- camera feed (demo: <video>; AR: canvas MindAR) -->
+    <video id="camera-feed" autoplay muted playsinline></video>
+
+    <div class="vignette"></div>
+
+    <!-- mirino -->
+    <svg class="crosshair" id="crosshair" viewBox="0 0 60 60" fill="none">
+      <path d="M4 14V8a4 4 0 0 1 4-4h6"  stroke-width="2"/>
+      <path d="M46 4h6a4 4 0 0 1 4 4v6"  stroke-width="2"/>
+      <path d="M56 46v6a4 4 0 0 1-4 4h-6" stroke-width="2"/>
+      <path d="M14 56H8a4 4 0 0 1-4-4v-6" stroke-width="2"/>
+      <line x1="30" y1="24" x2="30" y2="36" stroke-width="1.5"/>
+      <line x1="24" y1="30" x2="36" y2="30" stroke-width="1.5"/>
+    </svg>
+
+    <div class="hint" id="hint">Punta la camera sul print Calvin Klein</div>
+
+    <div class="notice hide" id="notice"></div>
+    <div class="demo" id="demo">▶ Simula riconoscimento</div>
+
+    <!-- ===== REVEAL ===== -->
+    <div class="reveal" id="reveal">
+      <img class="reveal-image" id="revealImg" src="assets/ck-revealed.webp" alt="Calvin Klein Jeans — campagna d'archivio">
+      <div class="reveal-dark" id="revealDark"></div>
+      <div class="reveal-title" id="revealTitle">Calvin Klein Archive</div>
+      <a class="reveal-cta" id="revealCta" href="#">Scopri l'archivio</a>
+    </div>
+
+  </div>
+
+  <script>
+    /* ===========================================================
+       CONFIG
+       =========================================================== */
+    // URL dell'archivio CK (GitHub Pages / dominio finale). Da completare.
+    const ARCHIVE_URL = "../index.html";
+
+    const els = {
+      crosshair: document.getElementById('crosshair'),
+      hint:      document.getElementById('hint'),
+      demo:      document.getElementById('demo'),
+      notice:    document.getElementById('notice'),
+      reveal:    document.getElementById('reveal'),
+      img:       document.getElementById('revealImg'),
+      dark:      document.getElementById('revealDark'),
+      title:     document.getElementById('revealTitle'),
+      cta:       document.getElementById('revealCta'),
+      video:     document.getElementById('camera-feed'),
+    };
+    els.cta.setAttribute('href', ARCHIVE_URL);
+
+    let revealed = false;
+
+    // hint fade-out dopo 3s
+    setTimeout(() => els.hint.classList.add('hide'), 3000);
+
+    /* ===========================================================
+       SCREEN 3 — sequenza reveal (~2.5s, da brief)
+       =========================================================== */
+    function runReveal() {
+      if (revealed) return;
+      revealed = true;
+
+      // riconoscimento: mirino verde + haptic
+      els.crosshair.classList.add('locked');
+      if (navigator.vibrate) navigator.vibrate(100);
+
+      // breve attesa per far percepire il "lock", poi reveal
+      setTimeout(() => {
+        els.reveal.classList.add('on');
+
+        // 0.3s -> il blur si riduce
+        setTimeout(() => els.img.classList.add('revealed'), 300);
+        // 1.0s -> pulse di scala
+        setTimeout(() => els.img.classList.add('pulse'), 1000);
+        setTimeout(() => els.img.classList.remove('pulse'), 1400);
+        // 1.5s -> l'overlay scuro si dissipa
+        setTimeout(() => els.dark.classList.add('clear'), 1500);
+        // 1.8s -> compare il titolo
+        setTimeout(() => els.title.classList.add('in'), 1800);
+        // 2.2s -> CTA slide-up
+        setTimeout(() => els.cta.classList.add('in'), 2200);
+      }, 350);
+    }
+
+    els.demo.addEventListener('click', runReveal);
+
+    /* ===========================================================
+       SCREEN 2 — camera / AR
+       Se assets/targets.mind esiste -> MindAR reale.
+       Altrimenti -> camera live di anteprima + pulsante Demo.
+       =========================================================== */
+    function loadScript(src) {
+      return new Promise((res, rej) => {
+        const s = document.createElement('script');
+        s.src = src; s.onload = res; s.onerror = rej;
+        document.head.appendChild(s);
+      });
+    }
+
+    async function startPreviewCamera() {
+      // mostra la camera reale come sfondo (anteprima) in modalita' demo
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment' }, audio: false
+        });
+        els.video.srcObject = stream;
+      } catch (e) {
+        // permesso negato / no camera: resta lo sfondo scuro, la demo funziona comunque
+        els.video.style.display = 'none';
+      }
+    }
+
+    async function startMindAR() {
+      // carica le librerie e costruisce una a-scene minima per il target
+      await loadScript('https://aframe.io/releases/1.4.2/aframe.min.js');
+      await loadScript('https://cdn.jsdelivr.net/npm/mind-ar@1.2.5/dist/mindar-image-aframe.prod.js');
+
+      els.video.style.display = 'none';
+      const scene = document.createElement('a-scene');
+      scene.setAttribute('mindar-image', 'imageTargetSrc: assets/targets.mind; autoStart: true; uiScanning: no; uiLoading: no; uiError: no;');
+      scene.setAttribute('color-space', 'sRGB');
+      scene.setAttribute('embedded', '');
+      scene.setAttribute('renderer', 'colorManagement: true, physicallyCorrectLights');
+      scene.setAttribute('vr-mode-ui', 'enabled: false');
+      scene.setAttribute('device-orientation-permission-ui', 'enabled: false');
+
+      const cam = document.createElement('a-camera');
+      cam.setAttribute('position', '0 0 0');
+      cam.setAttribute('look-controls', 'enabled: false');
+      scene.appendChild(cam);
+
+      const target = document.createElement('a-entity');
+      target.setAttribute('mindar-image-target', 'targetIndex: 0');
+      target.addEventListener('targetFound', runReveal);
+      scene.appendChild(target);
+
+      document.getElementById('stage').insertBefore(scene, els.video);
+    }
+
+    async function init() {
+      try {
+        // il target .mind esiste?
+        const head = await fetch('assets/targets.mind', { method: 'HEAD' });
+        if (head.ok) {
+          await startMindAR();
+          return;
+        }
+      } catch (e) { /* fall through */ }
+
+      // nessun target compilato -> anteprima camera + demo
+      els.notice.textContent =
+        'Target AR non ancora compilato (assets/targets.mind). Usa "Simula riconoscimento" per la demo.';
+      els.notice.classList.remove('hide');
+      setTimeout(() => els.notice.classList.add('hide'), 6000);
+      startPreviewCamera();
+    }
+
+    init();
+  </script>
+</body>
+</html>
