@@ -136,7 +136,16 @@
     </div>
 
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
-    <div class="lookhint" id="lookhint">Muovi il telefono o trascina per esplorare</div>
+    <div class="lookhint" id="lookhint">Muovi il telefono per esplorare l'archivio 360°</div>
+
+    <!-- primer mobile: il tap chiede il permesso del giroscopio e avvia camera+AR -->
+    <div class="gate" id="startgate">
+      <div class="ph">📸</div>
+      <h2>Calvin Klein Archive</h2>
+      <p>Inquadra il print e <b>muovi il telefono</b> per esplorare l'archivio in 360°.
+         Tocca per avviare (richiede fotocamera e sensori di movimento).</p>
+      <button id="startBtn">▶ Avvia</button>
+    </div>
 
     <div class="gate" id="gate">
       <div class="ph">📱</div>
@@ -159,11 +168,12 @@
     const ARCHIVE_URL = "../index.html?archive=1";
     const MIND_URL    = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
     const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
-    const FONT_URL    = "vendor/three-addons/fonts/helvetiker_bold.typeface.json";
+    const FONT_URL    = "vendor/three-addons/fonts/klein.typeface.json";
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
     const ARCHIVE_BASE = "../assets/index";
-    const N_CAMPAIGNS  = 24;     // quante foto sparse nel mondo 360
+    const N_CAMPAIGNS  = 50;     // quante foto sparse nel mondo 360
+    const CAMP_R       = 7.5;    // raggio (shell unica -> distribuzione uniforme, niente sovrapposizioni)
 
     const D_PHOTO   = 3.2;    // distanza della foto rivelata
     const PHOTO_W   = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
@@ -172,12 +182,12 @@
     const CTA_GAP   = 1500;   // attesa dopo il reveal, prima della CTA
     const CTA_MS    = 800;    // emersione 3D della CTA lungo Z
     const CTA_Z_END = -2.2;   // posizione finale CTA (verso l'utente, dentro al viewport)
-    const SPHERE_R  = 6;      // raggio del 360 in cui stanno le campagne
 
     const $ = (id) => document.getElementById(id);
     const stage = $('stage');
     const ui = { ig:$('ig'), hint:$('hint'), lookhint:$('lookhint'),
-                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout') };
+                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout'),
+                 startgate:$('startgate'), startBtn:$('startBtn') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
     ui.close.addEventListener('click', goArchive);
@@ -207,14 +217,14 @@
     // ---------- stato mondo 360 ----------
     let phase = 'scan';               // 'scan' | 'flash' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
-    let revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
-    let worldT0 = 0;
+    let centerGroup, revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
+    let worldT0 = 0, previewMode = false;
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
 
-    // look-around (giroscopio + trascinamento)
-    let yaw = 0, pitch = 0, dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0, isDrag = false;
-    let gyroActive = false, gAlpha = 0, gBeta = 0, gGamma = 0, gOrient = 0, gyroRefInv = null, askedGyro = false;
+    // look-around: SOLO giroscopio (su desktop auto-rotazione in anteprima)
+    let yaw = 0, downX = 0, downY = 0, isDrag = false;
+    let gyroActive = false, gAlpha = 0, gBeta = 0, gGamma = 0, gOrient = 0, gyroRefInv = null;
     const tmpEuler = new THREE.Euler();
     const zee = new THREE.Vector3(0, 0, 1);
     const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
@@ -226,7 +236,7 @@
       return new Promise((resolve) => {
         const img = new Image(); img.crossOrigin = 'anonymous';
         img.onload = () => {
-          const max = 768, s = Math.min(1, max / Math.max(img.width, img.height));
+          const max = 640, s = Math.min(1, max / Math.max(img.width, img.height));
           const w = Math.round(img.width * s), h = Math.round(img.height * s);
           const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
           cv.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -260,9 +270,15 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    function sph(r, yawDeg, pitchDeg) {
-      const y = THREE.MathUtils.degToRad(yawDeg), p = THREE.MathUtils.degToRad(pitchDeg);
-      return new THREE.Vector3(r * Math.cos(p) * Math.sin(y), r * Math.sin(p), -r * Math.cos(p) * Math.cos(y));
+    // direzioni uniformi sulla sfera (Fibonacci) -> spaziatura regolare, niente sovrapposizioni
+    function fibDirs(n) {
+      const dirs = [], phi = Math.PI * (3 - Math.sqrt(5));
+      for (let i = 0; i < n; i++) {
+        const y = 1 - ((i + 0.5) / n) * 2;
+        const rad = Math.sqrt(Math.max(0, 1 - y * y)), th = phi * i;
+        dirs.push(new THREE.Vector3(Math.cos(th) * rad, y, Math.sin(th) * rad));
+      }
+      return dirs;
     }
 
     // costruisce scena 360, foto reveal, campagne attorno e CTA 3D — sul renderer dato
@@ -273,6 +289,10 @@
       worldCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
       worldScene.add(new THREE.AmbientLight(0xffffff, 0.95));
       const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); worldScene.add(dl);
+
+      // gruppo centrale: foto + CTA fluttuano INSIEME
+      centerGroup = new THREE.Group();
+      worldScene.add(centerGroup);
 
       // --- foto rivelata (planare, stabile) con deblur shader ---
       const tex = new THREE.TextureLoader().load(SHARP_IMG);
@@ -286,36 +306,35 @@
       });
       const photo = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
       photo.position.set(0, 0, -D_PHOTO);
-      worldScene.add(photo);
+      centerGroup.add(photo);
 
-      // --- campagne d'archivio sparse a caso nel 360, fluttuanti e cliccabili ---
+      // --- campagne d'archivio: distribuzione uniforme sul 360, fluttuanti e cliccabili ---
       const pool = await loadCampaignPool();
-      let placed = 0, idx = 0;
-      while (placed < N_CAMPAIGNS && idx < pool.length) {
-        const it = pool[idx++];
-        const yawDeg = Math.random() * 360;
-        const pitchDeg = (Math.random() * 2 - 1) * 38;
-        const ywrap = Math.abs(((yawDeg + 180) % 360) - 180);     // distanza dal fronte (0°)
-        if (ywrap < 26 && Math.abs(pitchDeg) < 20) continue;      // tieni libero il cono della foto
-        const r = SPHERE_R - 1 + Math.random() * 4;               // profondità varia (5..9)
-        const base = sph(r, yawDeg, pitchDeg);
+      const dirs = fibDirs(Math.ceil(N_CAMPAIGNS * 1.45));   // extra per scartare il cono frontale
+      let placed = 0, di = 0;
+      while (placed < N_CAMPAIGNS && di < dirs.length && placed < pool.length) {
+        const dir = dirs[di++];
+        if (dir.z < -0.80) continue;                          // libera il cono della foto (fronte = -Z)
+        const it = pool[placed];
+        const base = dir.clone().multiplyScalar(CAMP_R + (Math.random() - 0.5) * 0.5);
         const mat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0 });
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
         mesh.position.copy(base);
         mesh.lookAt(0, 0, 0);
-        const hh = 1.2 + Math.random() * 1.2;
-        mesh.scale.set(hh * it.a, hh, 1);                         // aspect dai dims (no pop)
+        let hh = 1.0 + Math.random() * 0.35;
+        if (hh * it.a > 2.4) hh = 2.4 / it.a;                 // limita la larghezza -> niente sovrapposizioni
+        mesh.scale.set(hh * it.a, hh, 1);
         mesh.userData = {
           stem: it.stem, base: base.clone(), baseQuat: mesh.quaternion.clone(),
           phase: Math.random() * Math.PI * 2, speed: 0.25 + Math.random() * 0.45,
-          amp: 0.10 + Math.random() * 0.18, rphase: Math.random() * Math.PI * 2, ramp: 0.03 + Math.random() * 0.05,
+          amp: 0.08 + Math.random() * 0.14, rphase: Math.random() * Math.PI * 2, ramp: 0.02 + Math.random() * 0.04,
         };
         loadTex(it.path).then((t) => { if (t) { mat.map = t; mat.needsUpdate = true; } });
         campMats.push(mat); campMeshes.push(mesh); worldScene.add(mesh);
         placed++;
       }
 
-      // --- CTA 3D estrusa (testo con volume, niente sfondo) ---
+      // --- CTA 3D estrusa nel font Klein (testo con volume, niente sfondo) ---
       try {
         const font = await new FontLoader().loadAsync(FONT_URL);
         buildCTA(font);
@@ -324,8 +343,8 @@
 
     function buildCTA(font) {
       const geo = new TextGeometry('DISCOVER THE ARCHIVE', {
-        font, size:1, height:0.28, curveSegments:5,
-        bevelEnabled:true, bevelThickness:0.035, bevelSize:0.022, bevelSegments:2,
+        font, size:1, height:0.5, curveSegments:5,
+        bevelEnabled:true, bevelThickness:0.06, bevelSize:0.03, bevelSegments:2,
       });
       geo.computeBoundingBox();
       const bb = geo.boundingBox;
@@ -341,7 +360,7 @@
       ctaGroup.add(mesh); ctaGroup.add(ctaHit);
       ctaGroup.position.set(0, 0, -D_PHOTO);
       ctaGroup.scale.setScalar(0.12);
-      worldScene.add(ctaGroup);
+      centerGroup.add(ctaGroup);   // fluttua insieme alla foto
     }
 
     // adatta renderer/camera al riquadro stage (portrait, senza distorsione)
@@ -371,36 +390,27 @@
       gyroActive = true;
     });
     function updateLook() {
-      if (gyroActive) {
+      if (previewMode) {                                   // desktop: lenta auto-rotazione per mostrare il 360
+        yaw += 0.0022; tmpEuler.set(0, yaw, 0, 'YXZ'); worldCam.quaternion.setFromEuler(tmpEuler); return;
+      }
+      if (gyroActive) {                                    // mobile: SOLO giroscopio
         setQuatFromGyro(curQ, gAlpha, gBeta, gGamma, gOrient);
         if (!gyroRefInv) gyroRefInv = curQ.clone().invert();   // allinea il "davanti" alla foto
         worldCam.quaternion.copy(curQ).multiply(gyroRefInv);
-      } else {
-        tmpEuler.set(pitch, yaw, 0, 'YXZ');
-        worldCam.quaternion.setFromEuler(tmpEuler);
       }
-    }
-    function requestGyroOnce() {
-      if (askedGyro) return; askedGyro = true;
-      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        DeviceOrientationEvent.requestPermission().catch(() => {});
-      }
+      // senza giroscopio resta frontale (niente drag)
     }
     stage.addEventListener('pointerdown', (e) => {
       if (phase !== 'world') return;
-      dragging = true; isDrag = false; lastX = downX = e.clientX; lastY = downY = e.clientY;
-      requestGyroOnce();
+      isDrag = false; downX = e.clientX; downY = e.clientY;
     });
     stage.addEventListener('pointermove', (e) => {
-      if (!dragging || phase !== 'world') return;
-      const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
-      if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 8) isDrag = true;
-      if (!gyroActive) { yaw -= dx * 0.0028; pitch -= dy * 0.0028; pitch = Math.max(-1.05, Math.min(1.05, pitch)); }
+      if (phase !== 'world') return;
+      if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 10) isDrag = true;  // distingue tap da swipe
     });
     stage.addEventListener('pointerup', (e) => {
-      if (phase !== 'world') { dragging = false; return; }
-      dragging = false;
-      if (!isDrag) tapTest(e.clientX, e.clientY);   // tap "fermo" = click sulla CTA
+      if (phase !== 'world') return;
+      if (!isDrag) tapTest(e.clientX, e.clientY);   // tap fermo = click su CTA / campagna
     });
     function tapTest(cx, cy) {
       const r = stage.getBoundingClientRect();
@@ -445,8 +455,12 @@
           revealMat.uniforms.uBias.value = 4.5 * (1 - easeOutCubic(clamp01(wt / DEBLUR_MS)));  // deblur
           const cf = easeOutCubic(clamp01(wt / 900));
           for (const m of campMats) m.opacity = cf * 0.95;                                      // campagne fade-in
-          const ts = now * 0.001;                                                              // campagne che fluttuano
-          for (const mh of campMeshes) {
+          const ts = now * 0.001;
+          if (centerGroup) {                                                                   // foto + CTA fluttuano insieme
+            centerGroup.position.set(Math.cos(ts * 0.42) * 0.03, Math.sin(ts * 0.55) * 0.05, 0);
+            centerGroup.rotation.set(Math.sin(ts * 0.42) * 0.010, 0, Math.sin(ts * 0.50) * 0.012);
+          }
+          for (const mh of campMeshes) {                                                       // campagne che fluttuano
             const u = mh.userData;
             mh.position.y = u.base.y + Math.sin(ts * u.speed + u.phase) * u.amp;
             mh.position.x = u.base.x + Math.cos(ts * u.speed * 0.8 + u.phase) * u.amp * 0.5;
@@ -483,10 +497,11 @@
       await mindar.start();
     }
 
-    async function startPreview() {        // desktop: stesso mondo, senza camera
+    async function startPreview() {        // desktop: stesso mondo, senza camera (auto-rotazione)
       ui.gate.classList.remove('on');
       ui.ig.classList.add('dim');
       ui.whiteout.style.opacity = '1';
+      previewMode = true;
       const rnd = new THREE.WebGLRenderer({ antialias:true });
       rnd.setSize(stage.clientWidth, stage.clientHeight);
       $('ar').appendChild(rnd.domElement);
@@ -496,14 +511,24 @@
     }
     ui.demoAlt.addEventListener('click', startPreview);
 
-    async function init() {
-      if (!isMobileDevice()) { ui.ig.style.display = 'none'; ui.gate.classList.add('on'); return; }
+    // mobile: la prima interazione utente serve a chiedere il permesso del giroscopio (obbligatorio su iOS)
+    async function beginMobile() {
+      ui.startgate.classList.remove('on');
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
+      }
       setTimeout(() => { if (phase === 'scan') ui.hint.classList.add('hide'); }, 4000);
       try { await startAR(); }
       catch (e) {
         ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
         ui.hint.classList.remove('hide'); console.error('AR error:', e);
       }
+    }
+
+    function init() {
+      if (!isMobileDevice()) { ui.ig.style.display = 'none'; ui.gate.classList.add('on'); return; }
+      ui.startgate.classList.add('on');
+      ui.startBtn.addEventListener('click', beginMobile, { once: true });
     }
     init();
   </script>

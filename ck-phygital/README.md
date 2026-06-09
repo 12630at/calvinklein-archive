@@ -22,15 +22,18 @@ La root smista per dispositivo:
    bianco** (niente più jitter di MindAR): la foto, perfettamente planare e stabile, sta
    davanti all'utente e fa il **deblur** sfocato→nitido. Tutt'attorno, su una sfera,
    **fluttuano** decine di **campagne d'archivio** pescate **a caso** da `archive_index.csv`
-   (ridimensionate a 768px per la memoria mobile): ci si guarda intorno col **giroscopio**
-   (o trascinando). **Tap su una campagna** → apre la sua **item view** nell'archivio
+   distribuite in modo **uniforme** sulla sfera (Fibonacci → niente sovrapposizioni),
+   ridimensionate a 640px per la memoria mobile. Ci si guarda intorno **solo col
+   giroscopio** (il permesso si chiede al tap iniziale di avvio, obbligatorio su iOS).
+   **Tap su una campagna** → apre la sua **item view** nell'archivio
    (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
-4. Dopo una breve attesa, dal **centro** della foto **emerge una CTA 3D estrusa**
-   ("DISCOVER THE ARCHIVE", testo con volume reale, senza sfondo) che avanza lungo Z verso
-   l'utente → tap sulla CTA → archivio (`../index.html?archive=1`).
+4. Dopo una breve attesa, dal **centro** della foto **emerge una CTA 3D estrusa nel font
+   Klein** ("DISCOVER THE ARCHIVE", volume reale, senza sfondo) che avanza lungo Z verso
+   l'utente → tap sulla CTA → archivio (`../index.html?archive=1`). Foto e CTA **fluttuano
+   insieme**; anche le campagne fluttuano.
 
-Su **desktop** il gate "▶ Anteprima" avvia lo stesso mondo 360° (senza camera), esplorabile
-trascinando col mouse.
+Su **desktop** il gate "▶ Anteprima" avvia lo stesso mondo 360° (senza camera) con una
+lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
 
 ## Nomenclatura asset
 
@@ -56,7 +59,8 @@ trascinando col mouse.
 | `../assets/index/**` | immagini delle campagne nel mondo 360 (tap → item view dell'archivio) |
 | `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
 | `vendor/` | MindAR + Three.js **in locale** (niente CDN) |
-| `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js,fonts/helvetiker_bold.typeface.json}` | testo 3D estruso della CTA (three r146, in locale) |
+| `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js}` | testo 3D estruso della CTA (three r146, in locale) |
+| `vendor/three-addons/fonts/klein.typeface.json` | font **Klein** in formato typeface (generato da `fonts/Klein-Medium.woff2` con fontTools) |
 
 ## Ricompilare il target (solo se cambia il print)
 
