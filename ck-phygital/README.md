@@ -14,17 +14,19 @@ La root smista per dispositivo:
 ## Flusso (mobile)
 
 1. `ck-phygital/index.html` — mock Instagram a pieno schermo. Post `@calvinklein` con il
-   print sfocato e il CTA **"Prova il filtro →"** che apre la camera.
+   print sfocato e il CTA **"Prova il filtro →"**: il tap **chiede subito i permessi**
+   (sensori di movimento su iOS) e apre la camera — niente schermata "Avvia" separata.
 2. `camera.html` — **fotocamera di Instagram** (feed ad alta risoluzione). MindAR serve
-   **solo a riconoscere** il print sfocato. Al riconoscimento parte un **flash high-key**:
-   l'esposizione del feed sale gradualmente fino a bruciare l'ambiente in **bianco**.
+   **solo a riconoscere** il print sfocato. Al riconoscimento un **bagliore bianco 3D**
+   esce dalla foto **verso la camera**, si espande fino a riempire la vista e porta nel
+   mondo 3D.
 3. Subito dopo l'esperienza si **stacca dal tracking** ed entra in un **mondo virtuale 360°
    bianco** (niente più jitter di MindAR): la foto, perfettamente planare e stabile, sta
    davanti all'utente e fa il **deblur** sfocato→nitido. Tutt'attorno, su una sfera,
-   **fluttuano** decine di **campagne d'archivio** pescate **a caso** da `archive_index.csv`
+   **fluttuano** circa 80 **campagne d'archivio** pescate **a caso** da `archive_index.csv`
    distribuite in modo **uniforme** sulla sfera (Fibonacci → niente sovrapposizioni),
-   ridimensionate a 640px per la memoria mobile. Ci si guarda intorno **solo col
-   giroscopio** (il permesso si chiede al tap iniziale di avvio, obbligatorio su iOS).
+   ridimensionate a 512px per la memoria mobile. Ci si guarda intorno **solo col
+   giroscopio** (il permesso si chiede al tap su "Prova il filtro", obbligatorio su iOS).
    **Tap su una campagna** → apre la sua **item view** nell'archivio
    (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
 4. Dopo una breve attesa, dal **centro** della foto **emerge una CTA 3D estrusa nel font
@@ -60,7 +62,7 @@ lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
 | `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
 | `vendor/` | MindAR + Three.js **in locale** (niente CDN) |
 | `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js}` | testo 3D estruso della CTA (three r146, in locale) |
-| `vendor/three-addons/fonts/klein.typeface.json` | font **Klein** in formato typeface (generato da `fonts/Klein-Medium.woff2` con fontTools) |
+| `vendor/three-addons/fonts/klein.typeface.json` | font **Klein** in formato typeface (generato da `fonts/Klein-Medium.woff2` con opentype.js) |
 
 ## Ricompilare il target (solo se cambia il print)
 

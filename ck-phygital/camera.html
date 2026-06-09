@@ -138,15 +138,6 @@
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
     <div class="lookhint" id="lookhint">Muovi il telefono per esplorare l'archivio 360°</div>
 
-    <!-- primer mobile: il tap chiede il permesso del giroscopio e avvia camera+AR -->
-    <div class="gate" id="startgate">
-      <div class="ph">📸</div>
-      <h2>Calvin Klein Archive</h2>
-      <p>Inquadra il print e <b>muovi il telefono</b> per esplorare l'archivio in 360°.
-         Tocca per avviare (richiede fotocamera e sensori di movimento).</p>
-      <button id="startBtn">▶ Avvia</button>
-    </div>
-
     <div class="gate" id="gate">
       <div class="ph">📱</div>
       <h2>Esperienza AR</h2>
@@ -172,12 +163,12 @@
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
     const ARCHIVE_BASE = "../assets/index";
-    const N_CAMPAIGNS  = 50;     // quante foto sparse nel mondo 360
+    const N_CAMPAIGNS  = 80;     // quante foto sparse nel mondo 360
     const CAMP_R       = 7.5;    // raggio (shell unica -> distribuzione uniforme, niente sovrapposizioni)
 
     const D_PHOTO   = 3.2;    // distanza della foto rivelata
     const PHOTO_W   = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
-    const FLASH_MS  = 750;    // sovraesposizione high-key -> bianco
+    const BURST_MS  = 850;    // bagliore bianco 3D che esce dalla foto verso la camera
     const DEBLUR_MS = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP   = 1500;   // attesa dopo il reveal, prima della CTA
     const CTA_MS    = 800;    // emersione 3D della CTA lungo Z
@@ -186,8 +177,7 @@
     const $ = (id) => document.getElementById(id);
     const stage = $('stage');
     const ui = { ig:$('ig'), hint:$('hint'), lookhint:$('lookhint'),
-                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout'),
-                 startgate:$('startgate'), startBtn:$('startBtn') };
+                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
     ui.close.addEventListener('click', goArchive);
@@ -215,10 +205,10 @@
     }
 
     // ---------- stato mondo 360 ----------
-    let phase = 'scan';               // 'scan' | 'flash' | 'world'
+    let phase = 'scan';               // 'scan' | 'burst' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
-    let centerGroup, revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
-    let worldT0 = 0, previewMode = false;
+    let centerGroup, photoMesh, glowMesh, revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
+    let worldT0 = 0, burstT0 = 0, previewMode = false;
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
 
@@ -236,7 +226,7 @@
       return new Promise((resolve) => {
         const img = new Image(); img.crossOrigin = 'anonymous';
         img.onload = () => {
-          const max = 640, s = Math.min(1, max / Math.max(img.width, img.height));
+          const max = 512, s = Math.min(1, max / Math.max(img.width, img.height));
           const w = Math.round(img.width * s), h = Math.round(img.height * s);
           const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
           cv.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -270,6 +260,18 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
+    // texture morbida (radiale) per il bagliore bianco
+    function makeGlowTex() {
+      const c = document.createElement('canvas'); c.width = c.height = 256;
+      const g = c.getContext('2d');
+      const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+      grd.addColorStop(0, 'rgba(255,255,255,1)');
+      grd.addColorStop(0.45, 'rgba(255,255,255,0.92)');
+      grd.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+      return new THREE.CanvasTexture(c);
+    }
+
     // direzioni uniformi sulla sfera (Fibonacci) -> spaziatura regolare, niente sovrapposizioni
     function fibDirs(n) {
       const dirs = [], phi = Math.PI * (3 - Math.sqrt(5));
@@ -285,7 +287,7 @@
     async function buildWorld(rnd) {
       renderer = rnd;
       worldScene = new THREE.Scene();
-      worldScene.background = new THREE.Color(0xffffff);
+      worldScene.background = null;                  // trasparente durante il burst (si vede la camera)
       worldCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
       worldScene.add(new THREE.AmbientLight(0xffffff, 0.95));
       const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); worldScene.add(dl);
@@ -304,25 +306,34 @@
         fragmentShader: `uniform sampler2D map; uniform float uBias; varying vec2 vUv;
           void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin,1.0);} `,
       });
-      const photo = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
-      photo.position.set(0, 0, -D_PHOTO);
-      centerGroup.add(photo);
+      photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
+      photoMesh.position.set(0, 0, -D_PHOTO);
+      photoMesh.visible = false;                     // appare dopo il burst
+      centerGroup.add(photoMesh);
+
+      // bagliore bianco 3D che esce dalla foto verso la camera (transizione)
+      glowMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625),
+        new THREE.MeshBasicMaterial({ map: makeGlowTex(), transparent:true, opacity:0,
+          blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
+      glowMesh.position.set(0, 0, -D_PHOTO); glowMesh.renderOrder = 50; glowMesh.visible = false;
+      worldScene.add(glowMesh);
 
       // --- campagne d'archivio: distribuzione uniforme sul 360, fluttuanti e cliccabili ---
       const pool = await loadCampaignPool();
-      const dirs = fibDirs(Math.ceil(N_CAMPAIGNS * 1.45));   // extra per scartare il cono frontale
+      const dirs = fibDirs(Math.ceil(N_CAMPAIGNS * 1.5));   // extra per scartare il cono frontale
       let placed = 0, di = 0;
       while (placed < N_CAMPAIGNS && di < dirs.length && placed < pool.length) {
         const dir = dirs[di++];
         if (dir.z < -0.80) continue;                          // libera il cono della foto (fronte = -Z)
         const it = pool[placed];
-        const base = dir.clone().multiplyScalar(CAMP_R + (Math.random() - 0.5) * 0.5);
+        const base = dir.clone().multiplyScalar(CAMP_R + (Math.random() - 0.5) * 0.4);
         const mat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0 });
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
         mesh.position.copy(base);
         mesh.lookAt(0, 0, 0);
-        let hh = 1.0 + Math.random() * 0.35;
-        if (hh * it.a > 2.4) hh = 2.4 / it.a;                 // limita la larghezza -> niente sovrapposizioni
+        let hh = 0.9 + Math.random() * 0.35;
+        const maxd = Math.max(hh * it.a, hh);
+        if (maxd > 1.9) hh *= 1.9 / maxd;                     // limita la dimensione -> niente sovrapposizioni
         mesh.scale.set(hh * it.a, hh, 1);
         mesh.userData = {
           stem: it.stem, base: base.clone(), baseQuat: mesh.quaternion.clone(),
@@ -342,22 +353,26 @@
     }
 
     function buildCTA(font) {
-      const geo = new TextGeometry('DISCOVER THE ARCHIVE', {
-        font, size:1, height:0.5, curveSegments:5,
-        bevelEnabled:true, bevelThickness:0.06, bevelSize:0.03, bevelSegments:2,
-      });
-      geo.computeBoundingBox();
-      const bb = geo.boundingBox;
-      const gw = bb.max.x - bb.min.x, gh = bb.max.y - bb.min.y;
-      geo.translate(-(bb.max.x + bb.min.x) / 2, -(bb.max.y + bb.min.y) / 2, 0);  // centra
-      const fit = 1.0 / gw;                                                      // larghezza ~1.0u (entra nel viewport)
-      ctaMat = new THREE.MeshStandardMaterial({ color:0x0a0a0a, metalness:0.15, roughness:0.45, transparent:true, opacity:0 });
-      const mesh = new THREE.Mesh(geo, ctaMat); mesh.scale.setScalar(fit);
-      ctaHit = new THREE.Mesh(new THREE.PlaneGeometry(gw * fit * 1.08, gh * fit * 1.8),
+      // due righe per leggibilità; niente bevel (mangiucchiava le aste sottili)
+      const mkLine = (txt) => {
+        const g = new TextGeometry(txt, { font, size:1, height:0.5, curveSegments:8, bevelEnabled:false });
+        g.computeBoundingBox(); const bb = g.boundingBox;
+        g.translate(-(bb.max.x + bb.min.x) / 2, -(bb.max.y + bb.min.y) / 2, 0);
+        return { g, w: bb.max.x - bb.min.x, h: bb.max.y - bb.min.y };
+      };
+      const l1 = mkLine('DISCOVER'), l2 = mkLine('THE ARCHIVE');
+      const maxW = Math.max(l1.w, l2.w), lineH = Math.max(l1.h, l2.h), gap = lineH * 0.5;
+      const fit = 1.2 / maxW;
+      ctaMat = new THREE.MeshStandardMaterial({ color:0x0a0a0a, metalness:0.1, roughness:0.5, transparent:true, opacity:0 });
+      const m1 = new THREE.Mesh(l1.g, ctaMat); m1.position.y =  (lineH + gap) / 2;
+      const m2 = new THREE.Mesh(l2.g, ctaMat); m2.position.y = -(lineH + gap) / 2;
+      const textWrap = new THREE.Group(); textWrap.add(m1, m2); textWrap.scale.setScalar(fit);
+      const blockW = maxW * fit, blockH = (2 * lineH + gap) * fit;
+      ctaHit = new THREE.Mesh(new THREE.PlaneGeometry(blockW * 1.1, blockH * 1.25),
                               new THREE.MeshBasicMaterial({ visible:false }));
-      ctaHit.position.z = 0.18 * fit;
+      ctaHit.position.z = 0.5 * fit;
       ctaGroup = new THREE.Group();
-      ctaGroup.add(mesh); ctaGroup.add(ctaHit);
+      ctaGroup.add(textWrap); ctaGroup.add(ctaHit);
       ctaGroup.position.set(0, 0, -D_PHOTO);
       ctaGroup.scale.setScalar(0.12);
       centerGroup.add(ctaGroup);   // fluttua insieme alla foto
@@ -425,23 +440,26 @@
     }
 
     // ---------- transizioni ----------
-    function flashThenWorld() {           // mobile: high-key flash sul feed -> mondo bianco
-      phase = 'flash';
+    function startBurst() {               // riconoscimento -> bagliore bianco 3D verso la camera
+      phase = 'burst';
+      burstT0 = performance.now();
       if (navigator.vibrate) navigator.vibrate(60);
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
       document.body.classList.add('revealed');
       const vid = $('ar').querySelector('video');
-      if (vid) vid.style.filter = 'brightness(3.4) contrast(1.06)';   // esposizione che sale
-      ui.whiteout.style.transition = 'opacity ' + FLASH_MS + 'ms ease-in';
-      ui.whiteout.style.opacity = '1';
-      setTimeout(enterWorld, FLASH_MS);
+      if (vid) { vid.style.transition = 'filter ' + BURST_MS + 'ms ease-in'; vid.style.filter = 'brightness(1.9)'; }
+      if (glowMesh) glowMesh.visible = true;
     }
-    function enterWorld() {
+    function enterWorld() {                // dal bagliore al mondo 3D bianco
       phase = 'world';
       worldT0 = performance.now();
+      worldScene.background = new THREE.Color(0xffffff);
+      if (glowMesh) glowMesh.visible = false;
+      if (photoMesh) photoMesh.visible = true;
       const vid = $('ar').querySelector('video');
       if (vid) vid.style.display = 'none';
+      ui.whiteout.style.opacity = '1';     // sicurezza: fondo bianco
       fitRenderer();
       setTimeout(() => { ui.lookhint.classList.add('show');
         setTimeout(() => ui.lookhint.classList.remove('show'), 3200); }, 600);
@@ -476,8 +494,16 @@
           }
           updateLook();
           renderer.render(worldScene, worldCam);
+        } else if (phase === 'burst') {
+          const bt = now - burstT0, e = easeOutCubic(clamp01(bt / BURST_MS));
+          glowMesh.material.opacity = Math.min(1, e * 1.5);
+          glowMesh.position.z = -D_PHOTO + (D_PHOTO - 0.15) * e;   // esce verso la camera
+          glowMesh.scale.setScalar(1 + e * e * 22);                // esplode fino a riempire
+          updateLook();
+          renderer.render(worldScene, worldCam);                   // bg trasparente -> camera dietro + bagliore
+          if (bt >= BURST_MS) enterWorld();
         } else if (scanScene) {
-          renderer.render(scanScene, scanCam);                     // scan/flash: feed visibile
+          renderer.render(scanScene, scanCam);                     // scan: feed visibile
         }
       });
     }
@@ -491,7 +517,7 @@
       });
       scanScene = mindar.scene; scanCam = mindar.camera;
       const anchor = mindar.addAnchor(0);
-      anchor.onTargetFound = () => { if (phase === 'scan') flashThenWorld(); };
+      anchor.onTargetFound = () => { if (phase === 'scan') startBurst(); };
       await buildWorld(mindar.renderer);
       startLoop();
       await mindar.start();
@@ -511,24 +537,22 @@
     }
     ui.demoAlt.addEventListener('click', startPreview);
 
-    // mobile: la prima interazione utente serve a chiedere il permesso del giroscopio (obbligatorio su iOS)
-    async function beginMobile() {
-      ui.startgate.classList.remove('on');
-      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
+    // fallback: il permesso giroscopio si chiede già al tap su "Prova il filtro" (index.html);
+    // se non fosse passato, lo richiediamo al primo tocco nella camera (iOS richiede un gesto).
+    window.addEventListener('touchstart', function once() {
+      window.removeEventListener('touchstart', once);
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function' && !gyroActive) {
+        DeviceOrientationEvent.requestPermission().catch(() => {});
       }
-      setTimeout(() => { if (phase === 'scan') ui.hint.classList.add('hide'); }, 4000);
-      try { await startAR(); }
-      catch (e) {
-        ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
-        ui.hint.classList.remove('hide'); console.error('AR error:', e);
-      }
-    }
+    }, { passive: true });
 
     function init() {
       if (!isMobileDevice()) { ui.ig.style.display = 'none'; ui.gate.classList.add('on'); return; }
-      ui.startgate.classList.add('on');
-      ui.startBtn.addEventListener('click', beginMobile, { once: true });
+      setTimeout(() => { if (phase === 'scan') ui.hint.classList.add('hide'); }, 4000);
+      startAR().catch((e) => {
+        ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";
+        ui.hint.classList.remove('hide'); console.error('AR error:', e);
+      });
     }
     init();
   </script>
