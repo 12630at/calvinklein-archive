@@ -329,8 +329,10 @@ async function skipToLogo() {
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    const _deepItem = new URLSearchParams(location.search).get('item');
     document.fonts.ready.then(() => {
-        play();
+        if (_deepItem) openArchiveToItem(_deepItem);
+        else play();
     });
 
     const skipBtn = document.getElementById('skip-intro');
@@ -1559,6 +1561,18 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         await morphMenuToDefault();
+    }
+
+    // Deep-link: apri l'archivio direttamente sulla vista dettaglio di un item.
+    // Usato dal mondo phygital: ../index.html?archive=1&item=<filename>
+    async function openArchiveToItem(stem) {
+        const stageEl = document.getElementById('stage');
+        const menuEl  = document.getElementById('menu');
+        if (stageEl) stageEl.style.display = 'none';     // salta l'intro
+        if (menuEl) { menuEl.style.opacity = '1'; menuEl.style.pointerEvents = 'all'; }
+        await openArchive();
+        const m = archiveManifest.find(x => x.filename === stem);
+        if (m) { await new Promise(r => setTimeout(r, 650)); openItemViewFromList(m); }
     }
 
     archive.addEventListener('click', (e) => { e.preventDefault(); openArchive(); });

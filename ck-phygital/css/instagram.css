@@ -47,7 +47,7 @@ html, body {
   display: flex;
   flex-direction: column;
 }
-@media (min-width: 430px) {
+@media (min-width: 760px) and (hover: hover) {
   body { display: flex; align-items: center; justify-content: center; }
   .phone {
     width: var(--vw);

@@ -26,7 +26,7 @@
     /* pieno schermo su mobile, mockup telefono solo su desktop */
     .stage { position:relative; width:100vw; height:100vh; height:100dvh;
       margin:0 auto; background:#000; overflow:hidden; }
-    @media (min-width:430px){
+    @media (min-width:760px) and (hover:hover){
       body{ display:flex; align-items:center; justify-content:center; }
       .stage{ width:390px; height:844px; border-radius:38px; border:10px solid #000; box-shadow:0 30px 80px rgba(0,0,0,.6); }
     }
@@ -147,6 +147,9 @@
     </div>
   </div>
 
+  <!-- dimensioni dell'archivio (definisce ARCHIVE_DIMS) per costruire i path delle campagne -->
+  <script src="../archive_dims.js"></script>
+
   <script type="module">
     import * as THREE from 'three';
     import { MindARThree } from './vendor/mindar-image-three.prod.js';
@@ -158,19 +161,9 @@
     const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
     const FONT_URL    = "vendor/three-addons/fonts/helvetiker_bold.typeface.json";
 
-    // campagne d'archivio che fluttano nel mondo 360 attorno all'utente
-    const CAMPAIGNS = [
-      "../assets/index/adv/billboard/1996/1996_fw_adv_billboard_collection_ck_001.jpg",
-      "../assets/index/adv/billboard/2009/2009_ss_adv_billboard_jeans_001.jpg",
-      "../assets/index/adv/billboard/2013/2013_ss_adv_billboard_collection_001.jpg",
-      "../assets/index/adv/print/1980/1980_adv_print_cosmetics_001.jpg",
-      "../assets/index/adv/print/1981/1981_adv_print_fragrance_001.jpg",
-      "../assets/index/adv/print/1985/1985_adv_print_fragrance_obsession_001.jpg",
-      "../assets/index/adv/print/1985/1985_ss_adv_print_underwear_001.jpg",
-      "../assets/index/adv/print/1986/1986_fw_adv_print_collection_004.jpg",
-      "../assets/index/adv/print/1988/1988_fw_adv_print_coats_001.jpg",
-      "../assets/index/adv/print/1989/1989_ss_adv_print_coats_001.jpg",
-    ];
+    // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
+    const ARCHIVE_BASE = "../assets/index";
+    const N_CAMPAIGNS  = 24;     // quante foto sparse nel mondo 360
 
     const D_PHOTO   = 3.2;    // distanza della foto rivelata
     const PHOTO_W   = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
@@ -216,7 +209,8 @@
     let renderer, worldScene, worldCam, scanScene = null;
     let revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
     let worldT0 = 0;
-    const campMats = [];
+    const campMats = [];      // materiali campagne (per il fade-in)
+    const campMeshes = [];    // mesh campagne (float + click -> item view)
 
     // look-around (giroscopio + trascinamento)
     let yaw = 0, pitch = 0, dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0, isDrag = false;
@@ -224,8 +218,47 @@
     const tmpEuler = new THREE.Euler();
     const zee = new THREE.Vector3(0, 0, 1);
     const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
-    const tmpQ = new THREE.Quaternion(), curQ = new THREE.Quaternion();
+    const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), curQ = new THREE.Quaternion();
     const ray = new THREE.Raycaster();
+
+    // carica una texture ridimensionata (max 768px) -> poca memoria GPU su mobile
+    function loadTex(url) {
+      return new Promise((resolve) => {
+        const img = new Image(); img.crossOrigin = 'anonymous';
+        img.onload = () => {
+          const max = 768, s = Math.min(1, max / Math.max(img.width, img.height));
+          const w = Math.round(img.width * s), h = Math.round(img.height * s);
+          const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+          cv.getContext('2d').drawImage(img, 0, 0, w, h);
+          const t = new THREE.CanvasTexture(cv); t.minFilter = THREE.LinearFilter; t.generateMipmaps = false;
+          resolve(t);
+        };
+        img.onerror = () => resolve(null);
+        img.src = url;
+      });
+    }
+
+    // pesca a caso N campagne dall'indice dell'archivio (path + stem per il deep-link)
+    async function loadCampaignPool() {
+      const DIMS = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS : {};
+      try {
+        const txt = await (await fetch('../archive_index.csv')).text();
+        const lines = txt.trim().split(/\r?\n/);
+        const h = lines.shift().split(',');
+        const iF = h.indexOf('filename'), iC = h.indexOf('category'), iS = h.indexOf('subcategory'), iY = h.indexOf('year');
+        const pool = [];
+        for (const ln of lines) {
+          const c = ln.split(','); const fn = c[iF]; const d = DIMS[fn];
+          if (!d) continue;
+          const ext = d[2] || 'webp'; if (ext === 'mp4') continue;   // niente video sul muro 360
+          const path = c[iS] ? `${ARCHIVE_BASE}/${c[iC]}/${c[iS]}/${c[iY]}/${fn}.${ext}`
+                             : `${ARCHIVE_BASE}/${c[iC]}/${c[iY]}/${fn}.${ext}`;
+          pool.push({ path, stem: fn, a: d[0] / d[1] });
+        }
+        for (let i = pool.length - 1; i > 0; i--) { const j = (Math.random() * (i + 1)) | 0; [pool[i], pool[j]] = [pool[j], pool[i]]; }
+        return pool;
+      } catch (e) { console.error('campaign pool error:', e); return []; }
+    }
 
     function sph(r, yawDeg, pitchDeg) {
       const y = THREE.MathUtils.degToRad(yawDeg), p = THREE.MathUtils.degToRad(pitchDeg);
@@ -255,26 +288,32 @@
       photo.position.set(0, 0, -D_PHOTO);
       worldScene.add(photo);
 
-      // --- campagne d'archivio sparse nel 360 (evitando il cono frontale) ---
-      const loader = new THREE.TextureLoader();
-      CAMPAIGNS.forEach((src, i) => {
-        const yawDeg = 40 + (i / CAMPAIGNS.length) * 280;   // 40..320, niente di fronte
-        const pitchDeg = (i % 2 ? 1 : -1) * (6 + (i % 3) * 7);
-        const r = SPHERE_R + (i % 3) * 0.7;
+      // --- campagne d'archivio sparse a caso nel 360, fluttuanti e cliccabili ---
+      const pool = await loadCampaignPool();
+      let placed = 0, idx = 0;
+      while (placed < N_CAMPAIGNS && idx < pool.length) {
+        const it = pool[idx++];
+        const yawDeg = Math.random() * 360;
+        const pitchDeg = (Math.random() * 2 - 1) * 38;
+        const ywrap = Math.abs(((yawDeg + 180) % 360) - 180);     // distanza dal fronte (0°)
+        if (ywrap < 26 && Math.abs(pitchDeg) < 20) continue;      // tieni libero il cono della foto
+        const r = SPHERE_R - 1 + Math.random() * 4;               // profondità varia (5..9)
+        const base = sph(r, yawDeg, pitchDeg);
         const mat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0 });
-        campMats.push(mat);
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-        mesh.position.copy(sph(r, yawDeg, pitchDeg));
+        mesh.position.copy(base);
         mesh.lookAt(0, 0, 0);
-        mesh.scale.set(0.001, 0.001, 1);   // dimensione reale dopo il load (per aspect)
-        worldScene.add(mesh);
-        loader.load(src, (t) => {
-          mat.map = t; mat.needsUpdate = true;
-          const a = t.image.width / t.image.height;
-          const h = 1.55;
-          mesh.scale.set(h * a, h, 1);
-        });
-      });
+        const hh = 1.2 + Math.random() * 1.2;
+        mesh.scale.set(hh * it.a, hh, 1);                         // aspect dai dims (no pop)
+        mesh.userData = {
+          stem: it.stem, base: base.clone(), baseQuat: mesh.quaternion.clone(),
+          phase: Math.random() * Math.PI * 2, speed: 0.25 + Math.random() * 0.45,
+          amp: 0.10 + Math.random() * 0.18, rphase: Math.random() * Math.PI * 2, ramp: 0.03 + Math.random() * 0.05,
+        };
+        loadTex(it.path).then((t) => { if (t) { mat.map = t; mat.needsUpdate = true; } });
+        campMats.push(mat); campMeshes.push(mesh); worldScene.add(mesh);
+        placed++;
+      }
 
       // --- CTA 3D estrusa (testo con volume, niente sfondo) ---
       try {
@@ -364,11 +403,15 @@
       if (!isDrag) tapTest(e.clientX, e.clientY);   // tap "fermo" = click sulla CTA
     });
     function tapTest(cx, cy) {
-      if (!ctaReady || !ctaHit) return;
       const r = stage.getBoundingClientRect();
       const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, worldCam);
-      if (ray.intersectObject(ctaHit, true).length) goArchive();
+      if (ctaReady && ctaHit && ray.intersectObject(ctaHit, true).length) { goArchive(); return; }
+      const hit = ray.intersectObjects(campMeshes, false);   // click su una campagna -> item view
+      if (hit.length) {
+        const stem = hit[0].object.userData.stem;
+        window.location.href = `../index.html?archive=1&item=${encodeURIComponent(stem)}`;
+      }
     }
 
     // ---------- transizioni ----------
@@ -402,6 +445,13 @@
           revealMat.uniforms.uBias.value = 4.5 * (1 - easeOutCubic(clamp01(wt / DEBLUR_MS)));  // deblur
           const cf = easeOutCubic(clamp01(wt / 900));
           for (const m of campMats) m.opacity = cf * 0.95;                                      // campagne fade-in
+          const ts = now * 0.001;                                                              // campagne che fluttuano
+          for (const mh of campMeshes) {
+            const u = mh.userData;
+            mh.position.y = u.base.y + Math.sin(ts * u.speed + u.phase) * u.amp;
+            mh.position.x = u.base.x + Math.cos(ts * u.speed * 0.8 + u.phase) * u.amp * 0.5;
+            mh.quaternion.copy(u.baseQuat).multiply(tmpQ2.setFromAxisAngle(zee, Math.sin(ts * u.speed + u.rphase) * u.ramp));
+          }
           const ctaT = wt - (DEBLUR_MS + CTA_GAP);
           if (ctaT > 0 && ctaGroup) {
             ctaReady = true;

@@ -21,8 +21,10 @@ La root smista per dispositivo:
 3. Subito dopo l'esperienza si **stacca dal tracking** ed entra in un **mondo virtuale 360°
    bianco** (niente più jitter di MindAR): la foto, perfettamente planare e stabile, sta
    davanti all'utente e fa il **deblur** sfocato→nitido. Tutt'attorno, su una sfera,
-   fluttuano altre **campagne d'archivio**: ci si guarda intorno col **giroscopio** (o
-   trascinando).
+   **fluttuano** decine di **campagne d'archivio** pescate **a caso** da `archive_index.csv`
+   (ridimensionate a 768px per la memoria mobile): ci si guarda intorno col **giroscopio**
+   (o trascinando). **Tap su una campagna** → apre la sua **item view** nell'archivio
+   (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
 4. Dopo una breve attesa, dal **centro** della foto **emerge una CTA 3D estrusa**
    ("DISCOVER THE ARCHIVE", testo con volume reale, senza sfondo) che avanza lungo Z verso
    l'utente → tap sulla CTA → archivio (`../index.html?archive=1`).
@@ -50,7 +52,8 @@ trascinando col mouse.
 | `assets/blur_print_1999_ss_adv_print_jeans_001.jpg` | print **sfocato** — ciò che si stampa/inquadra |
 | `assets/blur_print_1999_ss_adv_print_jeans_001.mind` | target MindAR (compilato dallo sfocato) |
 | `assets/print_1999_ss_adv_print_jeans_001.jpg` | print **nitido** rivelato nel mondo 360 |
-| `../assets/index/**` | campagne d'archivio che fluttano nel 360 (lista in `CAMPAIGNS` dentro `camera.html`) |
+| `../archive_index.csv` · `../archive_dims.js` | sorgente delle campagne casuali che fluttuano nel 360 (caricati da `camera.html`) |
+| `../assets/index/**` | immagini delle campagne nel mondo 360 (tap → item view dell'archivio) |
 | `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
 | `vendor/` | MindAR + Three.js **in locale** (niente CDN) |
 | `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js,fonts/helvetiker_bold.typeface.json}` | testo 3D estruso della CTA (three r146, in locale) |
