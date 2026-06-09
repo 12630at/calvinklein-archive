@@ -23,33 +23,30 @@
     html, body { height:100%; background:#000; overflow:hidden;
       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
 
-    .stage { position:relative; width:100vw; height:100vh; max-width:390px; max-height:844px;
+    /* pieno schermo su mobile, mockup telefono solo su desktop */
+    .stage { position:relative; width:100vw; height:100vh; height:100dvh;
       margin:0 auto; background:#000; overflow:hidden; }
     @media (min-width:430px){
       body{ display:flex; align-items:center; justify-content:center; }
-      .stage{ border-radius:38px; border:10px solid #000; box-shadow:0 30px 80px rgba(0,0,0,.6); }
+      .stage{ width:390px; height:844px; border-radius:38px; border:10px solid #000; box-shadow:0 30px 80px rgba(0,0,0,.6); }
     }
 
     #ar { position:absolute; inset:0; z-index:1; }
-    #ar video, #ar canvas { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; object-fit:cover!important; }
-    #ar video  { z-index:0!important; }   /* feed camera dietro */
-    #ar canvas { z-index:2!important; }   /* foto/CTA in AR davanti */
+    #ar video, #ar canvas { position:absolute!important; inset:0!important; width:100%!important; height:100%!important; }
+    #ar video  { z-index:0!important; object-fit:cover!important; transition:filter .75s ease-in; } /* feed camera dietro */
+    #ar canvas { z-index:2!important; object-fit:cover!important; }                                /* foto/CTA in AR davanti */
 
-    /* sovraesposizione: l'ambiente attorno alla foto diventa bianco a 360° */
+    /* sovraesposizione high-key: l'ambiente attorno alla foto si "brucia" verso il bianco */
     .whiteout { position:absolute; inset:0; z-index:1; background:#fff; opacity:0; pointer-events:none; will-change:opacity; }
 
-    .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:2;
-      background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; transition:opacity .8s ease; }
-    .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:2;
-      background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0)); pointer-events:none; transition:opacity .8s ease; }
+    .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:3;
+      background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; transition:opacity .7s ease; }
+    .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:3;
+      background:linear-gradient(to top, rgba(0,0,0,.55), rgba(0,0,0,0)); pointer-events:none; transition:opacity .7s ease; }
     body.revealed .scrim-top, body.revealed .scrim-bot { opacity:0; }
 
-    /* tap-catcher: attivo quando compare il testo AR -> porta all'archivio */
-    .tapcatch { position:absolute; inset:0; z-index:8; pointer-events:none; }
-    .tapcatch.on { pointer-events:auto; cursor:pointer; }
-
     /* ============ Instagram camera chrome ============ */
-    .ig { position:absolute; inset:0; z-index:3; display:flex; flex-direction:column; justify-content:space-between;
+    .ig { position:absolute; inset:0; z-index:4; display:flex; flex-direction:column; justify-content:space-between;
       transition:opacity .6s ease; }
     .ig.dim { opacity:0; pointer-events:none; }
     .ig-top { display:flex; align-items:flex-start; justify-content:space-between; padding:14px 16px 0; }
@@ -83,24 +80,16 @@
       color:#fff; font-size:12px; letter-spacing:.06em; text-transform:uppercase; }
     .modes span{ opacity:.6; } .modes span.on{ opacity:1; font-weight:700; }
 
-    .hint { position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:4;
+    .hint { position:absolute; top:64px; left:50%; transform:translateX(-50%); z-index:5;
       background:rgba(0,0,0,.45); color:#fff; font-size:12.5px; padding:8px 14px; border-radius:18px;
       backdrop-filter:blur(6px); white-space:nowrap; transition:opacity .6s ease; }
     .hint.hide{ opacity:0; }
 
-    /* testo per anteprima desktop (overlay HTML) */
-    .ar-text { position:absolute; left:50%; top:44%; margin-left:-135px; width:270px; text-align:center;
-      z-index:9; opacity:0; transform:translateY(14px); transition:opacity .6s ease, transform .6s cubic-bezier(.2,.9,.25,1.2);
-      display:none; }
-    .ar-text.show { display:block; }
-    .ar-text.in { opacity:1; transform:translateY(0); }
-    .ar-text .bubble { display:inline-block; background:rgba(255,255,255,.96); color:#000; font-family:"Klein",serif;
-      font-weight:500; font-size:14px; letter-spacing:.13em; text-transform:uppercase; padding:14px 22px; border-radius:30px;
-      box-shadow:0 10px 40px rgba(0,0,0,.55); cursor:pointer; }
-
-    .sim { position:absolute; inset:0; z-index:5; display:none; }
-    .sim.on { display:block; }
-    .sim img { width:100%; height:100%; object-fit:cover; }
+    /* hint "esplora" nel mondo 360 */
+    .lookhint { position:absolute; bottom:40px; left:50%; transform:translateX(-50%); z-index:6;
+      background:rgba(0,0,0,.30); color:#111; font-size:12px; letter-spacing:.04em; padding:8px 16px; border-radius:18px;
+      opacity:0; pointer-events:none; transition:opacity .6s ease; white-space:nowrap; }
+    .lookhint.show{ opacity:.55; }
 
     .gate{ position:absolute; inset:0; z-index:12; display:none; flex-direction:column;
       align-items:center; justify-content:center; text-align:center; color:#fff; background:#000; padding:0 38px; gap:16px; }
@@ -116,9 +105,6 @@
     <div id="ar"><div class="whiteout" id="whiteout"></div></div>
     <div class="scrim-top"></div>
     <div class="scrim-bot"></div>
-    <div class="tapcatch" id="tapcatch"></div>
-
-    <div class="sim" id="sim"><img src="assets/print_1999_ss_adv_print_jeans_001.jpg" alt=""></div>
 
     <div class="ig" id="ig">
       <div class="ig-top">
@@ -150,9 +136,7 @@
     </div>
 
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
-
-    <!-- testo per anteprima desktop -->
-    <div class="ar-text" id="arText"><span class="bubble" id="discoverBtn">Click to discover the archive</span></div>
+    <div class="lookhint" id="lookhint">Muovi il telefono o trascina per esplorare</div>
 
     <div class="gate" id="gate">
       <div class="ph">📱</div>
@@ -166,26 +150,55 @@
   <script type="module">
     import * as THREE from 'three';
     import { MindARThree } from './vendor/mindar-image-three.prod.js';
+    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
     const ARCHIVE_URL = "../index.html?archive=1";
     const MIND_URL    = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
     const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
-    const PLANE_W = 1, PLANE_H = 0.625;
-    const REVEAL_MS = 1300;   // durata reveal: deblur + sovraesposizione bianca
-    const CTA_GAP   = 1800;   // attesa (pochi secondi) dopo il reveal, prima della CTA
-    const CTA_MS    = 700;    // durata emersione 3D della CTA lungo Z
+    const FONT_URL    = "vendor/three-addons/fonts/helvetiker_bold.typeface.json";
+
+    // campagne d'archivio che fluttano nel mondo 360 attorno all'utente
+    const CAMPAIGNS = [
+      "../assets/index/adv/billboard/1996/1996_fw_adv_billboard_collection_ck_001.jpg",
+      "../assets/index/adv/billboard/2009/2009_ss_adv_billboard_jeans_001.jpg",
+      "../assets/index/adv/billboard/2013/2013_ss_adv_billboard_collection_001.jpg",
+      "../assets/index/adv/print/1980/1980_adv_print_cosmetics_001.jpg",
+      "../assets/index/adv/print/1981/1981_adv_print_fragrance_001.jpg",
+      "../assets/index/adv/print/1985/1985_adv_print_fragrance_obsession_001.jpg",
+      "../assets/index/adv/print/1985/1985_ss_adv_print_underwear_001.jpg",
+      "../assets/index/adv/print/1986/1986_fw_adv_print_collection_004.jpg",
+      "../assets/index/adv/print/1988/1988_fw_adv_print_coats_001.jpg",
+      "../assets/index/adv/print/1989/1989_ss_adv_print_coats_001.jpg",
+    ];
+
+    const D_PHOTO   = 3.2;    // distanza della foto rivelata
+    const PHOTO_W   = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
+    const FLASH_MS  = 750;    // sovraesposizione high-key -> bianco
+    const DEBLUR_MS = 1150;   // deblur della foto nel mondo bianco
+    const CTA_GAP   = 1500;   // attesa dopo il reveal, prima della CTA
+    const CTA_MS    = 800;    // emersione 3D della CTA lungo Z
+    const CTA_Z_END = -2.2;   // posizione finale CTA (verso l'utente, dentro al viewport)
+    const SPHERE_R  = 6;      // raggio del 360 in cui stanno le campagne
 
     const $ = (id) => document.getElementById(id);
-    const ui = { ig:$('ig'), hint:$('hint'), arText:$('arText'), discoverBtn:$('discoverBtn'),
-                 gate:$('gate'), demoAlt:$('demoAlt'), sim:$('sim'), close:$('closeBtn'),
-                 tap:$('tapcatch'), whiteout:$('whiteout') };
+    const stage = $('stage');
+    const ui = { ig:$('ig'), hint:$('hint'), lookhint:$('lookhint'),
+                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
-    ui.discoverBtn.addEventListener('click', goArchive);
     ui.close.addEventListener('click', goArchive);
-    ui.tap.addEventListener('click', goArchive);
 
-    // fotocamera ad alta risoluzione (MindAR di default usa il valore di default del browser)
+    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
+    const clamp01 = (v) => Math.max(0, Math.min(1, v));
+
+    function isMobileDevice() {
+      const ua = navigator.userAgent || '';
+      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)
+        || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+    }
+
+    // fotocamera ad alta risoluzione per lo scan del target
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       navigator.mediaDevices.getUserMedia = (c) => {
@@ -198,121 +211,244 @@
       };
     }
 
-    const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
-    const clamp01 = (v) => Math.max(0, Math.min(1, v));
-    let found = false, revealStart = null, textStart = null;
+    // ---------- stato mondo 360 ----------
+    let phase = 'scan';               // 'scan' | 'flash' | 'world'
+    let renderer, worldScene, worldCam, scanScene = null;
+    let revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
+    let worldT0 = 0;
+    const campMats = [];
 
-    function showCtaLater() {
-      setTimeout(() => { textStart = performance.now(); ui.tap.classList.add('on'); }, REVEAL_MS + CTA_GAP);
+    // look-around (giroscopio + trascinamento)
+    let yaw = 0, pitch = 0, dragging = false, lastX = 0, lastY = 0, downX = 0, downY = 0, isDrag = false;
+    let gyroActive = false, gAlpha = 0, gBeta = 0, gGamma = 0, gOrient = 0, gyroRefInv = null, askedGyro = false;
+    const tmpEuler = new THREE.Euler();
+    const zee = new THREE.Vector3(0, 0, 1);
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+    const tmpQ = new THREE.Quaternion(), curQ = new THREE.Quaternion();
+    const ray = new THREE.Raycaster();
+
+    function sph(r, yawDeg, pitchDeg) {
+      const y = THREE.MathUtils.degToRad(yawDeg), p = THREE.MathUtils.degToRad(pitchDeg);
+      return new THREE.Vector3(r * Math.cos(p) * Math.sin(y), r * Math.sin(p), -r * Math.cos(p) * Math.cos(y));
     }
-    function onFound() {
-      if (found) return; found = true;
+
+    // costruisce scena 360, foto reveal, campagne attorno e CTA 3D — sul renderer dato
+    async function buildWorld(rnd) {
+      renderer = rnd;
+      worldScene = new THREE.Scene();
+      worldScene.background = new THREE.Color(0xffffff);
+      worldCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+      worldScene.add(new THREE.AmbientLight(0xffffff, 0.95));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); worldScene.add(dl);
+
+      // --- foto rivelata (planare, stabile) con deblur shader ---
+      const tex = new THREE.TextureLoader().load(SHARP_IMG);
+      tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true;
+      tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
+      revealMat = new THREE.ShaderMaterial({
+        uniforms: { map:{value:tex}, uBias:{value:4.5} },
+        vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
+        fragmentShader: `uniform sampler2D map; uniform float uBias; varying vec2 vUv;
+          void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin,1.0);} `,
+      });
+      const photo = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
+      photo.position.set(0, 0, -D_PHOTO);
+      worldScene.add(photo);
+
+      // --- campagne d'archivio sparse nel 360 (evitando il cono frontale) ---
+      const loader = new THREE.TextureLoader();
+      CAMPAIGNS.forEach((src, i) => {
+        const yawDeg = 40 + (i / CAMPAIGNS.length) * 280;   // 40..320, niente di fronte
+        const pitchDeg = (i % 2 ? 1 : -1) * (6 + (i % 3) * 7);
+        const r = SPHERE_R + (i % 3) * 0.7;
+        const mat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0 });
+        campMats.push(mat);
+        const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
+        mesh.position.copy(sph(r, yawDeg, pitchDeg));
+        mesh.lookAt(0, 0, 0);
+        mesh.scale.set(0.001, 0.001, 1);   // dimensione reale dopo il load (per aspect)
+        worldScene.add(mesh);
+        loader.load(src, (t) => {
+          mat.map = t; mat.needsUpdate = true;
+          const a = t.image.width / t.image.height;
+          const h = 1.55;
+          mesh.scale.set(h * a, h, 1);
+        });
+      });
+
+      // --- CTA 3D estrusa (testo con volume, niente sfondo) ---
+      try {
+        const font = await new FontLoader().loadAsync(FONT_URL);
+        buildCTA(font);
+      } catch (e) { console.error('font/CTA error:', e); }
+    }
+
+    function buildCTA(font) {
+      const geo = new TextGeometry('DISCOVER THE ARCHIVE', {
+        font, size:1, height:0.28, curveSegments:5,
+        bevelEnabled:true, bevelThickness:0.035, bevelSize:0.022, bevelSegments:2,
+      });
+      geo.computeBoundingBox();
+      const bb = geo.boundingBox;
+      const gw = bb.max.x - bb.min.x, gh = bb.max.y - bb.min.y;
+      geo.translate(-(bb.max.x + bb.min.x) / 2, -(bb.max.y + bb.min.y) / 2, 0);  // centra
+      const fit = 1.0 / gw;                                                      // larghezza ~1.0u (entra nel viewport)
+      ctaMat = new THREE.MeshStandardMaterial({ color:0x0a0a0a, metalness:0.15, roughness:0.45, transparent:true, opacity:0 });
+      const mesh = new THREE.Mesh(geo, ctaMat); mesh.scale.setScalar(fit);
+      ctaHit = new THREE.Mesh(new THREE.PlaneGeometry(gw * fit * 1.08, gh * fit * 1.8),
+                              new THREE.MeshBasicMaterial({ visible:false }));
+      ctaHit.position.z = 0.18 * fit;
+      ctaGroup = new THREE.Group();
+      ctaGroup.add(mesh); ctaGroup.add(ctaHit);
+      ctaGroup.position.set(0, 0, -D_PHOTO);
+      ctaGroup.scale.setScalar(0.12);
+      worldScene.add(ctaGroup);
+    }
+
+    // adatta renderer/camera al riquadro stage (portrait, senza distorsione)
+    function fitRenderer() {
+      const r = stage.getBoundingClientRect();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+      renderer.setSize(r.width, r.height, false);
+      const cv = renderer.domElement;
+      cv.style.objectFit = 'fill'; cv.style.width = '100%'; cv.style.height = '100%';
+      worldCam.aspect = r.width / r.height; worldCam.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', () => { if (phase === 'world') fitRenderer(); });
+
+    // ---------- look-around ----------
+    function setQuatFromGyro(q, alpha, beta, gamma, orient) {
+      tmpEuler.set(beta, alpha, -gamma, 'YXZ');
+      q.setFromEuler(tmpEuler);
+      q.multiply(q1);
+      q.multiply(tmpQ.setFromAxisAngle(zee, -orient));
+    }
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.alpha == null) return;
+      gAlpha = THREE.MathUtils.degToRad(e.alpha);
+      gBeta  = THREE.MathUtils.degToRad(e.beta || 0);
+      gGamma = THREE.MathUtils.degToRad(e.gamma || 0);
+      gOrient = THREE.MathUtils.degToRad((screen.orientation && screen.orientation.angle) || window.orientation || 0);
+      gyroActive = true;
+    });
+    function updateLook() {
+      if (gyroActive) {
+        setQuatFromGyro(curQ, gAlpha, gBeta, gGamma, gOrient);
+        if (!gyroRefInv) gyroRefInv = curQ.clone().invert();   // allinea il "davanti" alla foto
+        worldCam.quaternion.copy(curQ).multiply(gyroRefInv);
+      } else {
+        tmpEuler.set(pitch, yaw, 0, 'YXZ');
+        worldCam.quaternion.setFromEuler(tmpEuler);
+      }
+    }
+    function requestGyroOnce() {
+      if (askedGyro) return; askedGyro = true;
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function') {
+        DeviceOrientationEvent.requestPermission().catch(() => {});
+      }
+    }
+    stage.addEventListener('pointerdown', (e) => {
+      if (phase !== 'world') return;
+      dragging = true; isDrag = false; lastX = downX = e.clientX; lastY = downY = e.clientY;
+      requestGyroOnce();
+    });
+    stage.addEventListener('pointermove', (e) => {
+      if (!dragging || phase !== 'world') return;
+      const dx = e.clientX - lastX, dy = e.clientY - lastY; lastX = e.clientX; lastY = e.clientY;
+      if (Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY) > 8) isDrag = true;
+      if (!gyroActive) { yaw -= dx * 0.0028; pitch -= dy * 0.0028; pitch = Math.max(-1.05, Math.min(1.05, pitch)); }
+    });
+    stage.addEventListener('pointerup', (e) => {
+      if (phase !== 'world') { dragging = false; return; }
+      dragging = false;
+      if (!isDrag) tapTest(e.clientX, e.clientY);   // tap "fermo" = click sulla CTA
+    });
+    function tapTest(cx, cy) {
+      if (!ctaReady || !ctaHit) return;
+      const r = stage.getBoundingClientRect();
+      const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
+      ray.setFromCamera(ndc, worldCam);
+      if (ray.intersectObject(ctaHit, true).length) goArchive();
+    }
+
+    // ---------- transizioni ----------
+    function flashThenWorld() {           // mobile: high-key flash sul feed -> mondo bianco
+      phase = 'flash';
       if (navigator.vibrate) navigator.vibrate(60);
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
-      document.body.classList.add('revealed');   // sfuma le scrim verso il bianco
-      revealStart = performance.now();
-      showCtaLater();
+      document.body.classList.add('revealed');
+      const vid = $('ar').querySelector('video');
+      if (vid) vid.style.filter = 'brightness(3.4) contrast(1.06)';   // esposizione che sale
+      ui.whiteout.style.transition = 'opacity ' + FLASH_MS + 'ms ease-in';
+      ui.whiteout.style.opacity = '1';
+      setTimeout(enterWorld, FLASH_MS);
     }
-    window.__onFound = onFound;
-
-    function isMobileDevice() {
-      const ua = navigator.userAgent || '';
-      return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)
-        || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
-    }
-
-    // crea una texture col testo "Click to discover the archive" (pillola bianca)
-    async function makeTextTexture(text) {
-      try { await document.fonts.load('500 60px "Klein"'); } catch (e) {}
-      const c = document.createElement('canvas'); c.width = 1280; c.height = 224;
-      const x = c.getContext('2d');
-      const W = c.width, H = c.height, pad = 26, r = (H - pad*2)/2;
-      x.fillStyle = 'rgba(255,255,255,0.96)';
-      if (x.roundRect) { x.beginPath(); x.roundRect(pad, pad, W - pad*2, H - pad*2, r); x.fill(); }
-      else { x.fillRect(pad, pad, W - pad*2, H - pad*2); }
-      x.fillStyle = '#000';
-      x.textAlign = 'center'; x.textBaseline = 'middle';
-      try { x.letterSpacing = '5px'; } catch (e) {}
-      const T = text.toUpperCase(), maxW = W - pad*2 - 70;
-      let fs = 64; x.font = `500 ${fs}px "Klein", Georgia, serif`;
-      while (x.measureText(T).width > maxW && fs > 22) { fs -= 2; x.font = `500 ${fs}px "Klein", Georgia, serif`; }
-      x.fillText(T, W/2, H/2 + 2);
-      const tex = new THREE.CanvasTexture(c);
-      tex.encoding = THREE.sRGBEncoding; tex.anisotropy = 8;
-      return { tex, ratio: W / H };
+    function enterWorld() {
+      phase = 'world';
+      worldT0 = performance.now();
+      const vid = $('ar').querySelector('video');
+      if (vid) vid.style.display = 'none';
+      fitRenderer();
+      setTimeout(() => { ui.lookhint.classList.add('show');
+        setTimeout(() => ui.lookhint.classList.remove('show'), 3200); }, 600);
     }
 
+    // ---------- loop ----------
+    function startLoop() {
+      renderer.setAnimationLoop((now) => {
+        if (phase === 'world') {
+          const wt = now - worldT0;
+          revealMat.uniforms.uBias.value = 4.5 * (1 - easeOutCubic(clamp01(wt / DEBLUR_MS)));  // deblur
+          const cf = easeOutCubic(clamp01(wt / 900));
+          for (const m of campMats) m.opacity = cf * 0.95;                                      // campagne fade-in
+          const ctaT = wt - (DEBLUR_MS + CTA_GAP);
+          if (ctaT > 0 && ctaGroup) {
+            ctaReady = true;
+            const e = easeOutCubic(clamp01(ctaT / CTA_MS));
+            ctaGroup.position.z = -D_PHOTO + (CTA_Z_END + D_PHOTO) * e;   // emerge verso l'utente (Z)
+            ctaGroup.scale.setScalar(0.12 + 0.88 * e);
+            ctaMat.opacity = e;
+          }
+          updateLook();
+          renderer.render(worldScene, worldCam);
+        } else if (scanScene) {
+          renderer.render(scanScene, scanCam);                     // scan/flash: feed visibile
+        }
+      });
+    }
+    let scanCam = null;
+
+    // ---------- avvio ----------
     async function startAR() {
       const mindar = new MindARThree({
         container: $('ar'), imageTargetSrc: MIND_URL,
         uiScanning: 'no', uiLoading: 'no', uiError: 'no',
-        // lock più aderente: i valori precedenti sovra-smorzavano la posa
-        // (overlay in ritardo -> decentrato e "deformato" agli angoli in movimento)
-        filterMinCF: 0.001, filterBeta: 1000,
-        warmupTolerance: 5, missTolerance: 5,
       });
-      const { renderer, scene, camera } = mindar;
+      scanScene = mindar.scene; scanCam = mindar.camera;
       const anchor = mindar.addAnchor(0);
-
-      // --- piano reveal: focus pull (shader) sfocato -> nitido ---
-      const tex = new THREE.TextureLoader().load(SHARP_IMG);
-      tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter;
-      tex.generateMipmaps = true;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
-      const revealMat = new THREE.ShaderMaterial({
-        uniforms: { map:{value:tex}, uBias:{value:4.5}, uOpacity:{value:0} },
-        transparent: true,
-        vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
-        fragmentShader: `uniform sampler2D map; uniform float uBias; uniform float uOpacity; varying vec2 vUv;
-          void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin, c.a*uOpacity);} `,
-      });
-      const revealPlane = new THREE.Mesh(new THREE.PlaneGeometry(PLANE_W, PLANE_H), revealMat);
-      anchor.group.add(revealPlane);
-
-      // --- CTA 3D: emerge dal CENTRO della foto, in rilievo lungo Z verso l'utente ---
-      const { tex: textTex, ratio } = await makeTextTexture('Click to discover the archive');
-      const textMat = new THREE.MeshBasicMaterial({ map:textTex, transparent:true, opacity:0, depthTest:false });
-      const tW = 0.62, tH = tW / ratio;
-      const ctaPlane = new THREE.Mesh(new THREE.PlaneGeometry(tW, tH), textMat);
-      ctaPlane.position.set(0, 0, 0.02);   // centro foto, a filo
-      ctaPlane.scale.setScalar(0.6);
-      ctaPlane.renderOrder = 20;
-      anchor.group.add(ctaPlane);
-
-      anchor.onTargetFound = onFound;
-
+      anchor.onTargetFound = () => { if (phase === 'scan') flashThenWorld(); };
+      await buildWorld(mindar.renderer);
+      startLoop();
       await mindar.start();
-      renderer.setAnimationLoop(() => {
-        if (revealStart !== null) {
-          const t = clamp01((performance.now() - revealStart) / REVEAL_MS);
-          const e = easeOutCubic(t);
-          revealMat.uniforms.uOpacity.value = clamp01(t / 0.18);   // foto compare subito
-          revealMat.uniforms.uBias.value = 4.5 * (1 - e);          // deblur progressivo
-          ui.whiteout.style.opacity = e;                           // ambiente -> bianco 360°
-        }
-        if (textStart !== null) {
-          const e = easeOutCubic(clamp01((performance.now() - textStart) / CTA_MS));
-          textMat.opacity = e;
-          ctaPlane.position.z = 0.02 + 0.22 * e;   // emerge verso l'utente (asse Z)
-          ctaPlane.scale.setScalar(0.6 + 0.4 * e); // rilievo
-        }
-        renderer.render(scene, camera);
-      });
     }
 
-    function simulate() {
+    async function startPreview() {        // desktop: stesso mondo, senza camera
       ui.gate.classList.remove('on');
-      ui.sim.classList.add('on');
-      ui.arText.classList.add('show');
-      onFound();
-      setTimeout(() => ui.arText.classList.add('in'), REVEAL_MS + CTA_GAP);
+      ui.ig.classList.add('dim');
+      ui.whiteout.style.opacity = '1';
+      const rnd = new THREE.WebGLRenderer({ antialias:true });
+      rnd.setSize(stage.clientWidth, stage.clientHeight);
+      $('ar').appendChild(rnd.domElement);
+      await buildWorld(rnd);
+      startLoop();
+      enterWorld();
     }
-    ui.demoAlt.addEventListener('click', simulate);
+    ui.demoAlt.addEventListener('click', startPreview);
 
     async function init() {
       if (!isMobileDevice()) { ui.ig.style.display = 'none'; ui.gate.classList.add('on'); return; }
-      setTimeout(() => ui.hint.classList.add('hide'), 4000);
+      setTimeout(() => { if (phase === 'scan') ui.hint.classList.add('hide'); }, 4000);
       try { await startAR(); }
       catch (e) {
         ui.hint.textContent = "Consenti l'accesso alla fotocamera, poi ricarica.";

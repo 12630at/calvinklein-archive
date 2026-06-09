@@ -35,13 +35,12 @@ html, body {
   color: var(--ig-text);
 }
 
-/* ---- contenitore "telefono": 1:1 su mobile, centrato su desktop ---- */
+/* ---- contenitore "telefono": pieno schermo su mobile, centrato su desktop ---- */
 .phone {
   position: relative;
   width: 100vw;
-  max-width: var(--vw);
   height: 100vh;
-  max-height: var(--vh);
+  height: 100dvh;
   margin: 0 auto;
   background: var(--ig-bg);
   overflow: hidden;

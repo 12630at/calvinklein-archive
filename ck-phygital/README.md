@@ -13,15 +13,22 @@ La root smista per dispositivo:
 
 ## Flusso (mobile)
 
-1. `ck-phygital/index.html` — mock Instagram 1:1 (390×844). Post `@calvinklein` con il
+1. `ck-phygital/index.html` — mock Instagram a pieno schermo. Post `@calvinklein` con il
    print sfocato e il CTA **"Prova il filtro →"** che apre la camera.
-2. `camera.html` — **fotocamera di Instagram 1:1** (story/effetto AR), feed a **risoluzione
-   alta** (1920×1080). Inquadri il print sfocato e MindAR ci **sovrappone in AR**, ancorata
-   al target, la versione nitida con un'**animazione di reveal** (dissolvenza sfocato→nitido +
-   settle): il print si "trasforma" sul posto (nessuno shutter).
-3. Con un piccolo **ritardo**, sopra la campagna compare in **AR** il testo
-   **"Click to discover the archive"** (ancorato, via CSS3D) → tap → archivio
-   (`../index.html?archive=1`).
+2. `camera.html` — **fotocamera di Instagram** (feed ad alta risoluzione). MindAR serve
+   **solo a riconoscere** il print sfocato. Al riconoscimento parte un **flash high-key**:
+   l'esposizione del feed sale gradualmente fino a bruciare l'ambiente in **bianco**.
+3. Subito dopo l'esperienza si **stacca dal tracking** ed entra in un **mondo virtuale 360°
+   bianco** (niente più jitter di MindAR): la foto, perfettamente planare e stabile, sta
+   davanti all'utente e fa il **deblur** sfocato→nitido. Tutt'attorno, su una sfera,
+   fluttuano altre **campagne d'archivio**: ci si guarda intorno col **giroscopio** (o
+   trascinando).
+4. Dopo una breve attesa, dal **centro** della foto **emerge una CTA 3D estrusa**
+   ("DISCOVER THE ARCHIVE", testo con volume reale, senza sfondo) che avanza lungo Z verso
+   l'utente → tap sulla CTA → archivio (`../index.html?archive=1`).
+
+Su **desktop** il gate "▶ Anteprima" avvia lo stesso mondo 360° (senza camera), esplorabile
+trascinando col mouse.
 
 ## Nomenclatura asset
 
@@ -42,9 +49,11 @@ La root smista per dispositivo:
 |---|---|
 | `assets/blur_print_1999_ss_adv_print_jeans_001.jpg` | print **sfocato** — ciò che si stampa/inquadra |
 | `assets/blur_print_1999_ss_adv_print_jeans_001.mind` | target MindAR (compilato dallo sfocato) |
-| `assets/print_1999_ss_adv_print_jeans_001.jpg` | print **nitido** rivelato in AR |
+| `assets/print_1999_ss_adv_print_jeans_001.jpg` | print **nitido** rivelato nel mondo 360 |
+| `../assets/index/**` | campagne d'archivio che fluttano nel 360 (lista in `CAMPAIGNS` dentro `camera.html`) |
 | `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
 | `vendor/` | MindAR + Three.js **in locale** (niente CDN) |
+| `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js,fonts/helvetiker_bold.typeface.json}` | testo 3D estruso della CTA (three r146, in locale) |
 
 ## Ricompilare il target (solo se cambia il print)
 
