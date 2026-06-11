@@ -37,6 +37,9 @@
     #ar video  { z-index:0!important; object-fit:cover!important; transition:filter .75s ease-in; } /* feed camera dietro */
     #ar canvas { z-index:2!important; object-fit:cover!important; }                                /* foto/CTA in AR davanti */
 
+    /* sovraesposizione high-key: l'ambiente attorno alla foto si "brucia" verso il bianco */
+    .whiteout { position:absolute; inset:0; z-index:1; background:#fff; opacity:0; pointer-events:none; will-change:opacity; }
+
     .scrim-top { position:absolute; top:0; left:0; right:0; height:120px; z-index:3;
       background:linear-gradient(to bottom, rgba(0,0,0,.45), rgba(0,0,0,0)); pointer-events:none; transition:opacity .7s ease; }
     .scrim-bot { position:absolute; bottom:0; left:0; right:0; height:230px; z-index:3;
@@ -89,13 +92,13 @@
       opacity:0; pointer-events:none; transition:opacity .6s ease; white-space:nowrap; }
     .lookhint.show{ opacity:.55; }
 
-    /* CTA 2D (font Klein, peso Book) — riemerge dopo il reveal */
+    /* CTA 2D (font Klein, peso Book) — riemerge dopo il reveal nel mondo bianco */
     .cta2d { position:absolute; left:50%; bottom:118px; z-index:7;
       transform:translateX(-50%) translateY(14px); opacity:0; pointer-events:none;
       transition:opacity .8s ease, transform .8s ease;
       font-family:"Klein",sans-serif; font-weight:400; font-size:15px; letter-spacing:.14em; text-transform:uppercase;
-      color:#111; background:rgba(255,255,255,.92); border:none; border-radius:30px; padding:14px 26px;
-      box-shadow:0 6px 24px rgba(0,0,0,.25); cursor:pointer; }
+      color:#111; background:rgba(255,255,255,.92); border:1px solid rgba(0,0,0,.12); border-radius:30px; padding:14px 26px;
+      box-shadow:0 6px 24px rgba(0,0,0,.18); cursor:pointer; }
     .cta2d.show { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
 
     .gate{ position:absolute; inset:0; z-index:12; display:none; flex-direction:column;
@@ -109,7 +112,7 @@
 </head>
 <body>
   <div class="stage" id="stage">
-    <div id="ar"></div>
+    <div id="ar"><div class="whiteout" id="whiteout"></div></div>
     <div class="scrim-top"></div>
     <div class="scrim-bot"></div>
 
@@ -143,7 +146,7 @@
     </div>
 
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
-    <div class="lookhint" id="lookhint">Muovi il telefono attorno alla foto per esplorare l'archivio</div>
+    <div class="lookhint" id="lookhint">Muovi il telefono per esplorare l'archivio 360°</div>
 
     <button class="cta2d" id="cta">Discover the archive</button>
 
@@ -169,21 +172,22 @@
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
     const ARCHIVE_BASE = "../assets/index";
-    const N_CAMPAIGNS  = 60;     // quante campagne fluttuano attorno alla foto, ancorate al marker
-    const CAMP_R       = 2.6;    // raggio della nuvola di campagne (emisfero frontale, in unità marker)
+    const N_CAMPAIGNS  = 150;    // quante foto sparse nel mondo 360 (più campagne)
+    const CAMP_R       = 7.5;    // raggio (shell unica -> distribuzione uniforme, niente sovrapposizioni)
+    const TEX_MAX      = 448;    // lato massimo texture campagna (memoria GPU su mobile)
 
-    const PHOTO_W    = 1.0;    // foto sovrapposta al marker (1 unità ~ larghezza del target)
-    const PHOTO_H    = 0.625;  // aspect 1.6:1
-    const GLOW_PUSH  = 1.3;    // quanto il glow dei bordi si proietta verso la camera (+Z marker)
-    const RECOG_DELAY = 2200;  // attesa dopo il riconoscimento, prima di far partire l'animazione
-    const BURST_MS   = 850;    // glow 3D che si proietta dai bordi della foto verso la camera
-    const DEBLUR_MS  = 1150;   // deblur della foto una volta ancorata al marker
-    const CTA_GAP    = 1500;   // attesa dopo il reveal, prima della CTA 2D
+    const D_PHOTO     = 3.2;    // distanza della foto rivelata
+    const PHOTO_W     = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
+    const RECOG_DELAY = 2200;   // attesa dopo il riconoscimento, prima di far partire l'animazione
+    const BURST_MS    = 850;    // glow 3D che si proietta dai bordi della foto verso la camera
+    const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
+    const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
+    const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
 
     const $ = (id) => document.getElementById(id);
     const stage = $('stage');
     const ui = { ig:$('ig'), hint:$('hint'), lookhint:$('lookhint'), cta:$('cta'),
-                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn') };
+                 gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
     ui.close.addEventListener('click', goArchive);
@@ -211,19 +215,22 @@
       };
     }
 
-    // ---------- stato esperienza AR ----------
+    // ---------- stato mondo 360 ----------
     let phase = 'scan';               // 'scan' | 'recognized' | 'burst' | 'world'
-    let renderer, scanScene = null, scanCam = null;
-    let renderScene = null, renderCam = null, contentRoot = null, markerMode = false;
-    let photoMesh, glowMesh, revealMat, ctaShown = false;
+    let renderer, worldScene, worldCam, scanScene = null;
+    let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false;
     let worldT0 = 0, burstT0 = 0, previewMode = false;
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
 
-    // tap vs swipe + raycast (la posa è data da MindAR in 6DoF; su desktop auto-rotazione)
-    let downX = 0, downY = 0, isDrag = false;
+    // look-around: SOLO giroscopio (su desktop auto-rotazione in anteprima)
+    let yaw = 0, downX = 0, downY = 0, isDrag = false;
+    let gyroActive = false, gAlpha = 0, gBeta = 0, gGamma = 0, gOrient = 0, gyroRefInv = null;
+    const tmpEuler = new THREE.Euler();
     const zee = new THREE.Vector3(0, 0, 1);
-    const tmpQ2 = new THREE.Quaternion();
+    const q1 = new THREE.Quaternion(-Math.sqrt(0.5), 0, 0, Math.sqrt(0.5));
+    const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), curQ = new THREE.Quaternion();
+    const targetQ = new THREE.Quaternion();   // posa giroscopio target (smussata via slerp)
     const ray = new THREE.Raycaster();
 
     // carica una texture ridimensionata (max 768px) -> poca memoria GPU su mobile
@@ -231,7 +238,7 @@
       return new Promise((resolve) => {
         const img = new Image(); img.crossOrigin = 'anonymous';
         img.onload = () => {
-          const max = 512, s = Math.min(1, max / Math.max(img.width, img.height));
+          const max = TEX_MAX, s = Math.min(1, max / Math.max(img.width, img.height));
           const w = Math.round(img.width * s), h = Math.round(img.height * s);
           const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
           cv.getContext('2d').drawImage(img, 0, 0, w, h);
@@ -296,16 +303,20 @@
       return dirs;
     }
 
-    // costruisce foto reveal + campagne dentro `root` (il gruppo ancorato al marker MindAR);
-    // le luci vanno nella `scene` renderizzata. Coordinate in spazio marker: origine = marker,
-    // +Z verso la camera/utente.
-    async function buildWorld(rnd, root, scene) {
+    // costruisce scena 360, foto reveal, campagne attorno e CTA 3D — sul renderer dato
+    async function buildWorld(rnd) {
       renderer = rnd;
-      contentRoot = root;
-      scene.add(new THREE.AmbientLight(0xffffff, 0.95));
-      const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); scene.add(dl);
+      worldScene = new THREE.Scene();
+      worldScene.background = null;                  // trasparente durante il burst (si vede la camera)
+      worldCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
+      worldScene.add(new THREE.AmbientLight(0xffffff, 0.95));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); worldScene.add(dl);
 
-      // --- foto rivelata, sovrapposta RIGIDAMENTE al marker, con deblur shader ---
+      // gruppo centrale: foto + CTA fluttuano INSIEME
+      centerGroup = new THREE.Group();
+      worldScene.add(centerGroup);
+
+      // --- foto rivelata (planare, stabile) con deblur shader ---
       const tex = new THREE.TextureLoader().load(SHARP_IMG);
       tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
@@ -315,63 +326,87 @@
         fragmentShader: `uniform sampler2D map; uniform float uBias; varying vec2 vUv;
           void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin,1.0);} `,
       });
-      photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_H), revealMat);
-      photoMesh.position.set(0, 0, 0.01);            // sul marker, appena davanti
-      photoMesh.visible = false;                     // appare dopo il glow
-      contentRoot.add(photoMesh);
+      photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
+      photoMesh.position.set(0, 0, -D_PHOTO);
+      photoMesh.visible = false;                     // appare dopo il burst
+      centerGroup.add(photoMesh);
 
-      // glow 3D dai bordi della foto che si proietta verso la camera (+Z)
-      glowMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_H),
+      // glow 3D dai bordi della foto che si proietta verso la camera (transizione)
+      glowMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625),
         new THREE.MeshBasicMaterial({ map: makeEdgeGlowTex(), transparent:true, opacity:0,
           blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
-      glowMesh.position.set(0, 0, 0.02); glowMesh.renderOrder = 50; glowMesh.visible = false;
-      contentRoot.add(glowMesh);
+      glowMesh.position.set(0, 0, -D_PHOTO); glowMesh.renderOrder = 50; glowMesh.visible = false;
+      worldScene.add(glowMesh);
 
-      // --- campagne d'archivio: nuvola nell'emisfero frontale del marker (+Z), ancorate all'ambiente ---
+      // --- campagne d'archivio: distribuzione uniforme sul 360, fluttuanti e cliccabili ---
       const pool = await loadCampaignPool();
-      const dirs = fibDirs(Math.ceil(N_CAMPAIGNS * 3));     // tanti extra: ne teniamo solo l'emisfero frontale
+      const dirs = fibDirs(Math.ceil(N_CAMPAIGNS * 1.4));   // extra per scartare il cono frontale
       let placed = 0, di = 0;
       while (placed < N_CAMPAIGNS && di < dirs.length && placed < pool.length) {
         const dir = dirs[di++];
-        if (dir.z < 0.15) continue;                           // solo davanti al marker, verso l'utente (+Z)
+        if (dir.z < -0.80) continue;                          // libera il cono della foto (fronte = -Z)
         const it = pool[placed];
-        const base = dir.clone().multiplyScalar(CAMP_R + (Math.random() - 0.5) * 0.5);
+        const base = dir.clone().multiplyScalar(CAMP_R + (Math.random() - 0.5) * 0.4);
         const mat = new THREE.MeshBasicMaterial({ transparent:true, opacity:0 });
         const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), mat);
-        mesh.position.copy(base);                             // orientamento di default: piano rivolto verso +Z (l'utente)
-        let hh = 0.32 + Math.random() * 0.22;
+        mesh.position.copy(base);
+        mesh.lookAt(0, 0, 0);
+        let hh = 0.9 + Math.random() * 0.35;
         const maxd = Math.max(hh * it.a, hh);
-        if (maxd > 0.7) hh *= 0.7 / maxd;                     // limita la dimensione -> niente sovrapposizioni
+        if (maxd > 1.9) hh *= 1.9 / maxd;                     // limita la dimensione -> niente sovrapposizioni
         mesh.scale.set(hh * it.a, hh, 1);
         mesh.userData = {
           stem: it.stem, base: base.clone(), baseQuat: mesh.quaternion.clone(),
           phase: Math.random() * Math.PI * 2, speed: 0.25 + Math.random() * 0.45,
-          amp: 0.06 + Math.random() * 0.10, rphase: Math.random() * Math.PI * 2, ramp: 0.02 + Math.random() * 0.04,
+          amp: 0.08 + Math.random() * 0.14, rphase: Math.random() * Math.PI * 2, ramp: 0.02 + Math.random() * 0.04,
         };
         loadTex(it.path).then((t) => { if (t) { mat.map = t; mat.needsUpdate = true; } });
-        campMats.push(mat); campMeshes.push(mesh); contentRoot.add(mesh);
+        campMats.push(mat); campMeshes.push(mesh); worldScene.add(mesh);
         placed++;
       }
       // la CTA è ora un overlay 2D (#cta): nessuna geometria 3D da costruire
     }
 
-    // adatta renderer/camera al riquadro stage (solo in anteprima desktop; in AR è MindAR a gestirlo)
+    // adatta renderer/camera al riquadro stage (portrait, senza distorsione)
     function fitRenderer() {
-      if (markerMode) return;                              // AR: dimensioni e proiezione le imposta MindAR
       const r = stage.getBoundingClientRect();
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
       renderer.setSize(r.width, r.height, false);
       const cv = renderer.domElement;
       cv.style.objectFit = 'fill'; cv.style.width = '100%'; cv.style.height = '100%';
-      renderCam.aspect = r.width / r.height; renderCam.updateProjectionMatrix();
+      worldCam.aspect = r.width / r.height; worldCam.updateProjectionMatrix();
     }
     window.addEventListener('resize', () => { if (phase === 'world') fitRenderer(); });
 
-    // ---------- movimento ----------
-    // In AR la posa è data dal tracking 6DoF di MindAR (l'utente muove il telefono attorno
-    // alla foto); su desktop, senza marker, ruotiamo lentamente la nuvola per mostrarla.
+    // ---------- look-around ----------
+    function setQuatFromGyro(q, alpha, beta, gamma, orient) {
+      tmpEuler.set(beta, alpha, -gamma, 'YXZ');
+      q.setFromEuler(tmpEuler);
+      q.multiply(q1);
+      q.multiply(tmpQ.setFromAxisAngle(zee, -orient));
+    }
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.alpha == null) return;
+      gAlpha = THREE.MathUtils.degToRad(e.alpha);
+      gBeta  = THREE.MathUtils.degToRad(e.beta || 0);
+      gGamma = THREE.MathUtils.degToRad(e.gamma || 0);
+      gOrient = THREE.MathUtils.degToRad((screen.orientation && screen.orientation.angle) || window.orientation || 0);
+      gyroActive = true;
+    });
     function updateLook() {
-      if (previewMode && contentRoot) contentRoot.rotation.y += 0.0035;
+      if (previewMode) {                                   // desktop: lenta auto-rotazione per mostrare il 360
+        yaw += 0.0022; tmpEuler.set(0, yaw, 0, 'YXZ'); worldCam.quaternion.setFromEuler(tmpEuler); return;
+      }
+      if (gyroActive) {                                    // mobile: SOLO giroscopio
+        setQuatFromGyro(curQ, gAlpha, gBeta, gGamma, gOrient);
+        if (!gyroRefInv) {                                 // allinea il "davanti" alla foto + parti senza scatto
+          gyroRefInv = curQ.clone().invert();
+          worldCam.quaternion.copy(curQ).multiply(gyroRefInv);
+        }
+        targetQ.copy(curQ).multiply(gyroRefInv);
+        worldCam.quaternion.slerp(targetQ, GYRO_SMOOTH);   // smoothing -> niente jitter, movimento fluido
+      }
+      // senza giroscopio resta frontale (niente drag)
     }
     stage.addEventListener('pointerdown', (e) => {
       if (phase !== 'world') return;
@@ -388,7 +423,7 @@
     function tapTest(cx, cy) {
       const r = stage.getBoundingClientRect();
       const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
-      ray.setFromCamera(ndc, renderCam);
+      ray.setFromCamera(ndc, worldCam);
       const hit = ray.intersectObjects(campMeshes, false);   // click su una campagna -> item view
       if (hit.length) {
         const stem = hit[0].object.userData.stem;
@@ -404,15 +439,17 @@
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
       document.body.classList.add('revealed');
-      if (glowMesh) glowMesh.visible = true;   // l'ambiente reale resta visibile: nessun flash bianco generale
+      if (glowMesh) glowMesh.visible = true;   // niente flash bianco generale: solo il glow dai margini
     }
-    function enterWorld() {                // dal glow alla scena ancorata al marker
+    function enterWorld() {                // dal bagliore al mondo 3D bianco
       phase = 'world';
       worldT0 = performance.now();
-      // niente mondo bianco: il contenuto è ancorato al marker (6DoF) e lo sfondo della scena
-      // è l'ambiente reale (feed camera in AR; fondo neutro in anteprima desktop).
+      worldScene.background = new THREE.Color(0xffffff);
       if (glowMesh) glowMesh.visible = false;
       if (photoMesh) photoMesh.visible = true;
+      const vid = $('ar').querySelector('video');
+      if (vid) vid.style.display = 'none';
+      ui.whiteout.style.opacity = '1';     // sicurezza: fondo bianco
       fitRenderer();
       setTimeout(() => { ui.lookhint.classList.add('show');
         setTimeout(() => ui.lookhint.classList.remove('show'), 3200); }, 600);
@@ -427,8 +464,11 @@
           const cf = easeOutCubic(clamp01(wt / 900));
           for (const m of campMats) m.opacity = cf * 0.95;                                      // campagne fade-in
           const ts = now * 0.001;
-          // la foto resta RIGIDAMENTE sul marker (niente float); fluttuano solo le campagne attorno
-          for (const mh of campMeshes) {
+          if (centerGroup) {                                                                   // foto + CTA fluttuano insieme
+            centerGroup.position.set(Math.cos(ts * 0.42) * 0.03, Math.sin(ts * 0.55) * 0.05, 0);
+            centerGroup.rotation.set(Math.sin(ts * 0.42) * 0.010, 0, Math.sin(ts * 0.50) * 0.012);
+          }
+          for (const mh of campMeshes) {                                                       // campagne che fluttuano
             const u = mh.userData;
             mh.position.y = u.base.y + Math.sin(ts * u.speed + u.phase) * u.amp;
             mh.position.x = u.base.x + Math.cos(ts * u.speed * 0.8 + u.phase) * u.amp * 0.5;
@@ -438,20 +478,22 @@
             ctaShown = true; ui.cta.classList.add('show');
           }
           updateLook();
-          renderer.render(renderScene, renderCam);
+          renderer.render(worldScene, worldCam);
         } else if (phase === 'burst') {
           const bt = now - burstT0, e = easeOutCubic(clamp01(bt / BURST_MS));
-          glowMesh.material.opacity = Math.sin(Math.PI * clamp01(e));   // pulse: sale dai bordi e svanisce
-          glowMesh.position.z = 0.02 + GLOW_PUSH * e;                    // i bordi si proiettano verso la camera (+Z)
-          glowMesh.scale.setScalar(1 + e * 1.6);                        // si espande dai margini (niente whiteout)
+          glowMesh.material.opacity = Math.sin(Math.PI * clamp01(e));    // pulse: sale dai bordi e svanisce
+          glowMesh.position.z = -D_PHOTO + (D_PHOTO - 0.25) * e;          // i bordi si proiettano verso la camera
+          glowMesh.scale.setScalar(1 + e * 1.6);                         // si espande dai margini (niente whiteout)
+          ui.whiteout.style.opacity = String(clamp01((e - 0.55) / 0.45)); // ultima parte: l'ambiente sfuma verso il mondo bianco
           updateLook();
-          renderer.render(renderScene, renderCam);                  // contenuto sul marker + ambiente reale dietro
+          renderer.render(worldScene, worldCam);                   // bg trasparente -> camera dietro + glow
           if (bt >= BURST_MS) enterWorld();
-        } else if (renderScene) {
-          renderer.render(renderScene, renderCam);                  // scan: feed camera visibile
+        } else if (scanScene) {
+          renderer.render(scanScene, scanCam);                     // scan: feed visibile
         }
       });
     }
+    let scanCam = null;
 
     // ---------- avvio ----------
     async function startAR() {
@@ -460,39 +502,40 @@
         uiScanning: 'no', uiLoading: 'no', uiError: 'no',
       });
       scanScene = mindar.scene; scanCam = mindar.camera;
-      renderScene = scanScene; renderCam = scanCam; markerMode = true;
-      const anchor = mindar.addAnchor(0);   // il contenuto vive qui: posa 6DoF del marker
+      const anchor = mindar.addAnchor(0);
       anchor.onTargetFound = () => {
         if (phase !== 'scan') return;
         phase = 'recognized';                 // blocca ri-trigger durante l'attesa
         if (navigator.vibrate) navigator.vibrate(30);
         setTimeout(() => { if (phase === 'recognized') startBurst(); }, RECOG_DELAY);
       };
-      await buildWorld(mindar.renderer, anchor.group, scanScene);
+      await buildWorld(mindar.renderer);
       startLoop();
       await mindar.start();
     }
 
-    async function startPreview() {        // desktop: stessa scena, senza camera né marker (auto-rotazione)
+    async function startPreview() {        // desktop: stesso mondo, senza camera (auto-rotazione)
       ui.gate.classList.remove('on');
       ui.ig.classList.add('dim');
-      previewMode = true; markerMode = false;
+      ui.whiteout.style.opacity = '1';
+      previewMode = true;
       const rnd = new THREE.WebGLRenderer({ antialias:true });
+      rnd.setSize(stage.clientWidth, stage.clientHeight);
       $('ar').appendChild(rnd.domElement);
-      const scene = new THREE.Scene();
-      scene.background = new THREE.Color(0x111111);             // anteprima desktop: fondo neutro (niente camera)
-      const cam = new THREE.PerspectiveCamera(60, stage.clientWidth / stage.clientHeight, 0.1, 100);
-      cam.position.set(0, 0, 3.2);                              // guarda la nuvola dal davanti (+Z)
-      const root = new THREE.Group(); scene.add(root);
-      renderScene = scene; renderCam = cam;
-      await buildWorld(rnd, root, scene);
-      fitRenderer();
+      await buildWorld(rnd);
       startLoop();
       enterWorld();
     }
     ui.demoAlt.addEventListener('click', startPreview);
 
-    // niente più giroscopio: in AR la posa arriva dal tracking 6DoF di MindAR (camera)
+    // fallback: il permesso giroscopio si chiede già al tap su "Prova il filtro" (index.html);
+    // se non fosse passato, lo richiediamo al primo tocco nella camera (iOS richiede un gesto).
+    window.addEventListener('touchstart', function once() {
+      window.removeEventListener('touchstart', once);
+      if (window.DeviceOrientationEvent && typeof DeviceOrientationEvent.requestPermission === 'function' && !gyroActive) {
+        DeviceOrientationEvent.requestPermission().catch(() => {});
+      }
+    }, { passive: true });
 
     function init() {
       if (!isMobileDevice()) { ui.ig.style.display = 'none'; ui.gate.classList.add('on'); return; }
