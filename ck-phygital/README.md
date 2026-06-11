@@ -17,22 +17,21 @@ La root smista per dispositivo:
    print sfocato e il CTA **"Prova il filtro →"**: il tap **chiede subito i permessi**
    (sensori di movimento su iOS) e apre la camera — niente schermata "Avvia" separata.
 2. `camera.html` — **fotocamera di Instagram** (feed ad alta risoluzione). MindAR serve
-   **solo a riconoscere** il print sfocato. Al riconoscimento un **bagliore bianco 3D**
-   esce dalla foto **verso la camera**, si espande fino a riempire la vista e porta nel
-   mondo 3D.
-3. Subito dopo l'esperienza si **stacca dal tracking** ed entra in un **mondo virtuale 360°
-   bianco** (niente più jitter di MindAR): la foto, perfettamente planare e stabile, sta
-   davanti all'utente e fa il **deblur** sfocato→nitido. Tutt'attorno, su una sfera,
-   **fluttuano** circa 80 **campagne d'archivio** pescate **a caso** da `archive_index.csv`
-   distribuite in modo **uniforme** sulla sfera (Fibonacci → niente sovrapposizioni),
-   ridimensionate a 512px per la memoria mobile. Ci si guarda intorno **solo col
-   giroscopio** (il permesso si chiede al tap su "Prova il filtro", obbligatorio su iOS).
-   **Tap su una campagna** → apre la sua **item view** nell'archivio
-   (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
-4. Dopo una breve attesa, dal **centro** della foto **emerge una CTA 3D estrusa nel font
-   Klein** ("DISCOVER THE ARCHIVE", volume reale, senza sfondo) che avanza lungo Z verso
-   l'utente → tap sulla CTA → archivio (`../index.html?archive=1`). Foto e CTA **fluttuano
-   insieme**; anche le campagne fluttuano.
+   **solo a riconoscere** il print sfocato. Al riconoscimento parte un **delay di qualche
+   secondo**, poi un **glow 3D** che si origina **solo dai margini della foto** e si
+   **proietta verso la camera** (niente più flash bianco generale) introduce l'esperienza.
+3. L'**infinite canvas** è **ancorato direttamente all'ambiente reale** (il feed camera
+   resta visibile dietro, **niente più mondo bianco**), posizionato sulle **coordinate
+   fisiche della foto scansionata**: la foto, planare e stabile, sta davanti all'utente e
+   fa il **deblur** sfocato→nitido. Tutt'attorno **fluttuano** circa 80 **campagne
+   d'archivio** pescate **a caso** da `archive_index.csv`, distribuite in modo **uniforme**
+   (Fibonacci → niente sovrapposizioni), ridimensionate a 512px per la memoria mobile. Ci
+   si guarda intorno **solo col giroscopio** (il permesso si chiede al tap su "Prova il
+   filtro", obbligatorio su iOS). **Tap su una campagna** → apre la sua **item view**
+   nell'archivio (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
+4. Dopo una breve attesa **riemerge la CTA in 2D** (overlay, font **Klein** peso **Book**)
+   "Discover the archive" → tap sulla CTA → archivio (`../index.html?archive=1`). Foto e
+   campagne **fluttuano**.
 
 Su **desktop** il gate "▶ Anteprima" avvia lo stesso mondo 360° (senza camera) con una
 lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
@@ -61,8 +60,8 @@ lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
 | `../assets/index/**` | immagini delle campagne nel mondo 360 (tap → item view dell'archivio) |
 | `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
 | `vendor/` | MindAR + Three.js **in locale** (niente CDN) |
-| `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js}` | testo 3D estruso della CTA (three r146, in locale) |
-| `vendor/three-addons/fonts/klein.typeface.json` | font **Klein** in formato typeface (generato da `fonts/Klein-Medium.woff2` con opentype.js) |
+| `fonts/Klein-Book.woff2` | font della **CTA 2D** (Klein, peso Book) |
+| `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js}` · `vendor/three-addons/fonts/klein.typeface.json` | non più usati dalla CTA (ora 2D); lasciati per riferimento |
 
 ## Ricompilare il target (solo se cambia il print)
 

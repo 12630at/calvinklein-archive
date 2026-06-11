@@ -18,6 +18,7 @@
   <style>
     @font-face { font-family:"Klein"; src:url("fonts/Klein-Medium.woff2") format("woff2"); font-weight:500; font-display:swap; }
     @font-face { font-family:"Klein"; src:url("fonts/Klein-Light.woff2")  format("woff2"); font-weight:300; font-display:swap; }
+    @font-face { font-family:"Klein"; src:url("fonts/Klein-Book.woff2")   format("woff2"); font-weight:400; font-display:swap; } /* CTA */
 
     * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; user-select:none; }
     html, body { height:100%; background:#000; overflow:hidden;
@@ -91,6 +92,15 @@
       opacity:0; pointer-events:none; transition:opacity .6s ease; white-space:nowrap; }
     .lookhint.show{ opacity:.55; }
 
+    /* CTA 2D (font Klein, peso Book) — riemerge dopo il reveal */
+    .cta2d { position:absolute; left:50%; bottom:118px; z-index:7;
+      transform:translateX(-50%) translateY(14px); opacity:0; pointer-events:none;
+      transition:opacity .8s ease, transform .8s ease;
+      font-family:"Klein",sans-serif; font-weight:400; font-size:15px; letter-spacing:.14em; text-transform:uppercase;
+      color:#111; background:rgba(255,255,255,.92); border:none; border-radius:30px; padding:14px 26px;
+      box-shadow:0 6px 24px rgba(0,0,0,.25); cursor:pointer; }
+    .cta2d.show { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
+
     .gate{ position:absolute; inset:0; z-index:12; display:none; flex-direction:column;
       align-items:center; justify-content:center; text-align:center; color:#fff; background:#000; padding:0 38px; gap:16px; }
     .gate.on{ display:flex; }
@@ -138,6 +148,8 @@
     <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
     <div class="lookhint" id="lookhint">Muovi il telefono per esplorare l'archivio 360°</div>
 
+    <button class="cta2d" id="cta">Discover the archive</button>
+
     <div class="gate" id="gate">
       <div class="ph">📱</div>
       <h2>Esperienza AR</h2>
@@ -153,34 +165,31 @@
   <script type="module">
     import * as THREE from 'three';
     import { MindARThree } from './vendor/mindar-image-three.prod.js';
-    import { FontLoader } from 'three/addons/loaders/FontLoader.js';
-    import { TextGeometry } from 'three/addons/geometries/TextGeometry.js';
 
     const ARCHIVE_URL = "../index.html?archive=1";
     const MIND_URL    = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
     const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
-    const FONT_URL    = "vendor/three-addons/fonts/klein.typeface.json";
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
     const ARCHIVE_BASE = "../assets/index";
     const N_CAMPAIGNS  = 80;     // quante foto sparse nel mondo 360
     const CAMP_R       = 7.5;    // raggio (shell unica -> distribuzione uniforme, niente sovrapposizioni)
 
-    const D_PHOTO   = 3.2;    // distanza della foto rivelata
-    const PHOTO_W   = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
-    const BURST_MS  = 850;    // bagliore bianco 3D che esce dalla foto verso la camera
-    const DEBLUR_MS = 1150;   // deblur della foto nel mondo bianco
-    const CTA_GAP   = 1500;   // attesa dopo il reveal, prima della CTA
-    const CTA_MS    = 800;    // emersione 3D della CTA lungo Z
-    const CTA_Z_END = -2.2;   // posizione finale CTA (verso l'utente, dentro al viewport)
+    const D_PHOTO    = 3.2;    // distanza della foto rivelata
+    const PHOTO_W    = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
+    const RECOG_DELAY = 2200;  // attesa dopo il riconoscimento, prima di far partire l'animazione
+    const BURST_MS   = 850;    // glow 3D che si proietta dai bordi della foto verso la camera
+    const DEBLUR_MS  = 1150;   // deblur della foto una volta ancorata all'ambiente
+    const CTA_GAP    = 1500;   // attesa dopo il reveal, prima della CTA 2D
 
     const $ = (id) => document.getElementById(id);
     const stage = $('stage');
-    const ui = { ig:$('ig'), hint:$('hint'), lookhint:$('lookhint'),
+    const ui = { ig:$('ig'), hint:$('hint'), lookhint:$('lookhint'), cta:$('cta'),
                  gate:$('gate'), demoAlt:$('demoAlt'), close:$('closeBtn'), whiteout:$('whiteout') };
 
     const goArchive = () => { window.location.href = ARCHIVE_URL; };
     ui.close.addEventListener('click', goArchive);
+    ui.cta.addEventListener('click', goArchive);
 
     const easeOutCubic = (t) => 1 - Math.pow(1 - t, 3);
     const clamp01 = (v) => Math.max(0, Math.min(1, v));
@@ -207,7 +216,7 @@
     // ---------- stato mondo 360 ----------
     let phase = 'scan';               // 'scan' | 'burst' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
-    let centerGroup, photoMesh, glowMesh, revealMat, ctaGroup, ctaMat, ctaHit = null, ctaReady = false;
+    let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false;
     let worldT0 = 0, burstT0 = 0, previewMode = false;
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
@@ -260,15 +269,23 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    // texture morbida (radiale) per il bagliore bianco
-    function makeGlowTex() {
-      const c = document.createElement('canvas'); c.width = c.height = 256;
+    // texture "cornice" luminosa: bagliore solo dai bordi, trasparente al centro
+    // -> il glow si origina dai margini della foto (non un flash generale)
+    function makeEdgeGlowTex() {
+      const s = 256, c = document.createElement('canvas'); c.width = c.height = s;
       const g = c.getContext('2d');
-      const grd = g.createRadialGradient(128, 128, 0, 128, 128, 128);
-      grd.addColorStop(0, 'rgba(255,255,255,1)');
-      grd.addColorStop(0.45, 'rgba(255,255,255,0.92)');
-      grd.addColorStop(1, 'rgba(255,255,255,0)');
-      g.fillStyle = grd; g.fillRect(0, 0, 256, 256);
+      const band = s * 0.42;                       // quanto rientra il bagliore dai bordi
+      g.globalCompositeOperation = 'lighter';      // i quattro lati si sommano negli angoli
+      const edge = (x0, y0, x1, y1) => {
+        const grd = g.createLinearGradient(x0, y0, x1, y1);
+        grd.addColorStop(0, 'rgba(255,255,255,1)');
+        grd.addColorStop(1, 'rgba(255,255,255,0)');
+        return grd;
+      };
+      g.fillStyle = edge(0, 0, 0, band);           g.fillRect(0, 0, s, band);          // alto
+      g.fillStyle = edge(0, s, 0, s - band);       g.fillRect(0, s - band, s, band);   // basso
+      g.fillStyle = edge(0, 0, band, 0);           g.fillRect(0, 0, band, s);          // sinistra
+      g.fillStyle = edge(s, 0, s - band, 0);       g.fillRect(s - band, 0, band, s);   // destra
       return new THREE.CanvasTexture(c);
     }
 
@@ -311,9 +328,9 @@
       photoMesh.visible = false;                     // appare dopo il burst
       centerGroup.add(photoMesh);
 
-      // bagliore bianco 3D che esce dalla foto verso la camera (transizione)
+      // glow 3D dai bordi della foto che si proietta verso la camera (transizione)
       glowMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625),
-        new THREE.MeshBasicMaterial({ map: makeGlowTex(), transparent:true, opacity:0,
+        new THREE.MeshBasicMaterial({ map: makeEdgeGlowTex(), transparent:true, opacity:0,
           blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
       glowMesh.position.set(0, 0, -D_PHOTO); glowMesh.renderOrder = 50; glowMesh.visible = false;
       worldScene.add(glowMesh);
@@ -344,38 +361,7 @@
         campMats.push(mat); campMeshes.push(mesh); worldScene.add(mesh);
         placed++;
       }
-
-      // --- CTA 3D estrusa nel font Klein (testo con volume, niente sfondo) ---
-      try {
-        const font = await new FontLoader().loadAsync(FONT_URL);
-        buildCTA(font);
-      } catch (e) { console.error('font/CTA error:', e); }
-    }
-
-    function buildCTA(font) {
-      // due righe per leggibilità; niente bevel (mangiucchiava le aste sottili)
-      const mkLine = (txt) => {
-        const g = new TextGeometry(txt, { font, size:1, height:0.5, curveSegments:8, bevelEnabled:false });
-        g.computeBoundingBox(); const bb = g.boundingBox;
-        g.translate(-(bb.max.x + bb.min.x) / 2, -(bb.max.y + bb.min.y) / 2, 0);
-        return { g, w: bb.max.x - bb.min.x, h: bb.max.y - bb.min.y };
-      };
-      const l1 = mkLine('DISCOVER'), l2 = mkLine('THE ARCHIVE');
-      const maxW = Math.max(l1.w, l2.w), lineH = Math.max(l1.h, l2.h), gap = lineH * 0.5;
-      const fit = 1.2 / maxW;
-      ctaMat = new THREE.MeshStandardMaterial({ color:0x0a0a0a, metalness:0.1, roughness:0.5, transparent:true, opacity:0 });
-      const m1 = new THREE.Mesh(l1.g, ctaMat); m1.position.y =  (lineH + gap) / 2;
-      const m2 = new THREE.Mesh(l2.g, ctaMat); m2.position.y = -(lineH + gap) / 2;
-      const textWrap = new THREE.Group(); textWrap.add(m1, m2); textWrap.scale.setScalar(fit);
-      const blockW = maxW * fit, blockH = (2 * lineH + gap) * fit;
-      ctaHit = new THREE.Mesh(new THREE.PlaneGeometry(blockW * 1.1, blockH * 1.25),
-                              new THREE.MeshBasicMaterial({ visible:false }));
-      ctaHit.position.z = 0.5 * fit;
-      ctaGroup = new THREE.Group();
-      ctaGroup.add(textWrap); ctaGroup.add(ctaHit);
-      ctaGroup.position.set(0, 0, -D_PHOTO);
-      ctaGroup.scale.setScalar(0.12);
-      centerGroup.add(ctaGroup);   // fluttua insieme alla foto
+      // la CTA è ora un overlay 2D (#cta): nessuna geometria 3D da costruire
     }
 
     // adatta renderer/camera al riquadro stage (portrait, senza distorsione)
@@ -431,7 +417,6 @@
       const r = stage.getBoundingClientRect();
       const ndc = new THREE.Vector2(((cx - r.left) / r.width) * 2 - 1, -((cy - r.top) / r.height) * 2 + 1);
       ray.setFromCamera(ndc, worldCam);
-      if (ctaReady && ctaHit && ray.intersectObject(ctaHit, true).length) { goArchive(); return; }
       const hit = ray.intersectObjects(campMeshes, false);   // click su una campagna -> item view
       if (hit.length) {
         const stem = hit[0].object.userData.stem;
@@ -440,26 +425,23 @@
     }
 
     // ---------- transizioni ----------
-    function startBurst() {               // riconoscimento -> bagliore bianco 3D verso la camera
+    function startBurst() {               // riconoscimento -> glow 3D dai bordi della foto verso la camera
       phase = 'burst';
       burstT0 = performance.now();
       if (navigator.vibrate) navigator.vibrate(60);
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
       document.body.classList.add('revealed');
-      const vid = $('ar').querySelector('video');
-      if (vid) { vid.style.transition = 'filter ' + BURST_MS + 'ms ease-in'; vid.style.filter = 'brightness(1.9)'; }
-      if (glowMesh) glowMesh.visible = true;
+      if (glowMesh) glowMesh.visible = true;   // l'ambiente reale resta visibile: nessun flash bianco generale
     }
-    function enterWorld() {                // dal bagliore al mondo 3D bianco
+    function enterWorld() {                // dal glow alla canvas ancorata all'ambiente reale
       phase = 'world';
       worldT0 = performance.now();
-      worldScene.background = new THREE.Color(0xffffff);
+      // niente più mondo bianco: sfondo trasparente -> il feed camera (ambiente) resta dietro.
+      // la canvas è ancorata alle coordinate fisiche della foto scansionata (davanti all'utente).
+      worldScene.background = previewMode ? new THREE.Color(0xffffff) : null;
       if (glowMesh) glowMesh.visible = false;
       if (photoMesh) photoMesh.visible = true;
-      const vid = $('ar').querySelector('video');
-      if (vid) vid.style.display = 'none';
-      ui.whiteout.style.opacity = '1';     // sicurezza: fondo bianco
       fitRenderer();
       setTimeout(() => { ui.lookhint.classList.add('show');
         setTimeout(() => ui.lookhint.classList.remove('show'), 3200); }, 600);
@@ -484,21 +466,16 @@
             mh.position.x = u.base.x + Math.cos(ts * u.speed * 0.8 + u.phase) * u.amp * 0.5;
             mh.quaternion.copy(u.baseQuat).multiply(tmpQ2.setFromAxisAngle(zee, Math.sin(ts * u.speed + u.rphase) * u.ramp));
           }
-          const ctaT = wt - (DEBLUR_MS + CTA_GAP);
-          if (ctaT > 0 && ctaGroup) {
-            ctaReady = true;
-            const e = easeOutCubic(clamp01(ctaT / CTA_MS));
-            ctaGroup.position.z = -D_PHOTO + (CTA_Z_END + D_PHOTO) * e;   // emerge verso l'utente (Z)
-            ctaGroup.scale.setScalar(0.12 + 0.88 * e);
-            ctaMat.opacity = e;
+          if (!ctaShown && wt > DEBLUR_MS + CTA_GAP) {   // riemerge la CTA 2D (font Klein Book)
+            ctaShown = true; ui.cta.classList.add('show');
           }
           updateLook();
           renderer.render(worldScene, worldCam);
         } else if (phase === 'burst') {
           const bt = now - burstT0, e = easeOutCubic(clamp01(bt / BURST_MS));
-          glowMesh.material.opacity = Math.min(1, e * 1.5);
-          glowMesh.position.z = -D_PHOTO + (D_PHOTO - 0.15) * e;   // esce verso la camera
-          glowMesh.scale.setScalar(1 + e * e * 22);                // esplode fino a riempire
+          glowMesh.material.opacity = Math.sin(Math.PI * clamp01(e));   // pulse: sale dai bordi e svanisce
+          glowMesh.position.z = -D_PHOTO + (D_PHOTO - 0.25) * e;         // i bordi si proiettano verso la camera
+          glowMesh.scale.setScalar(1 + e * 1.6);                        // si espande dai margini (niente whiteout)
           updateLook();
           renderer.render(worldScene, worldCam);                   // bg trasparente -> camera dietro + bagliore
           if (bt >= BURST_MS) enterWorld();
@@ -517,7 +494,12 @@
       });
       scanScene = mindar.scene; scanCam = mindar.camera;
       const anchor = mindar.addAnchor(0);
-      anchor.onTargetFound = () => { if (phase === 'scan') startBurst(); };
+      anchor.onTargetFound = () => {
+        if (phase !== 'scan') return;
+        phase = 'recognized';                 // blocca ri-trigger durante l'attesa
+        if (navigator.vibrate) navigator.vibrate(30);
+        setTimeout(() => { if (phase === 'recognized') startBurst(); }, RECOG_DELAY);
+      };
       await buildWorld(mindar.renderer);
       startLoop();
       await mindar.start();
