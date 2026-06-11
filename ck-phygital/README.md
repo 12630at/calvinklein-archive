@@ -16,25 +16,27 @@ La root smista per dispositivo:
 1. `ck-phygital/index.html` — mock Instagram a pieno schermo. Post `@calvinklein` con il
    print sfocato e il CTA **"Prova il filtro →"**: il tap **chiede subito i permessi**
    (sensori di movimento su iOS) e apre la camera — niente schermata "Avvia" separata.
-2. `camera.html` — **fotocamera di Instagram** (feed ad alta risoluzione). MindAR serve
-   **solo a riconoscere** il print sfocato. Al riconoscimento parte un **delay di qualche
-   secondo**, poi un **glow 3D** che si origina **solo dai margini della foto** e si
-   **proietta verso la camera** (niente più flash bianco generale) introduce l'esperienza.
-3. L'**infinite canvas** è **ancorato direttamente all'ambiente reale** (il feed camera
-   resta visibile dietro, **niente più mondo bianco**), posizionato sulle **coordinate
-   fisiche della foto scansionata**: la foto, planare e stabile, sta davanti all'utente e
-   fa il **deblur** sfocato→nitido. Tutt'attorno **fluttuano** circa 80 **campagne
-   d'archivio** pescate **a caso** da `archive_index.csv`, distribuite in modo **uniforme**
-   (Fibonacci → niente sovrapposizioni), ridimensionate a 512px per la memoria mobile. Ci
-   si guarda intorno **solo col giroscopio** (il permesso si chiede al tap su "Prova il
-   filtro", obbligatorio su iOS). **Tap su una campagna** → apre la sua **item view**
-   nell'archivio (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
+2. `camera.html` — **fotocamera di Instagram** (feed ad alta risoluzione). MindAR
+   **riconosce e traccia** il print sfocato in **6DoF**. Al riconoscimento parte un **delay
+   di qualche secondo**, poi un **glow 3D** che si origina **solo dai margini della foto** e
+   si **proietta verso la camera** (niente più flash bianco generale) introduce l'esperienza.
+3. Il contenuto è **ancorato RIGIDAMENTE al marker** (gruppo MindAR): l'**ambiente reale**
+   (feed camera) resta lo **sfondo** della scena — **niente mondo bianco**. La foto si
+   sovrappone al print fisico e fa il **deblur** sfocato→nitido; tutt'attorno, nello spazio
+   davanti alla foto, **fluttuano** delle **campagne d'archivio** pescate **a caso** da
+   `archive_index.csv` (distribuzione uniforme via Fibonacci, ridimensionate a 512px). Ci si
+   muove **fisicamente col telefono attorno alla foto** (tracking 6DoF, niente giroscopio):
+   gli elementi restano ancorati all'ambiente finché il print è inquadrato. **Tap su una
+   campagna** → apre la sua **item view** nell'archivio
+   (`../index.html?archive=1&item=<filename>`, gestito in `script.js`).
 4. Dopo una breve attesa **riemerge la CTA in 2D** (overlay, font **Klein** peso **Book**)
-   "Discover the archive" → tap sulla CTA → archivio (`../index.html?archive=1`). Foto e
-   campagne **fluttuano**.
+   "Discover the archive" → tap sulla CTA → archivio (`../index.html?archive=1`).
 
-Su **desktop** il gate "▶ Anteprima" avvia lo stesso mondo 360° (senza camera) con una
-lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
+> Nota AR: essendo un tracking **image-target**, gli elementi sono visibili e stabili
+> **finché il print resta inquadrato**; uscendo dall'inquadratura il tracking si sospende.
+
+Su **desktop** il gate "▶ Anteprima" mostra la stessa scena (senza camera né marker) su un
+fondo neutro, con una lenta **auto-rotazione** per visualizzarla.
 
 ## Nomenclatura asset
 
