@@ -1997,17 +1997,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const vw = window.innerWidth, vh = window.innerHeight;
         const aspect = naturalW / naturalH;
 
-        // Mobile: single column — image centered in the upper band, credits below.
+        // Mobile: single column — image on top, credits below, and the whole
+        // image+credits block vertically centered in the viewport.
         if (isMobileView()) {
             const M = 16;                 // page gutter
-            const topGap = 16;
-            const band = vh * 0.6;        // upper region reserved for the image
+            const edgeGap = 16;           // top/bottom breathing room
+            const gap = 16;               // space between image and credits
             const maxW = vw - 2 * M;
-            const maxH = band - 2 * topGap;
+            // Visible credits height (respects the 34vh CSS cap)
+            const creditsH = Math.min(itemViewInfo.offsetHeight || 0, vh * 0.34);
+            const maxH = Math.max(120, vh - 2 * edgeGap - gap - creditsH);
             let w = maxW, h = w / aspect;
             if (h > maxH) { h = maxH; w = h * aspect; }
+            const totalH = h + gap + creditsH;
             const x = (vw - w) / 2;
-            const y = Math.max(topGap, (band - h) / 2);   // centered in the band
+            const y = Math.max(edgeGap, (vh - totalH) / 2);
             return { x, y, w, h };
         }
 
