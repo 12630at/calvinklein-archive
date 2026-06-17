@@ -80,13 +80,12 @@ body {
     display: inline-block; /* Changed from absolute to flow inside a paragraph */
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    letter-spacing: -0.36px;
+    letter-spacing: 0px;
     text-transform: uppercase;
     white-space: nowrap;
     
     /* 2000s soft text aesthetic */
     color: rgba(40, 40, 40, 0.85);
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 
@@ -143,7 +142,7 @@ body {
 
 @media (max-width: 600px) {
     .word {
-        letter-spacing: -0.24px;
+        letter-spacing: 0px;
     }
 }
 
@@ -177,10 +176,10 @@ body {
 .menu-item {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
     text-rendering: geometricPrecision;
-    letter-spacing: -0.28px;
+    letter-spacing: 0px;
     line-height: 12px;
     color: #bbbdc0;
     text-decoration: none;
@@ -188,7 +187,6 @@ body {
     cursor: pointer;
     transition: color 300ms ease-out, opacity 300ms ease-out;
     /* 2000s soft text aesthetic */
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
@@ -259,11 +257,10 @@ body {
     display: block;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: rgba(40, 40, 40, 0.85);
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
     -webkit-font-smoothing: antialiased;
     white-space: nowrap;
     opacity: 0;
@@ -320,11 +317,10 @@ body {
 .people-nav-title {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: #424242;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     line-height: 12px;
 }
@@ -332,11 +328,10 @@ body {
 .people-close {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: #bbbdc0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     background: none;
     border: none;
@@ -368,11 +363,10 @@ body {
 .people-entry {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: #bbbdc0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     line-height: 12px;
     cursor: pointer;
@@ -452,9 +446,9 @@ body {
 .search-result {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     line-height: 12px;
     color: #bbbdc0;
     cursor: pointer;
@@ -609,11 +603,10 @@ body {
     transform: translate(-50%, -50%);
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: #bbbdc0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     opacity: 0;
     pointer-events: none;
@@ -634,14 +627,13 @@ body {
 .menu-archive-back {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 12px;
     color: #bbbdc0;
     background: none;
     border: none;
     cursor: pointer;
     padding: 0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 200ms ease-out;
 }
@@ -703,13 +695,68 @@ body {
 .item-view-numbers {
     display: flex;
     flex-direction: row;
-    flex-wrap: wrap;
     justify-content: flex-end;
-    gap: 10px;
-    min-height: 14px;
 }
 
-.item-view-num {
+/* Position counter "01/02" — shown on mobile only (desktop uses the cursor pill) */
+.item-view-counter {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: 0px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+    display: none;
+}
+
+/* Prev/Next click zones overlaid on the image (positioned to the image rect by JS) */
+#item-view-nav-zones {
+    position: fixed;
+    z-index: 4;
+    display: flex;
+    flex-direction: row;
+}
+
+#item-view-nav-zones .ivn-zone {
+    flex: 1 1 50%;
+    pointer-events: auto;
+}
+
+/* On desktop the native cursor is hidden so the following pill stands in for it */
+@media (min-width: 601px) {
+    #item-view-nav-zones .ivn-zone { cursor: none; }
+}
+
+/* Cursor-following pill: "Prev (01/10)" / "Next (01/10)" (desktop) */
+#item-view-cursor {
+    position: fixed;
+    z-index: 9999;
+    pointer-events: none;
+    background: #000;
+    color: #fff;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: 0px;
+    text-transform: uppercase;
+    padding: 7px 10px;
+    border-radius: 4px;
+    white-space: nowrap;
+    opacity: 0;
+    transform: translate(-50%, -160%);
+    transition: opacity 120ms ease-out;
+    -webkit-font-smoothing: antialiased;
+}
+
+#item-view-cursor.visible { opacity: 1; }
+
+.item-view-back {
+    position: absolute;
+    left: 36px;
+    top: 50%;
+    transform: translateY(-50%);
     font-family: 'Klein', sans-serif;
     font-weight: 350;
     font-size: 12px;
@@ -719,31 +766,6 @@ body {
     border: none;
     cursor: pointer;
     padding: 0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
-    -webkit-font-smoothing: antialiased;
-    transition: color 200ms ease-out;
-}
-
-.item-view-num:hover,
-.item-view-num.active {
-    color: #424242;
-}
-
-.item-view-back {
-    position: absolute;
-    left: 36px;
-    top: 50%;
-    transform: translateY(-50%);
-    font-family: 'Klein', sans-serif;
-    font-weight: 350;
-    font-size: 14px;
-    line-height: 12px;
-    color: #bbbdc0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 200ms ease-out;
     z-index: 1;
@@ -756,12 +778,11 @@ body {
 .item-view-title {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     line-height: 14px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: #424242;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     margin: 0;
 }
@@ -781,10 +802,10 @@ body {
 .item-view-meta-label {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.2px;
+    letter-spacing: 0px;
     color: #bbbdc0;
     -webkit-font-smoothing: antialiased;
 }
@@ -792,10 +813,10 @@ body {
 .item-view-meta-value {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 13px;
+    font-size: 12px;
     line-height: 14px;
     text-transform: uppercase;
-    letter-spacing: -0.3px;
+    letter-spacing: 0px;
     color: #424242;
     -webkit-font-smoothing: antialiased;
 }
@@ -885,7 +906,6 @@ body.item-view-open .menu-archive-back {
     border: none;
     cursor: pointer;
     padding: 0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 200ms ease-out;
 }
@@ -901,7 +921,6 @@ body.item-view-open .menu-archive-back {
     text-transform: uppercase;
     letter-spacing: -0.35px;
     color: #424242;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     line-height: 12px;
 }
@@ -948,7 +967,6 @@ body.item-view-open .menu-archive-back {
     letter-spacing: -0.06em;
     text-transform: uppercase;
     color: rgba(40, 40, 40, 0.85);
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.3);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     opacity: 0;
@@ -1000,7 +1018,6 @@ body.item-view-open .menu-archive-back {
     line-height: 1.45;
     letter-spacing: -0.2px;
     color: #424242;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     max-width: 560px;
@@ -1027,13 +1044,12 @@ body.timeline-open .menu {
     cursor: pointer;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 14px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.35px;
+    letter-spacing: 0px;
     color: #bbbdc0;
     padding: 0;
     z-index: 16;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 300ms ease-out, opacity 300ms ease-out;
     opacity: 0;
@@ -1075,9 +1091,9 @@ body.timeline-open .menu {
     z-index: 2;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 11px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.3px;
+    letter-spacing: 0px;
     color: #bbbdc0;
     text-align: left;
     padding: 68px 22px 16px 0;
@@ -1101,15 +1117,14 @@ body.timeline-open .menu {
 .archive-list-row td {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 11px;
-    letter-spacing: -0.3px;
+    font-size: 12px;
+    letter-spacing: 0px;
     text-transform: uppercase;
     color: #bbbdc0;
     padding: 8px 22px 8px 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 200ms ease-out;
 }
@@ -1130,7 +1145,7 @@ body.timeline-open .menu {
 #mobile-trigger {
     display: none;
     position: fixed;
-    bottom: 22px;
+    bottom: 24px;
     left: 50%;
     transform: translateX(-50%);
     background: none;
@@ -1171,17 +1186,16 @@ body.timeline-open .menu {
 .mobile-nav-item {
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 12px;
     text-transform: uppercase;
-    letter-spacing: -0.28px;
+    letter-spacing: 0px;
     color: #bbbdc0;
     text-decoration: none;
     background: none;
     border: none;
     cursor: pointer;
     padding: 0;
-    text-shadow: 0px 0px 1px rgba(40, 40, 40, 0.2);
     -webkit-font-smoothing: antialiased;
     transition: color 200ms ease-out;
     -webkit-tap-highlight-color: transparent;
@@ -1197,35 +1211,42 @@ body.timeline-open .menu {
     body.page-open .menu          { display: none !important; }
     body.page-open #mobile-trigger { display: block; }
 
-    .skip-intro-btn { bottom: 22px; }
-    .people-nav     { left: 22px; }
-    .timeline-nav   { left: 22px; }
+    .skip-intro-btn { bottom: 24px; }
+    .people-nav     { left: 24px; }
+    .timeline-nav   { left: 24px; }
 
-    /* Item view: single column — large image on top, credits underneath. */
+    /* Item view: single column — credits on top, large image underneath. */
     body.item-view-open .menu { display: none; }
 
     #item-view-info {
-        top: var(--iv-info-top, 62%);
-        left: 22px;
-        right: 22px;
+        top: 56px;
+        left: 24px;
+        right: 24px;
+        bottom: auto;
         width: auto;
         transform: none;
+        align-items: flex-start;
+        text-align: left;
         max-height: 34vh;
         overflow-y: auto;
     }
 
+    /* Counter shows on mobile, in the credits block, in place of the number line */
+    .item-view-numbers { justify-content: flex-start; }
+    .item-view-counter { display: block; }
+
     .item-view-back {
-        top: var(--iv-info-top, 62%);
-        left: 22px;
+        top: 24px;
+        left: 24px;
         transform: none;
     }
 
-    #list-view-btn { right: 22px; }
+    #list-view-btn { right: 24px; }
 
     /* List view: keep only #, Campaign, Year, Category on mobile */
-    #archive-list { padding: 0 22px 80px 22px; }
+    #archive-list { padding: 0 24px 80px 24px; }
 
-    .archive-list-thead th { padding-top: 22px; padding-right: 12px; }
+    .archive-list-thead th { padding-top: 24px; padding-right: 12px; }
     .archive-list-row td   { padding-right: 12px; }
 
     .archive-list-row td.col-season,

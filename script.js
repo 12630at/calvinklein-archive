@@ -143,7 +143,7 @@ async function play() {
     const viewport = getViewport();
 
     // Dimensione del testo come all'inizio
-    fontSize = Math.max(14, Math.min(viewport.w * 0.025, 14));
+    fontSize = 12;
 
     const lh = 1.6;
 
@@ -181,11 +181,10 @@ async function play() {
             span.className = 'word';
             span.textContent = words[j].toUpperCase();
             span.style.fontSize = `${fontSize}px`;
-            span.style.letterSpacing = window.innerWidth <= 600 ? '-0.02em' : '-0.04em';
+            span.style.letterSpacing = '0px';
 
             // --- 2000s SOFT TEXT AESTHETIC INTEGRATION ---
             span.style.color = 'rgba(40, 40, 40, 0.85)';
-            span.style.textShadow = '0px 0px 1px rgba(40, 40, 40, 0.3)';
             span.style.WebkitFontSmoothing = 'antialiased';
             span.style.MozOsxFontSmoothing = 'grayscale';
             // ---------------------------------------------
@@ -739,9 +738,9 @@ document.addEventListener('DOMContentLoaded', () => {
             outline:       'none',
             fontFamily:    'Klein, sans-serif',
             fontWeight:    '350',
-            fontSize:      '14px',
+            fontSize:      '12px',
             textTransform: 'uppercase',
-            letterSpacing: '-0.35px',
+            letterSpacing: '0px',
             color:         '#ffffff',
             caretColor:    '#ffffff',
             padding:       '0',
@@ -1233,6 +1232,7 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveViewport.addEventListener('pointerdown', (e) => {
         if (switching || itemViewOpen) return;
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        stopWheelGlide();
         dragging = true;
         archiveViewport.classList.add('dragging');
         archiveViewport.setPointerCapture(e.pointerId);
@@ -1295,15 +1295,46 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveViewport.addEventListener('pointerup', endDrag);
     archiveViewport.addEventListener('pointercancel', endDrag);
 
-    // Wheel/trackpad scroll to pan the canvas
+    // Wheel/trackpad scroll to pan the canvas — smoothed.
+    // Deltas accumulate into a target offset and the canvas eases toward it
+    // every frame, so flicks glide to a stop instead of snapping per-tick.
+    let wheelTarget = null;
+    let wheelRAF    = null;
+    const WHEEL_EASE = 0.16;   // higher = snappier, lower = smoother/longer glide
+
+    function stopWheelGlide() {
+        if (wheelRAF) { cancelAnimationFrame(wheelRAF); wheelRAF = null; }
+        wheelTarget = null;
+    }
+
+    function wheelGlideStep() {
+        if (!wheelTarget) { wheelRAF = null; return; }
+        const dx = wheelTarget.x - canvasOffset.x;
+        const dy = wheelTarget.y - canvasOffset.y;
+        canvasOffset.x += dx * WHEEL_EASE;
+        canvasOffset.y += dy * WHEEL_EASE;
+        applyCanvasTransform();
+        scheduleSync();
+        if (Math.hypot(dx, dy) > 0.4) {
+            wheelRAF = requestAnimationFrame(wheelGlideStep);
+        } else {
+            canvasOffset.x = wheelTarget.x;
+            canvasOffset.y = wheelTarget.y;
+            applyCanvasTransform();
+            scheduleSync();
+            wheelRAF = null;
+            wheelTarget = null;
+        }
+    }
+
     archiveViewport.addEventListener('wheel', (e) => {
         e.preventDefault();
         if (!archiveOpen || itemViewOpen || switching) return;
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
-        canvasOffset.x -= e.deltaX;
-        canvasOffset.y -= e.deltaY;
-        applyCanvasTransform();
-        scheduleSync();
+        if (!wheelTarget) wheelTarget = { x: canvasOffset.x, y: canvasOffset.y };
+        wheelTarget.x -= e.deltaX;
+        wheelTarget.y -= e.deltaY;
+        if (!wheelRAF) wheelRAF = requestAnimationFrame(wheelGlideStep);
     }, { passive: false });
 
     // ----- Search filter across archive items -----
@@ -1769,26 +1800,26 @@ document.addEventListener('DOMContentLoaded', () => {
             archiveList.removeAttribute('aria-hidden');
             archiveList.style.display = 'flex';
             archiveList.style.opacity = '0';
-            gsap.set(archiveListInner.querySelectorAll('.archive-list-row'), { opacity: 0, y: 6 });
-            gsap.set(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, y: 8 });
+            gsap.set(archiveListInner.querySelectorAll('.archive-list-row'), { opacity: 0, y: 10 });
+            gsap.set(archiveListInner.querySelectorAll('.archive-list-thead th'), { opacity: 0, y: 10 });
         });
 
         // 3. Panel fades in
-        tl.to(archiveList, { opacity: 1, duration: 0.2, ease: 'power2.out' });
+        tl.to(archiveList, { opacity: 1, duration: 0.3, ease: 'power2.out' });
 
-        // 4. Header
+        // 4. Header — same gentle fade-up as the mobile menu, a touch slower
         tl.to(archiveListInner.querySelectorAll('.archive-list-thead th'), {
-            opacity: 1, y: 0, duration: 0.22, ease: 'power2.out',
-            stagger: { amount: 0.1, from: 'start' },
-        }, '-=0.08');
+            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
+            stagger: { amount: 0.2, from: 'start' },
+        }, '-=0.1');
 
-        // 5. Rows stream in top-to-bottom
+        // 5. Rows stream in top-to-bottom — slowed, mobile-menu-style fade-up
         tl.to(archiveListInner.querySelectorAll('.archive-list-row'), {
             opacity: 1, y: 0,
-            duration: 0.18,
+            duration: 0.4,
             ease: 'power2.out',
-            stagger: { amount: 0.45, from: 'start' },
-        }, '-=0.1');
+            stagger: { amount: 1.2, from: 'start' },
+        }, '-=0.15');
     }
 
     function closeListView() {
@@ -1917,26 +1948,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderItemNumbers(group, currentIdx) {
-        itemViewNumbersEl.innerHTML = '';
-        if (group.length <= 1) return;
-        for (let i = 0; i < group.length; i++) {
-            const btn = document.createElement('button');
-            btn.className = 'item-view-num' + (i === currentIdx ? ' active' : '');
-            btn.textContent = String(i + 1).padStart(2, '0');
-            btn.addEventListener('click', () => switchItemPhoto(i));
-            itemViewNumbersEl.appendChild(btn);
-        }
-    }
-
     const isMobileView = () => window.innerWidth <= 600;
 
-    // On mobile the credits sit directly under the image; feed their top edge to CSS.
-    function positionMobileInfo(tgt) {
-        if (isMobileView()) {
-            itemView.style.setProperty('--iv-info-top', (tgt.y + tgt.h + 24) + 'px');
-        } else {
-            itemView.style.removeProperty('--iv-info-top');
+    // Counter "01/02" — visible on mobile (CSS), in place of the old number line.
+    function renderItemCounter(group, currentIdx) {
+        itemViewNumbersEl.innerHTML = '';
+        if (group.length <= 1) return;
+        const counter = document.createElement('span');
+        counter.className = 'item-view-counter';
+        counter.textContent = counterText(currentIdx, group.length);
+        itemViewNumbersEl.appendChild(counter);
+    }
+
+    function counterText(idx, total) {
+        return `${String(idx + 1).padStart(2, '0')}/${String(total).padStart(2, '0')}`;
+    }
+
+    function updateItemCounter() {
+        const c = itemViewNumbersEl.querySelector('.item-view-counter');
+        if (c && itemViewState) {
+            c.textContent = counterText(itemViewState.currentIdx, itemViewState.group.length);
         }
     }
 
@@ -1944,16 +1975,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const vw = window.innerWidth, vh = window.innerHeight;
         const aspect = naturalW / naturalH;
 
-        // Mobile: single column, large image pinned to the top, credits below.
+        // Mobile: single column — credits pinned to the top, image below them.
         if (isMobileView()) {
-            const M = 28;                 // page gutter
-            const topGap = 28;
+            const M = 24;                 // page gutter
+            const bottomGap = 24;
+            // Image starts just below the credits block (measured live).
+            const infoRect = itemViewInfo.getBoundingClientRect();
+            const topStart = (infoRect && infoRect.bottom ? infoRect.bottom : 56) + 24;
             const maxW = vw - 2 * M;
-            const maxH = vh * 0.6;        // leave the lower 40% for the credits
+            const maxH = Math.max(120, vh - topStart - bottomGap);
             let w = maxW, h = w / aspect;
             if (h > maxH) { h = maxH; w = h * aspect; }
             const x = (vw - w) / 2;
-            const y = topGap;
+            const y = topStart;
             return { x, y, w, h };
         }
 
@@ -1967,6 +2001,87 @@ document.addEventListener('DOMContentLoaded', () => {
         const x = marginL + (maxW - w) / 2;
         const y = (vh - h) / 2;
         return { x, y, w, h };
+    }
+
+    // ----- Prev / Next navigation over the image (group photos) -----
+    // Left half = previous, right half = next (wrapping). On desktop a black
+    // pill follows the cursor showing "Prev (01/10)" / "Next (01/10)"; on mobile
+    // the same taps drive navigation and the "01/02" counter in the credits.
+    let navZonesEl   = null;
+    let cursorPillEl = null;
+
+    function ensureCursorPill() {
+        if (!cursorPillEl) {
+            cursorPillEl = document.createElement('div');
+            cursorPillEl.id = 'item-view-cursor';
+            itemView.appendChild(cursorPillEl);
+        }
+        return cursorPillEl;
+    }
+
+    function navPillLabel(dir) {
+        if (!itemViewState) return '';
+        const word = dir === 'prev' ? 'Prev' : 'Next';
+        return `${word} (${counterText(itemViewState.currentIdx, itemViewState.group.length)})`;
+    }
+
+    function buildNavZones() {
+        if (navZonesEl) { navZonesEl.remove(); navZonesEl = null; }
+        navZonesEl = document.createElement('div');
+        navZonesEl.id = 'item-view-nav-zones';
+        const left  = document.createElement('div'); left.className  = 'ivn-zone ivn-zone-left';
+        const right = document.createElement('div'); right.className = 'ivn-zone ivn-zone-right';
+        navZonesEl.appendChild(left);
+        navZonesEl.appendChild(right);
+        itemView.appendChild(navZonesEl);
+
+        const pill = ensureCursorPill();
+
+        const navTo = (dir) => {
+            if (!itemViewState) return;
+            const n = itemViewState.group.length;
+            const next = dir === 'prev'
+                ? (itemViewState.currentIdx - 1 + n) % n
+                : (itemViewState.currentIdx + 1) % n;
+            switchItemPhoto(next);
+            if (!isMobileView()) pill.textContent = navPillLabel(dir);
+        };
+        const enter = (dir) => () => {
+            if (isMobileView()) return;
+            pill.textContent = navPillLabel(dir);
+            pill.classList.add('visible');
+        };
+        const move = (e) => {
+            if (isMobileView()) return;
+            pill.style.left = e.clientX + 'px';
+            pill.style.top  = e.clientY + 'px';
+        };
+        const leave = () => pill.classList.remove('visible');
+
+        left.addEventListener('mouseenter', enter('prev'));
+        right.addEventListener('mouseenter', enter('next'));
+        left.addEventListener('mousemove', move);
+        right.addEventListener('mousemove', move);
+        left.addEventListener('mouseleave', leave);
+        right.addEventListener('mouseleave', leave);
+        left.addEventListener('click', () => navTo('prev'));
+        right.addEventListener('click', () => navTo('next'));
+    }
+
+    function positionNavZones(rect) {
+        if (!navZonesEl) return;
+        Object.assign(navZonesEl.style, {
+            position: 'fixed',
+            left:   rect.x + 'px',
+            top:    rect.y + 'px',
+            width:  rect.w + 'px',
+            height: rect.h + 'px',
+        });
+    }
+
+    function removeNavZones() {
+        if (navZonesEl)   { navZonesEl.remove(); navZonesEl = null; }
+        if (cursorPillEl) { cursorPillEl.classList.remove('visible'); }
     }
 
     function openItemView(imgEl) {
@@ -2040,16 +2155,17 @@ document.addEventListener('DOMContentLoaded', () => {
             transformOrigin: 'center center',
         });
 
-        const tgt = computeTargetRect(item.manifest.dw, item.manifest.dh);
-        positionMobileInfo(tgt);
-
         itemViewTitleEl.textContent = buildTitle(item.manifest.csv);
         renderItemMeta(item.manifest.csv);
-        renderItemNumbers(group, currentIdx);
-        if (itemIsVideo) positionVideoZones(tgt);
+        renderItemCounter(group, currentIdx);
 
         itemView.removeAttribute('aria-hidden');
         itemView.style.display = 'block';
+
+        // Target rect computed after credits render so mobile can measure them
+        const tgt = computeTargetRect(item.manifest.dw, item.manifest.dh);
+        if (itemIsVideo)            positionVideoZones(tgt);
+        else if (group.length > 1) { buildNavZones(); positionNavZones(tgt); }
 
         const tl = gsap.timeline();
 
@@ -2214,13 +2330,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         itemViewState.currentIdx = idx;
         itemViewState.currentManifest = m;
-        itemViewNumbersEl.querySelectorAll('.item-view-num').forEach((b, i) => {
-            b.classList.toggle('active', i === idx);
-        });
+        updateItemCounter();
 
         const clone = itemViewState.cloneImg;
         const tgt   = computeTargetRect(m.dw, m.dh);
-        positionMobileInfo(tgt);
+        if (navZonesEl) positionNavZones(tgt);
         const nextIsVideo = isVideoSrc(m.path);
 
         // Cross-fade: shrink + fade out, swap src, expand + fade in
@@ -2294,8 +2408,15 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 2500);
         }
 
+        itemViewTitleEl.textContent = buildTitle(manifest.csv);
+        renderItemMeta(manifest.csv);
+        renderItemCounter(group, currentIdx);
+
+        itemView.removeAttribute('aria-hidden');
+        itemView.style.display = 'block';
+
+        // Target rect computed after credits render so mobile can measure them
         const tgt = computeTargetRect(manifest.dw, manifest.dh);
-        positionMobileInfo(tgt);
 
         // Start at target position, collapsed — mirrors the exit collapse animation
         gsap.set(clone, {
@@ -2305,13 +2426,8 @@ document.addEventListener('DOMContentLoaded', () => {
             rotation: 0, transformOrigin: 'center center',
         });
 
-        itemViewTitleEl.textContent = buildTitle(manifest.csv);
-        renderItemMeta(manifest.csv);
-        renderItemNumbers(group, currentIdx);
-        if (isVideo) positionVideoZones(tgt);
-
-        itemView.removeAttribute('aria-hidden');
-        itemView.style.display = 'block';
+        if (isVideo)               positionVideoZones(tgt);
+        else if (group.length > 1) { buildNavZones(); positionNavZones(tgt); }
 
         const tl = gsap.timeline();
         tl.fromTo(itemViewBackdrop, { opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power2.out' }, 0);
@@ -2322,6 +2438,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function closeItemView() {
         if (!itemViewOpen) return;
         itemViewOpen = false;
+
+        if (cursorPillEl) cursorPillEl.classList.remove('visible');
 
         const st = itemViewState;
         const clone = st.cloneImg;
@@ -2346,6 +2464,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (st.isVideo) { try { clone.pause(); } catch (_) {} }
                 clone.remove();
                 if (videoZonesEl) { videoZonesEl.remove(); videoZonesEl = null; }
+                removeNavZones();
                 itemView.classList.remove('is-video', 'video-paused');
                 if (st.sourceEl) st.sourceEl.classList.remove('is-hidden');
                 // Restore list rows if we came from list view
