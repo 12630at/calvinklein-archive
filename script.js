@@ -1971,23 +1971,43 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // Number line — restored for VIDEO item views only.
+    function renderItemNumbers(group, currentIdx) {
+        itemViewNumbersEl.innerHTML = '';
+        if (group.length <= 1) return;
+        for (let i = 0; i < group.length; i++) {
+            const btn = document.createElement('button');
+            btn.className = 'item-view-num' + (i === currentIdx ? ' active' : '');
+            btn.textContent = String(i + 1).padStart(2, '0');
+            btn.addEventListener('click', () => switchItemPhoto(i));
+            itemViewNumbersEl.appendChild(btn);
+        }
+    }
+
+    // On mobile the credits sit directly under the image; feed their top edge to CSS.
+    function positionMobileInfo(tgt) {
+        if (isMobileView()) {
+            itemView.style.setProperty('--iv-info-top', (tgt.y + tgt.h + 16) + 'px');
+        } else {
+            itemView.style.removeProperty('--iv-info-top');
+        }
+    }
+
     function computeTargetRect(naturalW, naturalH) {
         const vw = window.innerWidth, vh = window.innerHeight;
         const aspect = naturalW / naturalH;
 
-        // Mobile: single column — credits pinned to the top, image below them.
+        // Mobile: single column — image centered in the upper band, credits below.
         if (isMobileView()) {
-            const M = 24;                 // page gutter
-            const bottomGap = 24;
-            // Image starts just below the credits block (measured live).
-            const infoRect = itemViewInfo.getBoundingClientRect();
-            const topStart = (infoRect && infoRect.bottom ? infoRect.bottom : 56) + 24;
+            const M = 16;                 // page gutter
+            const topGap = 16;
+            const band = vh * 0.6;        // upper region reserved for the image
             const maxW = vw - 2 * M;
-            const maxH = Math.max(120, vh - topStart - bottomGap);
+            const maxH = band - 2 * topGap;
             let w = maxW, h = w / aspect;
             if (h > maxH) { h = maxH; w = h * aspect; }
             const x = (vw - w) / 2;
-            const y = topStart;
+            const y = Math.max(topGap, (band - h) / 2);   // centered in the band
             return { x, y, w, h };
         }
 
@@ -2157,13 +2177,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         itemViewTitleEl.textContent = buildTitle(item.manifest.csv);
         renderItemMeta(item.manifest.csv);
-        renderItemCounter(group, currentIdx);
+        // Video keeps the clickable number line; images get the prev/next counter.
+        if (itemIsVideo) renderItemNumbers(group, currentIdx);
+        else             renderItemCounter(group, currentIdx);
 
         itemView.removeAttribute('aria-hidden');
         itemView.style.display = 'block';
 
-        // Target rect computed after credits render so mobile can measure them
         const tgt = computeTargetRect(item.manifest.dw, item.manifest.dh);
+        positionMobileInfo(tgt);
         if (itemIsVideo)            positionVideoZones(tgt);
         else if (group.length > 1) { buildNavZones(); positionNavZones(tgt); }
 
@@ -2331,9 +2353,13 @@ document.addEventListener('DOMContentLoaded', () => {
         itemViewState.currentIdx = idx;
         itemViewState.currentManifest = m;
         updateItemCounter();
+        itemViewNumbersEl.querySelectorAll('.item-view-num').forEach((b, i) => {
+            b.classList.toggle('active', i === idx);
+        });
 
         const clone = itemViewState.cloneImg;
         const tgt   = computeTargetRect(m.dw, m.dh);
+        positionMobileInfo(tgt);
         if (navZonesEl) positionNavZones(tgt);
         const nextIsVideo = isVideoSrc(m.path);
 
@@ -2410,13 +2436,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         itemViewTitleEl.textContent = buildTitle(manifest.csv);
         renderItemMeta(manifest.csv);
-        renderItemCounter(group, currentIdx);
+        if (isVideo) renderItemNumbers(group, currentIdx);
+        else         renderItemCounter(group, currentIdx);
 
         itemView.removeAttribute('aria-hidden');
         itemView.style.display = 'block';
 
-        // Target rect computed after credits render so mobile can measure them
         const tgt = computeTargetRect(manifest.dw, manifest.dh);
+        positionMobileInfo(tgt);
 
         // Start at target position, collapsed — mirrors the exit collapse animation
         gsap.set(clone, {
