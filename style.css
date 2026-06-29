@@ -995,22 +995,8 @@ body.item-view-open .menu-archive-back {
     position: absolute;
     inset: 0;
 }
-.flipbook-canvas canvas { display: block; }
-
-/* Transparent full-height click zones: left half = prev, right half = next.
-   No visible glyphs here (they would collide with the back button / credits) —
-   the visible controls live in the bottom bar. */
-.flipbook-zone {
-    position: absolute;
-    top: 0;
-    bottom: 88px;          /* keep clear of the bottom control bar */
-    width: 34%;
-    background: none;
-    border: none;
-    padding: 0;
-}
-.flipbook-zone-left  { left: 0;  cursor: w-resize; }
-.flipbook-zone-right { right: 0; cursor: e-resize; }
+.flipbook-canvas canvas { display: block; cursor: grab; }
+.flipbook-canvas canvas:active { cursor: grabbing; }
 
 /* Bottom control bar: ‹  page counter  › */
 .flipbook-bar {
@@ -1048,9 +1034,6 @@ body.item-view-open .menu-archive-back {
     -webkit-font-smoothing: antialiased;
 }
 
-@media (max-width: 600px) {
-    .flipbook-zone { width: 40%; }
-}
 
 /* ===== TIMELINE PAGE ===== */
 

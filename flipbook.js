@@ -1,28 +1,50 @@
 /* ------------------------------------------------------------------ *
  * CK Flipbook — interactive 3D zine viewer (three.js + GSAP)
  *
- * Renders a stack of double-sided page "sheets" hinged at a central
- * spine. Page 1 is the front cover (only right page visible), the last
- * page is the back cover. Clicking the right/left half — or the on-screen
- * arrows — flips a sheet forward/back with a GSAP-eased page turn.
+ * A real magazine: leaves hinged at a central spine, page_001 the front
+ * cover (single, right), the last page the back cover (single, left when
+ * closed at the end). Pages are segmented meshes that curl in 3D as they
+ * turn, lit so the bend is visible. You turn a page by DRAGGING it with
+ * the pointer (grab the right page and pull it left, or the left page and
+ * pull it right); a quick tap on a half, the arrows, or the keyboard also
+ * flip. The two pages of an open spread are coplanar so they meet flush
+ * at the spine (no z-split).
  *
  * Exposed as window.CKFlipbook.create(opts) -> instance{ animateIn,
- * dispose }. Requires global THREE (r128 UMD) and GSAP.
+ * dispose, el }. Requires global THREE (r128 UMD) and GSAP.
  * ------------------------------------------------------------------ */
 (function () {
     'use strict';
 
-    const PAGE_ASPECT  = 2400 / 3228;   // all zine pages share this portrait ratio
-    const PAGE_H       = 4;             // world height of a page
-    const PAGE_W       = PAGE_H * PAGE_ASPECT;
-    const Z_STEP       = 0.0025;        // per-sheet depth offset (avoids z-fighting)
-    const PRELOAD      = 3;             // sheets to keep textured around the current spread
-    const FLIP_DUR     = 0.9;          // seconds per page turn
+    const PAGE_ASPECT = 2400 / 3228;   // all zine pages share this portrait ratio
+    const PAGE_H      = 4;             // world height of a page
+    const PAGE_W      = PAGE_H * PAGE_ASPECT;
+    const SEG         = 30;            // width segments per page (for a smooth curl)
+    const CURL_AMP    = 0.5;           // peak page bulge (world units) at mid-turn
+    const Z_STEP      = 0.004;         // depth between stacked (hidden) pages
+    const LIFT_Z      = 0.25;          // how far the turning leaf rises off the stack
+    const PRELOAD     = 3;             // leaves textured on each side of the spread
+    const FLIP_DUR    = 0.85;          // seconds for an auto (tap/arrow) turn
+    const MAX_TEX_W   = 1400;          // textures downscaled to this width
+
+    const lerp = (a, b, t) => a + (b - a) * t;
+    const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+    const pad = n => String(n).padStart(2, '0');
 
     function create(opts) {
         const mount = opts.mount;
-        const pages = opts.pages;       // array of image URLs, page_001 … page_NNN
-        const onFlip = opts.onFlip || function () {};
+        const pages = opts.pages;       // image URLs, page_001 … page_NNN (in order)
+
+        // --- faces: pad to an even count so the back cover sits alone on the
+        // left when closed. A blank is inserted just before the last page
+        // (the inside-back-cover), which keeps every real page in order. -----
+        const faces  = pages.slice();
+        const humans = pages.map((_, i) => i + 1);   // 1-based page number per face
+        if (faces.length % 2 === 1) {
+            faces.splice(faces.length - 1, 0, null);  // blank inside-back-cover
+            humans.splice(humans.length - 1, 0, null);
+        }
+        const total = pages.length;
 
         // --- container + controls ---------------------------------------
         const root = document.createElement('div');
@@ -32,32 +54,13 @@
         canvasWrap.className = 'flipbook-canvas';
         root.appendChild(canvasWrap);
 
-        // Full-height transparent click zones (left = prev, right = next).
-        const zoneL = document.createElement('button');
-        zoneL.className = 'flipbook-zone flipbook-zone-left';
-        zoneL.setAttribute('aria-label', 'previous page');
-        const zoneR = document.createElement('button');
-        zoneR.className = 'flipbook-zone flipbook-zone-right';
-        zoneR.setAttribute('aria-label', 'next page');
-        root.appendChild(zoneL);
-        root.appendChild(zoneR);
-
-        // Bottom control bar: ‹  page counter  ›
         const bar = document.createElement('div');
         bar.className = 'flipbook-bar';
-        const prevBtn = document.createElement('button');
-        prevBtn.className = 'flipbook-arrow';
-        prevBtn.setAttribute('aria-label', 'previous page');
-        prevBtn.textContent = '‹';
+        const prevBtn = mkBtn('flipbook-arrow', '‹', 'previous page');
         const counter = document.createElement('div');
         counter.className = 'flipbook-counter';
-        const nextBtn = document.createElement('button');
-        nextBtn.className = 'flipbook-arrow';
-        nextBtn.setAttribute('aria-label', 'next page');
-        nextBtn.textContent = '›';
-        bar.appendChild(prevBtn);
-        bar.appendChild(counter);
-        bar.appendChild(nextBtn);
+        const nextBtn = mkBtn('flipbook-arrow', '›', 'next page');
+        bar.append(prevBtn, counter, nextBtn);
         root.appendChild(bar);
 
         mount.appendChild(root);
@@ -71,146 +74,148 @@
         renderer.outputEncoding = THREE.sRGBEncoding;
         canvasWrap.appendChild(renderer.domElement);
 
+        scene.add(new THREE.AmbientLight(0xffffff, 0.72));
+        const key = new THREE.DirectionalLight(0xffffff, 0.42);
+        key.position.set(0.4, 0.6, 1.2);
+        scene.add(key);
+
         const bookGroup = new THREE.Group();
+        bookGroup.rotation.x = -0.16;     // subtle tilt for depth
         scene.add(bookGroup);
 
         // Soft contact shadow grounding the book on the white backdrop.
         const shadowTex = makeShadowTexture();
-        const shadowMat = new THREE.MeshBasicMaterial({
-            map: shadowTex, transparent: true, depthWrite: false, opacity: 0.5,
-        });
-        const shadow = new THREE.Mesh(new THREE.PlaneGeometry(PAGE_W * 3.4, PAGE_H * 1.5), shadowMat);
+        const shadow = new THREE.Mesh(
+            new THREE.PlaneGeometry(PAGE_W * 3.6, PAGE_H * 1.5),
+            new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: 0.5 })
+        );
         shadow.rotation.x = -Math.PI / 2;
         shadow.position.y = -PAGE_H / 2 - 0.02;
         shadow.renderOrder = -1;
         bookGroup.add(shadow);
 
-        // --- sheets ------------------------------------------------------
-        // Sheet k: front = page (2k), back = page (2k+1)  (0-based page index)
-        const numSheets = Math.ceil(pages.length / 2);
-        const sheets = [];
+        // --- leaf template (flat base vertices, spine at x = 0) -----------
+        const tpl = new THREE.PlaneGeometry(PAGE_W, PAGE_H, SEG, 1);
+        tpl.translate(PAGE_W / 2, 0, 0);        // left edge on the spine
+        const baseArr = tpl.attributes.position.array.slice();
+        const vCount  = tpl.attributes.position.count;
+        tpl.dispose();
 
-        function blankMat() {
-            return new THREE.MeshBasicMaterial({ color: 0xf2f2f2, side: THREE.FrontSide });
-        }
+        // --- leaves ------------------------------------------------------
+        // Leaf k: front face = faces[2k] (a right page), back face = faces[2k+1]
+        // (the page seen on the left once the leaf is turned).
+        const numLeaves = faces.length / 2;
+        const leaves = [];
+        for (let k = 0; k < numLeaves; k++) {
+            const pivot = new THREE.Group();    // hinged at the spine
+            const geom = new THREE.PlaneGeometry(PAGE_W, PAGE_H, SEG, 1);
+            geom.translate(PAGE_W / 2, 0, 0);
 
-        for (let k = 0; k < numSheets; k++) {
-            const pivot = new THREE.Group();          // hinged at spine (x = 0)
-
-            const geom = new THREE.PlaneGeometry(PAGE_W, PAGE_H, 1, 1);
-
-            const frontMat = blankMat();
-            const front = new THREE.Mesh(geom, frontMat);
-            front.position.set(PAGE_W / 2, 0, 0.001);
-
-            const backMat = blankMat();
-            const back = new THREE.Mesh(geom, backMat);
-            back.position.set(PAGE_W / 2, 0, -0.001);
-            back.rotation.y = Math.PI;                 // its textured face points -z
-
+            const frontMat = paperMat();
+            const backMat  = paperMat();
+            const front = new THREE.Mesh(geom, frontMat);          // +z face
+            const back  = new THREE.Mesh(geom, backMat);           // -z face (BackSide)
+            backMat.side  = THREE.BackSide;
+            frontMat.side = THREE.FrontSide;
             pivot.add(front, back);
             bookGroup.add(pivot);
 
-            sheets.push({
-                pivot, front, back, frontMat, backMat,
-                frontIdx: 2 * k,
-                backIdx: 2 * k + 1,
-                flipped: false,
-                loaded: false,
-                loading: false,
+            leaves.push({
+                pivot, geom, frontMat, backMat,
+                frontIdx: 2 * k, backIdx: 2 * k + 1,
+                flipped: false, loaded: false, loading: false,
             });
         }
 
-        // currentLeaf = index of the next sheet to flip forward (0..maxLeaf).
-        // With an odd page count the final sheet's back is blank, so we stop one
-        // sheet early — the last real page then rests as the final right page.
-        const maxLeaf = (pages.length % 2 === 0) ? numSheets : numSheets - 1;
+        // currentLeaf = number of turned leaves = index of the next to turn.
         let currentLeaf = 0;
-        let animating = false;
+        const maxLeaf = numLeaves;
+        let animating = false;          // an auto (tap/arrow/snap) tween is running
 
-        function layout(animate) {
-            // Resting rotation/depth for every sheet based on flipped state, and
-            // horizontal shift so a single-page view (cover / back cover) centers.
-            for (let k = 0; k < sheets.length; k++) {
-                const s = sheets[k];
-                const targetRot = s.flipped ? -Math.PI : 0;
-                const targetZ = s.flipped ? k * Z_STEP : -k * Z_STEP;
-                s.pivot.rotation.y = targetRot;
-                s.pivot.position.z = targetZ;
+        // --- geometry deformation ----------------------------------------
+        // theta 0 = flat on the right; theta PI = flat on the left. The page
+        // bulges (cylindrical curl) most at theta = PI/2.
+        function setLeafShape(leaf, theta) {
+            const curl = Math.sin(theta) * CURL_AMP;
+            const a = leaf.geom.attributes.position.array;
+            for (let i = 0; i < vCount; i++) {
+                const x = baseArr[i * 3];
+                a[i * 3]     = x;
+                a[i * 3 + 1] = baseArr[i * 3 + 1];
+                a[i * 3 + 2] = Math.sin((x / PAGE_W) * Math.PI) * curl;
             }
-            const onlyRight = currentLeaf === 0;
-            const onlyLeft = currentLeaf === numSheets;
-            const targetX = onlyRight ? -PAGE_W / 2 : onlyLeft ? PAGE_W / 2 : 0;
-            if (animate) {
-                gsap.to(bookGroup.position, { x: targetX, duration: FLIP_DUR, ease: 'power3.inOut' });
-            } else {
-                bookGroup.position.x = targetX;
+            leaf.geom.attributes.position.needsUpdate = true;
+            leaf.geom.computeVertexNormals();
+            leaf.pivot.rotation.y = -theta;     // turn toward the viewer, then left
+        }
+
+        function restZ(k) {
+            // Visible top of each stack sits at z = 0 so the two open pages are
+            // coplanar; deeper pages recede behind.
+            return (leaves[k].flipped
+                ? -((currentLeaf - 1) - k)
+                : -(k - currentLeaf)) * Z_STEP;
+        }
+
+        function centerXFor(L) {
+            if (L <= 0)        return -PAGE_W / 2;   // front cover alone (right)
+            if (L >= maxLeaf)  return  PAGE_W / 2;   // back cover alone (left)
+            return 0;                                // open spread, centred on spine
+        }
+
+        function layout() {
+            for (let k = 0; k < numLeaves; k++) {
+                const leaf = leaves[k];
+                setLeafShape(leaf, leaf.flipped ? Math.PI : 0);
+                leaf.pivot.position.set(0, 0, restZ(k));
             }
+            bookGroup.position.x = centerXFor(currentLeaf);
             updateCounter();
         }
 
-        function updateCounter() {
-            // Human (1-based) page numbers currently visible.
-            const total = pages.length;
+        // --- counter -----------------------------------------------------
+        function updateCounter() { counter.textContent = counterFor(currentLeaf); }
+        function counterFor(L) {
+            const leftH  = humans[2 * L - 1];   // back of last turned leaf
+            const rightH = humans[2 * L];       // front of current leaf
             let label;
-            if (currentLeaf === 0) {
-                label = '01 / ' + pad(total);                  // front cover, alone
-            } else if (currentLeaf === numSheets) {
-                label = pad(total) + ' / ' + pad(total);       // back cover, alone (even totals)
-            } else {
-                const leftHuman  = 2 * currentLeaf;            // page_002, 004, …
-                const rightHuman = 2 * currentLeaf + 1;        // page_003, 005, …
-                label = rightHuman > total
-                    ? pad(leftHuman) + ' / ' + pad(total)
-                    : pad(leftHuman) + '–' + pad(rightHuman) + ' / ' + pad(total);
-            }
-            counter.textContent = label;
+            if (!leftH)        label = pad(rightH || total);          // front cover
+            else if (!rightH)  label = pad(leftH);                    // back cover
+            else               label = pad(leftH) + '–' + pad(rightH);
+            return label + ' / ' + pad(total);
         }
 
+        // --- textures (downscaled, windowed to cap VRAM) -----------------
         function ensureTextures(center) {
-            for (let k = Math.max(0, center - PRELOAD); k <= Math.min(numSheets - 1, center + PRELOAD); k++) {
-                loadSheet(sheets[k]);
+            for (let k = Math.max(0, center - PRELOAD); k <= Math.min(numLeaves - 1, center + PRELOAD); k++) {
+                loadLeaf(leaves[k]);
             }
-            pruneTextures(center);
-        }
-
-        // Cap GPU memory: dispose textures for sheets far from the current spread.
-        // 115 full pages at once would exhaust VRAM, so only a window stays live.
-        function pruneTextures(center) {
-            const KEEP = PRELOAD + 2;
-            for (let k = 0; k < numSheets; k++) {
-                if (k < center - KEEP || k > center + KEEP) unloadSheet(sheets[k]);
+            for (let k = 0; k < numLeaves; k++) {
+                if (k < center - (PRELOAD + 2) || k > center + (PRELOAD + 2)) unloadLeaf(leaves[k]);
             }
         }
-
-        function loadSheet(s) {
-            if (s.loaded || s.loading) return;
-            s.loading = true;
-            applyTexture(s, 'front', pages[s.frontIdx]);
-            if (s.backIdx < pages.length) applyTexture(s, 'back', pages[s.backIdx]);
-            s.loaded = true;
+        function loadLeaf(leaf) {
+            if (leaf.loaded || leaf.loading) return;
+            leaf.loading = true;
+            applyTexture(leaf, 'front', faces[leaf.frontIdx]);
+            applyTexture(leaf, 'back',  faces[leaf.backIdx]);
+            leaf.loaded = true;
         }
-
-        function unloadSheet(s) {
-            if (!s.loaded && !s.loading) return;
-            [s.frontMat, s.backMat].forEach(m => {
+        function unloadLeaf(leaf) {
+            if (!leaf.loaded && !leaf.loading) return;
+            [leaf.frontMat, leaf.backMat].forEach(m => {
                 if (m.map) { m.map.dispose(); m.map = null; }
-                m.color.set(0xf2f2f2);
+                m.color.set(0xf4f2ec);
                 m.needsUpdate = true;
             });
-            s.loaded = false;
-            s.loading = false;
+            leaf.loaded = false;
+            leaf.loading = false;
         }
-
-        // Decode the page, downscale to a sane texture width, and upload as a
-        // CanvasTexture. Downscaling keeps VRAM and decode cost in check while
-        // staying crisp at the on-screen page size.
-        const MAX_TEX_W = 1400;
-        function applyTexture(s, which, url) {
-            if (!url) return;
+        function applyTexture(leaf, which, url) {
+            if (!url) return;                       // blank face keeps paper colour
             const img = new Image();
             img.onload = () => {
-                if (!s.loading && !s.loaded) return;   // sheet was pruned mid-load
+                if (!leaf.loading && !leaf.loaded) return;
                 let cw = img.naturalWidth, ch = img.naturalHeight;
                 if (cw > MAX_TEX_W) { ch = Math.round(ch * MAX_TEX_W / cw); cw = MAX_TEX_W; }
                 const cv = document.createElement('canvas');
@@ -219,8 +224,11 @@
                 const tex = new THREE.CanvasTexture(cv);
                 tex.encoding = THREE.sRGBEncoding;
                 tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-                tex.minFilter = THREE.LinearMipmapLinearFilter;
-                const mat = which === 'front' ? s.frontMat : s.backMat;
+                if (which === 'back') {             // back is viewed mirrored — flip U
+                    tex.wrapS = THREE.RepeatWrapping;
+                    tex.repeat.x = -1;
+                }
+                const mat = which === 'front' ? leaf.frontMat : leaf.backMat;
                 if (mat.map) mat.map.dispose();
                 mat.map = tex;
                 mat.color.set(0xffffff);
@@ -229,70 +237,135 @@
             img.src = url;
         }
 
-        function flipNext() {
-            if (animating || currentLeaf >= maxLeaf) return;
-            const s = sheets[currentLeaf];
+        // --- turning (drag + auto) ---------------------------------------
+        // A turn is parametrised by progress p in [0,1] toward the target state.
+        let active = null;   // { leafIndex, dir, fromX, toX }
+
+        function beginFlip(dir) {
+            if (active || animating) return false;
+            if (dir > 0 && currentLeaf >= maxLeaf) return false;
+            if (dir < 0 && currentLeaf <= 0) return false;
+            const leafIndex = dir > 0 ? currentLeaf : currentLeaf - 1;
+            ensureTextures(dir > 0 ? currentLeaf + 1 : currentLeaf - 1);
+            active = {
+                leafIndex, dir,
+                fromX: centerXFor(currentLeaf),
+                toX:   centerXFor(currentLeaf + dir),
+            };
+            leaves[leafIndex].pivot.position.z = LIFT_Z;   // ride above the stacks
+            return true;
+        }
+
+        function setFlipProgress(p) {
+            if (!active) return;
+            p = clamp(p, 0, 1);
+            const leaf = leaves[active.leafIndex];
+            const theta = active.dir > 0 ? p * Math.PI : (1 - p) * Math.PI;
+            setLeafShape(leaf, theta);
+            leaf.pivot.position.z = LIFT_Z;
+            bookGroup.position.x = lerp(active.fromX, active.toX, p);
+        }
+
+        function endFlip(commit) {
+            if (!active) return;
+            const leaf = leaves[active.leafIndex];
+            if (commit) {
+                leaf.flipped = active.dir > 0;
+                currentLeaf += active.dir;
+            }
+            active = null;
+            layout();                 // settle every leaf flat + restack + recentre
+        }
+
+        // Auto turn (arrows / tap / drag-release snap): tween progress 0→1.
+        function autoFlip(dir, fromP) {
+            if (!beginFlip(dir)) return;
             animating = true;
-            ensureTextures(currentLeaf + 1);
-            s.flipped = true;
-            currentLeaf++;
-            const lift = 0.35 + currentLeaf * Z_STEP;
-            const tl = gsap.timeline({ onComplete: () => { animating = false; layout(false); } });
-            tl.to(s.pivot.rotation, { y: -Math.PI, duration: FLIP_DUR, ease: 'power2.inOut' }, 0);
-            tl.to(s.pivot.position, { z: lift, duration: FLIP_DUR / 2, ease: 'power2.out' }, 0);
-            tl.to(s.pivot.position, { z: (currentLeaf - 1) * Z_STEP, duration: FLIP_DUR / 2, ease: 'power2.in' }, FLIP_DUR / 2);
-            shiftBook();
-            onFlip(currentLeaf);
+            const o = { p: fromP || 0 };
+            gsap.to(o, {
+                p: 1, duration: FLIP_DUR * (1 - (fromP || 0)), ease: 'power2.inOut',
+                onUpdate: () => setFlipProgress(o.p),
+                onComplete: () => { animating = false; endFlip(true); },
+            });
         }
-
-        function flipPrev() {
-            if (animating || currentLeaf <= 0) return;
-            currentLeaf--;
-            const s = sheets[currentLeaf];
+        // Snap a drag back/forward to the nearest rest.
+        function snap(commit, fromP) {
             animating = true;
-            ensureTextures(currentLeaf);
-            s.flipped = false;
-            const lift = 0.35 + currentLeaf * Z_STEP;
-            const tl = gsap.timeline({ onComplete: () => { animating = false; layout(false); } });
-            tl.to(s.pivot.rotation, { y: 0, duration: FLIP_DUR, ease: 'power2.inOut' }, 0);
-            tl.to(s.pivot.position, { z: lift, duration: FLIP_DUR / 2, ease: 'power2.out' }, 0);
-            tl.to(s.pivot.position, { z: -currentLeaf * Z_STEP, duration: FLIP_DUR / 2, ease: 'power2.in' }, FLIP_DUR / 2);
-            shiftBook();
-            onFlip(currentLeaf);
+            const o = { p: fromP };
+            gsap.to(o, {
+                p: commit ? 1 : 0, duration: FLIP_DUR * 0.5, ease: 'power2.out',
+                onUpdate: () => setFlipProgress(o.p),
+                onComplete: () => { animating = false; endFlip(commit); },
+            });
         }
 
-        function shiftBook() {
-            const onlyRight = currentLeaf === 0;
-            const onlyLeft = currentLeaf === numSheets;
-            const targetX = onlyRight ? -PAGE_W / 2 : onlyLeft ? PAGE_W / 2 : 0;
-            gsap.to(bookGroup.position, { x: targetX, duration: FLIP_DUR, ease: 'power3.inOut', onUpdate: updateCounter });
-        }
-
-        zoneR.addEventListener('click', flipNext);
-        zoneL.addEventListener('click', flipPrev);
-        nextBtn.addEventListener('click', flipNext);
-        prevBtn.addEventListener('click', flipPrev);
+        nextBtn.addEventListener('click', () => autoFlip(1));
+        prevBtn.addEventListener('click', () => autoFlip(-1));
         document.addEventListener('keydown', onKey);
         function onKey(e) {
-            if (e.key === 'ArrowRight') flipNext();
-            else if (e.key === 'ArrowLeft') flipPrev();
+            if (e.key === 'ArrowRight') autoFlip(1);
+            else if (e.key === 'ArrowLeft') autoFlip(-1);
         }
 
-        // --- camera fit + resize ----------------------------------------
+        // --- pointer drag on the canvas ----------------------------------
+        const cvs = renderer.domElement;
+        cvs.style.touchAction = 'none';
+        let drag = null;   // { startX, lastX, lastT, vx, dir, moved }
+
+        cvs.addEventListener('pointerdown', (e) => {
+            if (active || animating) return;
+            const rect = cvs.getBoundingClientRect();
+            const nx = (e.clientX - rect.left) / rect.width;
+            const dir = nx > 0.5 ? 1 : -1;
+            if (!beginFlip(dir)) return;
+            drag = { startX: e.clientX, lastX: e.clientX, lastT: performance.now(), vx: 0, dir, moved: false, w: rect.width };
+            cvs.setPointerCapture(e.pointerId);
+            setFlipProgress(0);
+        });
+        cvs.addEventListener('pointermove', (e) => {
+            if (!drag) return;
+            const dx = e.clientX - drag.startX;
+            if (Math.abs(dx) > 4) drag.moved = true;
+            // Drag spans roughly half the canvas for a full turn.
+            const span = drag.w * 0.55;
+            const p = drag.dir > 0 ? (-dx / span) : (dx / span);
+            setFlipProgress(p);
+            const now = performance.now();
+            const dt = Math.max(8, now - drag.lastT);
+            drag.vx = (e.clientX - drag.lastX) / dt;
+            drag.lastX = e.clientX; drag.lastT = now;
+        });
+        function endDrag(e) {
+            if (!drag) return;
+            try { cvs.releasePointerCapture(e.pointerId); } catch (_) {}
+            const d = drag; drag = null;
+            if (!d.moved) {                 // tap → flip that half
+                if (active) { endFlip(false); }
+                autoFlip(d.dir);
+                return;
+            }
+            const dx = e.clientX - d.startX;
+            const span = d.w * 0.55;
+            const p = clamp(d.dir > 0 ? (-dx / span) : (dx / span), 0, 1);
+            // Commit if dragged past halfway or flicked in the turn direction.
+            const flick = (d.dir > 0 ? -d.vx : d.vx) > 0.5;
+            snap(p > 0.5 || flick, p);
+        }
+        cvs.addEventListener('pointerup', endDrag);
+        cvs.addEventListener('pointercancel', endDrag);
+
+        // --- camera fit + resize -----------------------------------------
         function resize() {
             const w = root.clientWidth || window.innerWidth;
             const h = root.clientHeight || window.innerHeight;
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
-
-            // Fit the fully-open spread (width 2*PAGE_W) with margin.
             const fovV = THREE.MathUtils.degToRad(camera.fov);
-            const margin = 1.22;
+            const margin = 1.24;
             const distH = (PAGE_H * margin / 2) / Math.tan(fovV / 2);
             const spreadW = PAGE_W * 2 * margin;
             const distW = (spreadW / 2) / (Math.tan(fovV / 2) * camera.aspect);
-            const dist = Math.max(distH, distW);
-            camera.position.set(0, 0.15, dist);
+            camera.position.set(0, 0.15, Math.max(distH, distW));
             camera.lookAt(0, 0, 0);
             camera.updateProjectionMatrix();
         }
@@ -301,24 +374,17 @@
 
         // --- render loop -------------------------------------------------
         let raf = null;
-        function tick() {
-            renderer.render(scene, camera);
-            raf = requestAnimationFrame(tick);
-        }
-        tick();
+        (function tick() { renderer.render(scene, camera); raf = requestAnimationFrame(tick); })();
 
-        // --- initial state -----------------------------------------------
         ensureTextures(0);
-        layout(false);
-        bookGroup.rotation.x = -0.18;   // subtle tilt for depth
+        layout();
 
-        // --- entrance animation -----------------------------------------
+        // --- public ------------------------------------------------------
         function animateIn() {
             gsap.from(bookGroup.rotation, { y: -0.5, duration: 1.0, ease: 'power3.out' });
             gsap.from(bookGroup.scale, { x: 0.6, y: 0.6, z: 0.6, duration: 0.9, ease: 'power3.out' });
             gsap.from(root, { opacity: 0, duration: 0.5, ease: 'power2.out' });
         }
-
         function dispose() {
             if (raf) cancelAnimationFrame(raf);
             window.removeEventListener('resize', resize);
@@ -326,14 +392,13 @@
             gsap.killTweensOf(bookGroup.position);
             gsap.killTweensOf(bookGroup.rotation);
             gsap.killTweensOf(bookGroup.scale);
-            sheets.forEach(s => {
-                gsap.killTweensOf(s.pivot.rotation);
-                gsap.killTweensOf(s.pivot.position);
-                [s.frontMat, s.backMat].forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
-                s.front.geometry.dispose();
+            leaves.forEach(leaf => {
+                [leaf.frontMat, leaf.backMat].forEach(m => { if (m.map) m.map.dispose(); m.dispose(); });
+                leaf.geom.dispose();
             });
-            shadowMat.map.dispose();
-            shadowMat.dispose();
+            shadowTex.dispose();
+            shadow.material.map.dispose();
+            shadow.material.dispose();
             shadow.geometry.dispose();
             renderer.dispose();
             if (root.parentNode) root.parentNode.removeChild(root);
@@ -342,8 +407,14 @@
         return { animateIn, dispose, el: root };
     }
 
-    function pad(n) { return String(n).padStart(2, '0'); }
-
+    function mkBtn(cls, text, label) {
+        const b = document.createElement('button');
+        b.className = cls; b.textContent = text; b.setAttribute('aria-label', label);
+        return b;
+    }
+    function paperMat() {
+        return new THREE.MeshLambertMaterial({ color: 0xf4f2ec });
+    }
     function makeShadowTexture() {
         const c = document.createElement('canvas');
         c.width = c.height = 256;
