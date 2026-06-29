@@ -1260,6 +1260,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function buildFlipbookManifest() {
         const pages = [];
         for (let i = 1; i <= FLIPBOOK_PAGES; i++) {
+            if (i === 16) continue;   // page_016 è errata — esclusa dalla rivista
             pages.push(`${FLIPBOOK_DIR}/page_${String(i).padStart(3, '0')}.jpg`);
         }
         const csv = {

@@ -1,14 +1,13 @@
 /* ------------------------------------------------------------------ *
  * CK Flipbook — interactive 3D zine viewer (three.js + GSAP)
  *
- * A real magazine: leaves hinged at a central spine, page_001 the front
- * cover (single, right), the last page the back cover (single, left when
- * closed at the end). Pages are segmented meshes that curl in 3D as they
- * turn, lit so the bend is visible. You turn a page by DRAGGING it with
- * the pointer (grab the right page and pull it left, or the left page and
- * pull it right); a quick tap on a half, the arrows, or the keyboard also
- * flip. The two pages of an open spread are coplanar so they meet flush
- * at the spine (no z-split).
+ * A real magazine: leaves hinged at a central spine. The front cover and
+ * the back cover are single pages shown centred; the interior reads as
+ * two-page spreads. Pages are segmented meshes that curl in 3D as they
+ * turn, lit so the bend is visible. Turning is DRAG-ONLY — grab the right
+ * page and pull it left, or the left page and pull it right (the arrows /
+ * keyboard also flip). The turning page stays glued at the spread's depth
+ * (no z lift) and the two open pages are coplanar, meeting flush.
  *
  * Exposed as window.CKFlipbook.create(opts) -> instance{ animateIn,
  * dispose, el }. Requires global THREE (r128 UMD) and GSAP.
@@ -22,9 +21,9 @@
     const SEG         = 30;            // width segments per page (for a smooth curl)
     const CURL_AMP    = 0.5;           // peak page bulge (world units) at mid-turn
     const Z_STEP      = 0.004;         // depth between stacked (hidden) pages
-    const LIFT_Z      = 0.25;          // how far the turning leaf rises off the stack
     const PRELOAD     = 3;             // leaves textured on each side of the spread
-    const FLIP_DUR    = 0.85;          // seconds for an auto (tap/arrow) turn
+    const FLIP_DUR    = 0.85;          // seconds for a drag-release snap
+    const ARROW_DUR   = 0.32;          // seconds for an arrow/keyboard turn (snappy)
     const MAX_TEX_W   = 1400;          // textures downscaled to this width
 
     const lerp = (a, b, t) => a + (b - a) * t;
@@ -35,16 +34,11 @@
         const mount = opts.mount;
         const pages = opts.pages;       // image URLs, page_001 … page_NNN (in order)
 
-        // --- faces: pad to an even count so the back cover sits alone on the
-        // left when closed. A blank is inserted just before the last page
-        // (the inside-back-cover), which keeps every real page in order. -----
+        // --- faces: one per page, in order. Front cover = faces[0], back
+        // cover = last face; both are shown single and centred. -----------
         const faces  = pages.slice();
-        const humans = pages.map((_, i) => i + 1);   // 1-based page number per face
-        if (faces.length % 2 === 1) {
-            faces.splice(faces.length - 1, 0, null);  // blank inside-back-cover
-            humans.splice(humans.length - 1, 0, null);
-        }
-        const total = pages.length;
+        const humans = pages.map((_, i) => i + 1);   // sequential page number per face
+        const total  = pages.length;
 
         // --- container + controls ---------------------------------------
         const root = document.createElement('div');
@@ -61,7 +55,8 @@
         counter.className = 'flipbook-counter';
         const nextBtn = mkBtn('flipbook-arrow', '›', 'next page');
         bar.append(prevBtn, counter, nextBtn);
-        root.appendChild(bar);
+        // Bar lives inside the canvas area so it stays centred under the book.
+        canvasWrap.appendChild(bar);
 
         mount.appendChild(root);
 
@@ -104,7 +99,7 @@
         // --- leaves ------------------------------------------------------
         // Leaf k: front face = faces[2k] (a right page), back face = faces[2k+1]
         // (the page seen on the left once the leaf is turned).
-        const numLeaves = faces.length / 2;
+        const numLeaves = Math.ceil(faces.length / 2);
         const leaves = [];
         for (let k = 0; k < numLeaves; k++) {
             const pivot = new THREE.Group();    // hinged at the spine
@@ -252,7 +247,12 @@
                 fromX: centerXFor(currentLeaf),
                 toX:   centerXFor(currentLeaf + dir),
             };
-            leaves[leafIndex].pivot.position.z = LIFT_Z;   // ride above the stacks
+            // The turning page stays glued at the spread's depth (z = 0) — no
+            // lift. Push the page it will land on one step back so it stacks
+            // underneath cleanly instead of z-fighting.
+            leaves[leafIndex].pivot.position.z = 0;
+            const coverIdx = dir > 0 ? leafIndex - 1 : leafIndex + 1;
+            if (leaves[coverIdx]) leaves[coverIdx].pivot.position.z = -Z_STEP;
             return true;
         }
 
@@ -262,7 +262,7 @@
             const leaf = leaves[active.leafIndex];
             const theta = active.dir > 0 ? p * Math.PI : (1 - p) * Math.PI;
             setLeafShape(leaf, theta);
-            leaf.pivot.position.z = LIFT_Z;
+            leaf.pivot.position.z = 0;
             bookGroup.position.x = lerp(active.fromX, active.toX, p);
         }
 
@@ -277,13 +277,13 @@
             layout();                 // settle every leaf flat + restack + recentre
         }
 
-        // Auto turn (arrows / tap / drag-release snap): tween progress 0→1.
-        function autoFlip(dir, fromP) {
+        // Auto turn (arrows / keyboard): tween progress 0→1, snappy.
+        function autoFlip(dir) {
             if (!beginFlip(dir)) return;
             animating = true;
-            const o = { p: fromP || 0 };
+            const o = { p: 0 };
             gsap.to(o, {
-                p: 1, duration: FLIP_DUR * (1 - (fromP || 0)), ease: 'power2.inOut',
+                p: 1, duration: ARROW_DUR, ease: 'power2.inOut',
                 onUpdate: () => setFlipProgress(o.p),
                 onComplete: () => { animating = false; endFlip(true); },
             });
@@ -339,9 +339,8 @@
             if (!drag) return;
             try { cvs.releasePointerCapture(e.pointerId); } catch (_) {}
             const d = drag; drag = null;
-            if (!d.moved) {                 // tap → flip that half
-                if (active) { endFlip(false); }
-                autoFlip(d.dir);
+            if (!d.moved) {                 // a plain click does nothing — turning is drag-only
+                endFlip(false);
                 return;
             }
             const dx = e.clientX - d.startX;
@@ -356,8 +355,10 @@
 
         // --- camera fit + resize -----------------------------------------
         function resize() {
-            const w = root.clientWidth || window.innerWidth;
-            const h = root.clientHeight || window.innerHeight;
+            // Size to the canvas wrapper (which on desktop reserves space for the
+            // credits column), so the book + counter centre in the reading area.
+            const w = canvasWrap.clientWidth || root.clientWidth || window.innerWidth;
+            const h = canvasWrap.clientHeight || root.clientHeight || window.innerHeight;
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
             const fovV = THREE.MathUtils.degToRad(camera.fov);
