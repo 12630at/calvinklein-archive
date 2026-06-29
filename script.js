@@ -1247,7 +1247,7 @@ document.addEventListener('DOMContentLoaded', () => {
         all:         null,
         advertising: 'adv',
         editorials:  'edi',
-        collections: '__none__',
+        collections: 'collection',
         ephemera:    '__none__',
     };
 
@@ -2076,7 +2076,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let listSortAsc   = false;  // year descending by default = most recent first
     let listManifests = [];
 
-    const CAT_LABEL = { adv: 'Advertisement', edi: 'Editorial' };
+    const CAT_LABEL = { adv: 'Advertisement', edi: 'Editorial', collection: 'Collection' };
     const SUB_LABEL = { print: 'Print', billboard: 'Billboard', tv: 'TV' };
     const SEA_LABEL = { ss: 'S/S', fw: 'F/W' };
 
