@@ -292,11 +292,11 @@ body {
     inset: 0;
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 1.2s ease-in-out;
-    overflow-y: auto;
+    transition: opacity 0.45s ease-in-out;
+    overflow: hidden;
 }
 
 #people-content.visible {
@@ -310,8 +310,9 @@ body {
     left: 36px;
     transform: translateY(-50%);
     display: flex;
-    flex-direction: column;
-    gap: 24px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
 }
 
 .people-nav-title {
@@ -346,18 +347,27 @@ body {
     color: #424242;
 }
 
-.people-grid {
-    display: flex;
-    flex-direction: row;
-    gap: 48px;
-    margin-left: 147px;
-    padding-left: 36px;
+/* Full collaborator list — pinned to the right margin, starts from the top.
+   Scrolling + edge blur are driven by GSAP/JS (inertia), so the element itself
+   has overflow hidden and the inner wrapper is translated. */
+.people-list {
+    margin-left: auto;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    padding-right: 36px;
+    touch-action: none;
 }
 
-.people-column {
+.people-list-inner {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    align-items: flex-end;
+    text-align: right;
+    gap: 9px;
+    padding-top: 40px;     /* names begin at the top-right margin */
+    padding-bottom: 80px;
+    will-change: transform;
 }
 
 .people-entry {
@@ -369,13 +379,101 @@ body {
     color: #bbbdc0;
     -webkit-font-smoothing: antialiased;
     line-height: 12px;
-    cursor: pointer;
+    cursor: default;
+    white-space: nowrap;
+    will-change: opacity, filter;
     transition: color 300ms ease-out;
 }
 
-.people-entry:hover {
+/* Only people with a dedicated page (currently Kate Moss) are clickable */
+.people-entry-active {
+    cursor: pointer;
+}
+
+.people-entry-active:hover {
     color: #424242;
 }
+
+/* ===== PERSON PAGE (video background + credits) ===== */
+#person-stage {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 17;
+    display: none;
+    opacity: 0;
+    overflow: hidden;
+}
+
+#person-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Soft scrim on the right so the white credits stay legible over the video */
+#person-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+}
+
+/* Left "← people" back nav, centre-left, in white over the video */
+#person-stage .person-nav { z-index: 5; }
+#person-stage .person-nav .people-nav-title { color: #ffffff; }
+#person-stage .person-nav .people-close { color: rgba(255, 255, 255, 0.7); }
+#person-stage .person-nav .people-close:hover { color: #ffffff; }
+
+/* Full-height flex column so the whole credits block stays vertically centred
+   even while GSAP animates its translateY (no reliance on translate(-50%)). */
+#person-info {
+    position: absolute;
+    right: 36px;
+    top: 0;
+    height: 100%;
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-end;
+    gap: 14px;
+    text-align: right;
+    z-index: 4;
+}
+
+#person-info .item-view-title { color: #ffffff; }
+#person-info .item-view-meta-label { color: rgba(255, 255, 255, 0.55); }
+#person-info .item-view-meta-value { color: #ffffff; }
+
+.person-view-works {
+    margin-top: 10px;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0px;
+    color: rgba(255, 255, 255, 0.7);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.person-view-works:hover { color: #ffffff; }
+
+/* Clickable item-view fields (year, model, photographer…) — no underline */
+.iv-link {
+    cursor: pointer;
+    transition: opacity 200ms ease-out;
+}
+.iv-link:hover { opacity: 0.55; }
 
 /* ===== SEARCH TRANSITION ===== */
 
@@ -1252,6 +1350,23 @@ body.timeline-open .menu {
         text-align: left;
         max-height: 34vh;
         overflow-y: auto;
+    }
+
+    /* Person page: credits anchored to the bottom-left over the video */
+    #person-info {
+        top: auto;
+        height: auto;
+        bottom: 24px;
+        left: 16px;
+        right: 16px;
+        width: auto;
+        justify-content: flex-end;
+        transform: none;
+        align-items: flex-start;
+        text-align: left;
+    }
+    #person-scrim {
+        background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 45%);
     }
 
     /* Counter shows on mobile, in the credits block, in place of the number line */
