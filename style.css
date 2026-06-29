@@ -984,6 +984,74 @@ body.item-view-open .menu-archive-back {
     cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='9,6 22,14 9,22' fill='white'/></svg>") 14 14, pointer;
 }
 
+/* ===== FLIPBOOK (EPHEMERA zine) ===== */
+.flipbook-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+}
+
+.flipbook-canvas {
+    position: absolute;
+    inset: 0;
+}
+.flipbook-canvas canvas { display: block; }
+
+/* Transparent full-height click zones: left half = prev, right half = next.
+   No visible glyphs here (they would collide with the back button / credits) —
+   the visible controls live in the bottom bar. */
+.flipbook-zone {
+    position: absolute;
+    top: 0;
+    bottom: 88px;          /* keep clear of the bottom control bar */
+    width: 34%;
+    background: none;
+    border: none;
+    padding: 0;
+}
+.flipbook-zone-left  { left: 0;  cursor: w-resize; }
+.flipbook-zone-right { right: 0; cursor: e-resize; }
+
+/* Bottom control bar: ‹  page counter  › */
+.flipbook-bar {
+    position: absolute;
+    left: 50%;
+    bottom: 30px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 22px;
+}
+
+.flipbook-arrow {
+    font-family: 'Klein', sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.flipbook-arrow:hover { color: #424242; }
+
+.flipbook-counter {
+    min-width: 96px;
+    text-align: center;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+}
+
+@media (max-width: 600px) {
+    .flipbook-zone { width: 40%; }
+}
+
 /* ===== TIMELINE PAGE ===== */
 
 /* Hover state for the timeline menu item */

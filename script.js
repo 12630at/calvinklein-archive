@@ -1248,8 +1248,35 @@ document.addEventListener('DOMContentLoaded', () => {
         advertising: 'adv',
         editorials:  'edi',
         collections: 'collection',
-        ephemera:    '__none__',
+        ephemera:    'ephemera',
     };
+
+    // EPHEMERA holds a single browsable item: the 1991 CK Jeans zine (Bruce
+    // Weber). It is not a per-image CSV row — it is one synthetic manifest entry
+    // whose cover (page_001) shows on the canvas and whose item view opens the
+    // 3D flipbook (page_001 = cover … page_115 = back cover).
+    const FLIPBOOK_DIR   = 'assets/index/ephemera/flipbook';
+    const FLIPBOOK_PAGES = 115;
+    function buildFlipbookManifest() {
+        const pages = [];
+        for (let i = 1; i <= FLIPBOOK_PAGES; i++) {
+            pages.push(`${FLIPBOOK_DIR}/page_${String(i).padStart(3, '0')}.jpg`);
+        }
+        const csv = {
+            filename: 'flipbook_jeans_1991', year: '1991', season: '',
+            category: 'ephemera', subcategory: '', description: 'jeans',
+            campaign: '', photographer: 'bruce-weber', director: '', producer: '',
+            production_company: '', model: '', stylist: '', art_director: '',
+            creative_director: '', hair: '', makeup: '', set_designer: '',
+            casting_director: '', agency: '', publication: '', issue_date: '',
+            music: '', notes: '',
+        };
+        return {
+            path: pages[0], filename: 'flipbook_jeans_1991', category: 'ephemera',
+            dw: 2400, dh: 3228, csv, campaignKey: 'flipbook_jeans_1991',
+            isFlipbook: true, pages,
+        };
+    }
 
     function _hash(s) {
         let h = 2166136261;
@@ -1317,6 +1344,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 campaignKey: filename.replace(/_\d+$/, ''),
             };
         }).filter(Boolean);
+
+        // Inject the EPHEMERA flipbook (not a CSV row — see buildFlipbookManifest).
+        archiveManifest.push(buildFlipbookManifest());
 
         // Group items by campaign key for multi-photo navigation
         for (const m of archiveManifest) {
@@ -2576,11 +2606,56 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cursorPillEl) { cursorPillEl.classList.remove('visible'); }
     }
 
+    // Open the 3D flipbook item view (EPHEMERA zine). Reuses the item-view
+    // shell (backdrop + info panel + back button) but replaces the centre image
+    // with the three.js flipbook instead of a clone <img>.
+    function openFlipbookView(manifest, origRect, src) {
+        itemViewOpen = true;
+        document.body.classList.add('item-view-open');
+        itemView.classList.remove('is-video');
+
+        itemViewTitleEl.textContent = buildTitle(manifest.csv);
+        renderItemMeta(manifest.csv);
+        itemViewNumbersEl.innerHTML = '';
+
+        itemView.removeAttribute('aria-hidden');
+        itemView.style.display = 'block';
+
+        const fb = window.CKFlipbook.create({
+            mount: itemViewImgWrap,
+            pages: manifest.pages,
+        });
+
+        itemViewState = {
+            isFlipbook: true,
+            flipbook:   fb,
+            sourceEl:   src.sourceEl || null,
+            fromList:   !!src.fromList,
+            origRect,
+            currentManifest: manifest,
+            group: [manifest], currentIdx: 0, isVideo: false,
+        };
+
+        const tl = gsap.timeline();
+        tl.fromTo(itemViewBackdrop, { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 0);
+        tl.add(() => fb.animateIn(), 0.1);
+        tl.fromTo(itemViewInfo, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+    }
+
     function openItemView(imgEl) {
         if (itemViewOpen) return;
         const itemId = parseInt(imgEl.dataset.itemId, 10);
         const item = items[itemId];
         if (!item) return;
+
+        if (item.manifest.isFlipbook) {
+            const r = imgEl.getBoundingClientRect();
+            imgEl.classList.add('is-hidden');
+            openFlipbookView(item.manifest,
+                { x: r.left, y: r.top, w: r.width, h: r.height },
+                { sourceEl: imgEl, fromList: false });
+            return;
+        }
 
         itemViewOpen = true;
         document.body.classList.add('item-view-open');
@@ -2857,6 +2932,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Open item view when originating from the list view (no canvas element)
     function openItemViewFromList(manifest, fromRect) {
         if (itemViewOpen) return;
+
+        if (manifest.isFlipbook) {
+            const origRect = fromRect || { x: window.innerWidth / 2, y: window.innerHeight / 2, w: 4, h: 4 };
+            openFlipbookView(manifest, origRect, { sourceEl: null, fromList: true });
+            return;
+        }
+
         itemViewOpen = true;
         document.body.classList.add('item-view-open');
 
@@ -2941,6 +3023,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cursorPillEl) cursorPillEl.classList.remove('visible');
 
         const st = itemViewState;
+
+        // Flipbook has no clone image — fade the shell out and dispose three.js.
+        if (st && st.isFlipbook) {
+            const tl = gsap.timeline({
+                onComplete: () => {
+                    itemView.style.display = 'none';
+                    itemView.setAttribute('aria-hidden', 'true');
+                    st.flipbook.dispose();
+                    if (st.sourceEl) st.sourceEl.classList.remove('is-hidden');
+                    if (st.fromList && listViewOpen) {
+                        const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                        gsap.to(rows, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.2 } });
+                    }
+                    itemViewState = null;
+                    document.body.classList.remove('item-view-open');
+                    if (typeof onDone === 'function') onDone();
+                },
+            });
+            tl.to(itemViewInfo, { x: 30, opacity: 0, duration: 0.3, ease: 'power2.in' }, 0);
+            tl.to(st.flipbook.el, { opacity: 0, scale: 0.85, duration: 0.4, ease: 'power3.in' }, 0);
+            tl.to(itemViewBackdrop, { opacity: 0, duration: 0.4, ease: 'power2.in' }, 0.1);
+            return;
+        }
         const clone = st.cloneImg;
         const target = st.origRect;
 
