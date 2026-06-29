@@ -10,6 +10,9 @@ Uso:
     python3 download_collection.py URL --year 2003 --season ss   # forza i metadati
     python3 download_collection.py URL --no-db                   # solo file, niente database
     python3 download_collection.py URL --dry-run                 # mostra cosa farebbe, non scarica
+    python3 download_collection.py --urls foto.txt --year 2002 --season fw
+        # pagine che caricano le foto SCROLLANDO (lazy-load): si incolla in
+        # foto.txt la lista completa delle URL presa dal browser (vedi README).
 
 Note:
  - Nella pagina i thumbnail sono "thumb_XXXX.jpg"; la versione full e' lo stesso
@@ -104,6 +107,32 @@ def extract_full_urls(html, page_url):
     return [(sid, best[sid][1]) for sid in order]
 
 
+def read_urls_file(path):
+    """Legge le URL delle foto da un file di testo (una per riga). Serve per le
+    pagine che caricano le immagini man mano che scrolli: si incolla qui la lista
+    completa presa dal browser. Accetta sia URL 'thumb_' che gia' full."""
+    p = Path(path)
+    if not p.exists():
+        sys.exit(f"ERRORE: file non trovato: {path}")
+    best, order = {}, []
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.search(r"\S+\.jpe?g", line, re.I)
+        if not m:
+            continue
+        url = m.group(0)
+        base = url.rsplit("/", 1)
+        full_name = re.sub(r"^thumb_", "", base[-1], flags=re.I)
+        full = (base[0] + "/" + full_name) if len(base) == 2 else full_name
+        source_id = re.sub(r"\.jpe?g$", "", full_name, flags=re.I)
+        if source_id not in best:
+            order.append(source_id)
+            best[source_id] = full
+    return [(sid, best[sid]) for sid in order]
+
+
 # ----------------------------------------------------------------- CSV --------
 def read_csv_rows():
     if not CSV_PATH.exists():
@@ -185,7 +214,11 @@ def regenerate_dims():
 # ----------------------------------------------------------------- main -------
 def main():
     ap = argparse.ArgumentParser(description="Scarica e ordina le foto sfilata da firstview.com")
-    ap.add_argument("url", help="URL della pagina collection_images.php?id=...")
+    ap.add_argument("url", nargs="?", help="URL della pagina collection_images.php?id=...")
+    ap.add_argument("--urls", metavar="FILE",
+                    help="File di testo con le URL delle foto (una per riga). "
+                         "Da usare per le pagine che caricano le immagini scrollando: "
+                         "richiede anche --year e --season.")
     ap.add_argument("--year", help="Forza l'anno (es. 2003)")
     ap.add_argument("--season", choices=["ss", "fw"], help="Forza la stagione")
     ap.add_argument("--no-db", action="store_true", help="Aggiorna solo i file, non i database")
@@ -194,33 +227,48 @@ def main():
                     help="Procedi anche se 'Calvin Klein' non e' nella pagina")
     args = ap.parse_args()
 
-    print(f"Pagina: {args.url}")
-    try:
-        html = fetch(args.url)
-    except (URLError, HTTPError) as e:
-        sys.exit(f"ERRORE rete: {e}\n(Se sei dietro un proxy che blocca firstview.com, "
-                 "lancia lo script da una rete che lo permette.)")
+    if args.urls:
+        # Modalita' lista: le foto arrivano da un file (pagine con lazy-load).
+        if not (args.year and args.season):
+            sys.exit("ERRORE: con --urls servono anche --year e --season "
+                     "(la pagina non viene letta, quindi non li ricavo da solo).")
+        year, season = args.year, args.season
+        images = read_urls_file(args.urls)
+        if not images:
+            sys.exit(f"ERRORE: nessuna URL .jpg valida in {args.urls}.")
+        print(f"Anno: {year}   Stagione: {season}")
+        print(f"Lette {len(images)} foto da {args.urls}.")
+    else:
+        if not args.url:
+            sys.exit("ERRORE: serve l'URL della pagina, oppure --urls FILE "
+                     "per le pagine che caricano le foto scrollando.")
+        print(f"Pagina: {args.url}")
+        try:
+            html = fetch(args.url)
+        except (URLError, HTTPError) as e:
+            sys.exit(f"ERRORE rete: {e}\n(Se sei dietro un proxy che blocca firstview.com, "
+                     "lancia lo script da una rete che lo permette.)")
 
-    title = page_title(html)
-    if title:
-        print(f"Titolo:  {title}")
+        title = page_title(html)
+        if title:
+            print(f"Titolo:  {title}")
 
-    if not args.force_designer and "calvin klein" not in html.lower():
-        sys.exit("ERRORE: 'Calvin Klein' non trovato nella pagina. "
-                 "Se e' giusta comunque, rilancia con --force-designer.")
+        if not args.force_designer and "calvin klein" not in html.lower():
+            sys.exit("ERRORE: 'Calvin Klein' non trovato nella pagina. "
+                     "Se e' giusta comunque, rilancia con --force-designer.")
 
-    year = args.year or detect_year(html)
-    season = args.season or detect_season(html)
-    if not year:
-        sys.exit("ERRORE: anno non rilevato. Passa --year YYYY.")
-    if not season:
-        sys.exit("ERRORE: stagione non rilevata. Passa --season ss|fw.")
-    print(f"Anno: {year}   Stagione: {season}")
+        year = args.year or detect_year(html)
+        season = args.season or detect_season(html)
+        if not year:
+            sys.exit("ERRORE: anno non rilevato. Passa --year YYYY.")
+        if not season:
+            sys.exit("ERRORE: stagione non rilevata. Passa --season ss|fw.")
+        print(f"Anno: {year}   Stagione: {season}")
 
-    images = extract_full_urls(html, args.url)
-    if not images:
-        sys.exit("ERRORE: nessun thumbnail 'thumb_*.jpg' trovato nella pagina.")
-    print(f"Trovate {len(images)} foto.")
+        images = extract_full_urls(html, args.url)
+        if not images:
+            sys.exit("ERRORE: nessun thumbnail 'thumb_*.jpg' trovato nella pagina.")
+        print(f"Trovate {len(images)} foto.")
 
     # idempotenza: salta gli id firstview gia' nel CSV
     csv_rows = [] if args.no_db else read_csv_rows()
