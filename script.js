@@ -59,7 +59,6 @@ const SEARCH_DATA = [
     { text: 'Archive',     type: 'nav' },
     { text: 'People',      type: 'nav' },
     { text: 'Timeline',    type: 'nav' },
-    { text: 'Profile',     type: 'nav' },
     { text: 'About',       type: 'nav' },
     { text: 'Collections', type: 'nav' },
     { text: 'Advertising', type: 'nav' },
@@ -546,6 +545,129 @@ document.addEventListener('DOMContentLoaded', () => {
         closePeopleStage();
     });
 
+    // ===== PERSON PAGE (video background + credits, e.g. Kate Moss) =====
+
+    // Only people with an entry here are clickable in the list. Add more later.
+    const PEOPLE_DATA = {
+        'Kate Moss': {
+            video: 'assets/index/backgrounds/page_people_katemoss.mp4',
+            query: 'kate moss',
+            meta: [
+                ['role',        'Model'],
+                ['born',        '1974 — Croydon, London'],
+                ['nationality', 'British'],
+                ['ck since',    '1992'],
+                ['campaigns',   'Obsession · CK One · Jeans'],
+                ['agency',      'Storm Management'],
+            ],
+        },
+    };
+
+    const personStage = document.getElementById('person-stage');
+    const personBg     = document.getElementById('person-bg');
+    const personNameEl = document.getElementById('person-name');
+    const personMetaEl = document.getElementById('person-meta');
+    const personInfo   = document.getElementById('person-info');
+    let   currentPerson = null;
+
+    function buildPersonMeta(rows) {
+        personMetaEl.innerHTML = '';
+        for (const [label, value] of rows) {
+            if (!value) continue;
+            const row = document.createElement('div');
+            row.className = 'item-view-meta-row';
+            const l = document.createElement('span');
+            l.className = 'item-view-meta-label';
+            l.textContent = label;
+            const v = document.createElement('span');
+            v.className = 'item-view-meta-value';
+            v.textContent = String(value).toUpperCase();
+            row.appendChild(l); row.appendChild(v);
+            personMetaEl.appendChild(row);
+        }
+    }
+
+    // Flash/GSAP open: clicked name punches toward the viewer and dissolves,
+    // then the video page flashes in.
+    function openPersonPage(name, sourceEl) {
+        const data = PEOPLE_DATA[name];
+        if (!data || currentPerson) return;
+        currentPerson = name;
+
+        personNameEl.textContent = name.toUpperCase();
+        buildPersonMeta(data.meta);
+        personBg.src = data.video;
+        try { personBg.currentTime = 0; } catch (_) {}
+        personBg.play().catch(() => {});
+
+        const tl = gsap.timeline();
+        if (sourceEl) {
+            tl.to(sourceEl, {
+                scale: 2.4, opacity: 0, filter: 'blur(14px)',
+                duration: 0.45, ease: 'power3.in',
+                transformOrigin: 'right center',
+            }, 0);
+        }
+        tl.add(() => {
+            personStage.removeAttribute('aria-hidden');
+            personStage.style.display = 'block';
+            gsap.set(personStage, { opacity: 0 });
+            gsap.set(personInfo, { opacity: 0, y: 16 });
+        });
+        tl.fromTo(personStage,
+            { opacity: 0, scale: 1.06, filter: 'blur(12px)' },
+            { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.6, ease: 'power2.out' });
+        tl.fromTo(personInfo,
+            { opacity: 0, y: 16 },
+            { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, '-=0.25');
+        tl.add(() => { if (sourceEl) gsap.set(sourceEl, { clearProps: 'all' }); });
+    }
+
+    function teardownPersonStage() {
+        personStage.style.display = 'none';
+        personStage.setAttribute('aria-hidden', 'true');
+        gsap.set(personStage, { clearProps: 'transform,filter,opacity' });
+        try { personBg.pause(); } catch (_) {}
+        currentPerson = null;
+    }
+
+    function closePersonPage() {
+        if (!currentPerson) return;
+        gsap.to(personStage, {
+            opacity: 0, duration: 0.45, ease: 'power2.in',
+            onComplete: teardownPersonStage,
+        });
+    }
+
+    // VIEW WORKS → infinite canvas filtered to this person's works.
+    function openPersonWorks() {
+        const data = currentPerson ? PEOPLE_DATA[currentPerson] : null;
+        const query = data ? data.query : '';
+        gsap.to(personStage, {
+            opacity: 0, duration: 0.4, ease: 'power2.in',
+            onComplete: async () => {
+                teardownPersonStage();
+                // Close the people stage underneath instantly
+                const peopleStage = document.getElementById('people-stage');
+                const contentEl   = document.getElementById('people-content');
+                contentEl.classList.remove('visible');
+                peopleStage.style.display = 'none';
+                peopleStage.style.opacity = '0';
+                peopleStage.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('page-open');
+                if (!query) return;
+                await openArchive();
+                setTimeout(() => applyArchiveFilter(query), 1200);
+            },
+        });
+    }
+
+    document.querySelectorAll('.people-entry[data-person]').forEach(el => {
+        el.addEventListener('click', () => openPersonPage(el.dataset.person, el));
+    });
+    document.getElementById('person-back').addEventListener('click', closePersonPage);
+    document.getElementById('person-view-works').addEventListener('click', openPersonWorks);
+
     // ===== SEARCH =====
 
     const searchEl       = document.getElementById('search');
@@ -911,19 +1033,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const campaignGroups = new Map();    // campaignKey → array of items in same campaign
 
+    // Parse one CSV line respecting double-quoted fields (a field may contain
+    // commas when quoted — e.g. the model column "kate-moss,amber-valletta").
+    function parseCsvLine(line) {
+        const out = [];
+        let cur = '', inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+            const ch = line[i];
+            if (inQuotes) {
+                if (ch === '"') {
+                    if (line[i + 1] === '"') { cur += '"'; i++; }
+                    else inQuotes = false;
+                } else cur += ch;
+            } else if (ch === '"') {
+                inQuotes = true;
+            } else if (ch === ',') {
+                out.push(cur); cur = '';
+            } else cur += ch;
+        }
+        out.push(cur);
+        return out;
+    }
+
     async function loadArchiveManifest() {
         if (archiveManifest) return archiveManifest;
         const res = await fetch('archive_index.csv');
         const txt = await res.text();
         const lines = txt.trim().split(/\r?\n/);
-        const header = lines.shift().split(',');
+        const header = parseCsvLine(lines.shift());
         const iFile = header.indexOf('filename');
         const iCat  = header.indexOf('category');
         const iSub  = header.indexOf('subcategory');
         const iYear = header.indexOf('year');
 
         archiveManifest = lines.map(line => {
-            const cols = line.split(',');
+            const cols = parseCsvLine(line);
             const filename = cols[iFile];
             const dims = (typeof ARCHIVE_DIMS !== 'undefined') ? ARCHIVE_DIMS[filename] : null;
             if (!dims) return null;
@@ -1399,6 +1543,31 @@ document.addEventListener('DOMContentLoaded', () => {
         tl.to({}, { duration: 1.0 });
     }
 
+    // Jump from an item-view field (year, model, photographer…) straight to the
+    // infinite canvas filtered by that value. Works whether the item view was
+    // opened from the canvas or from the list view; if a list view is open it is
+    // closed so the filtered canvas is revealed.
+    function jumpToArchiveQuery(query) {
+        if (!query) return;
+        const apply = () => {
+            if (listViewOpen) {
+                listViewOpen = false;
+                listViewBtn.textContent = 'LIST VIEW';
+                archiveList.style.display = 'none';
+                archiveList.setAttribute('aria-hidden', 'true');
+                archiveViewport.style.pointerEvents = '';
+                unmountAll();
+            }
+            if (!archiveOpen) {
+                openArchive().then(() => setTimeout(() => applyArchiveFilter(query), 1200));
+            } else {
+                applyArchiveFilter(query);
+            }
+        };
+        if (itemViewOpen) closeItemView(apply);
+        else apply();
+    }
+
     // ----- Category switch: scatter + drop-in -----
     function setCategory(catLabel) {
         const queryActive = currentSearchQuery !== '';
@@ -1778,7 +1947,7 @@ document.addEventListener('DOMContentLoaded', () => {
         listViewOpen = true;
         listViewBtn.textContent = 'INFINITE VIEW';
 
-        listManifests = filterImages(currentCategory);
+        listManifests = filterByQuery(filterImages(currentCategory), currentSearchQuery);
         buildListView(listManifests);
 
         const oldEls = Array.from(mounted.values());
@@ -1891,7 +2060,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let itemViewOpen   = false;
     let itemViewState  = null;
 
-    const normalize = s => s ? s.replace(/_/g, ' ').replace(/\bformen\b/gi, 'for men') : '';
+    const normalize = s => s ? s.replace(/[_-]/g, ' ').replace(/\bformen\b/gi, 'for men') : '';
     const prettify  = s => normalize(s).toUpperCase();
 
     const ACRONYM_MAP = {
@@ -1906,6 +2075,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return prettify(csv.campaign) || prettify(csv.description) || expandLabel(csv.category).toUpperCase();
     }
 
+    // Build a meta value span. When `query` is set the value becomes a link that
+    // opens the infinite canvas filtered by that query (e.g. a year or a model).
+    function metaValueEl(value, query) {
+        const v = document.createElement('span');
+        v.className = 'item-view-meta-value';
+        v.textContent = value;
+        if (query) {
+            v.classList.add('iv-link');
+            v.addEventListener('click', () => jumpToArchiveQuery(query));
+        }
+        return v;
+    }
+
     function renderItemMeta(csv) {
         itemViewMetaEl.innerHTML = '';
         const seasonStr = csv.season ? expandLabel(csv.season).toUpperCase() : '';
@@ -1916,34 +2098,58 @@ document.addEventListener('DOMContentLoaded', () => {
             ? `${catExpanded} / ${prettify(csv.subcategory)}`
             : catExpanded;
         const mediaLine = isAdv ? prettify(csv.subcategory) : '';
+        // The comma separates multiple models; the hyphen joins first + last name.
+        const modelNames = (csv.model || '').split(',').map(s => s.trim()).filter(Boolean);
+
+        // [label, displayValue, filterQuery] — query null ⇒ not clickable
         const fields = [
-            ['date',              yearSeason],
-            ['category',          catLine],
-            ['media',             mediaLine],
-            ['line',              prettify(csv.description)],
-            ['photographer',      prettify(csv.photographer)],
-            ['model',             prettify(csv.model)],
-            ['director',          prettify(csv.director)],
-            ['stylist',           prettify(csv.stylist)],
-            ['art director',      prettify(csv.art_director)],
-            ['creative director', prettify(csv.creative_director)],
-            ['hair',              prettify(csv.hair)],
-            ['makeup',            prettify(csv.makeup)],
-            ['publication',       prettify(csv.publication)],
-            ['issue',             prettify(csv.issue_date)],
-            ['music',             prettify(csv.music)],
+            ['date',              yearSeason,                      csv.year || ''],
+            ['category',          catLine,                         ''],
+            ['media',             mediaLine,                       ''],
+            ['line',              prettify(csv.description),       normalize(csv.description)],
+            ['photographer',      prettify(csv.photographer),      normalize(csv.photographer)],
+            ['__model__',         '',                              ''],
+            ['director',          prettify(csv.director),          normalize(csv.director)],
+            ['stylist',           prettify(csv.stylist),           ''],
+            ['art director',      prettify(csv.art_director),      normalize(csv.art_director)],
+            ['creative director', prettify(csv.creative_director), normalize(csv.creative_director)],
+            ['hair',              prettify(csv.hair),              ''],
+            ['makeup',            prettify(csv.makeup),            ''],
+            ['publication',       prettify(csv.publication),       normalize(csv.publication)],
+            ['issue',             prettify(csv.issue_date),        ''],
+            ['music',             prettify(csv.music),             ''],
         ];
-        for (const [label, value] of fields) {
+        for (const [label, value, query] of fields) {
+            if (label === '__model__') {
+                if (!modelNames.length) continue;
+                const row = document.createElement('div');
+                row.className = 'item-view-meta-row';
+                const l = document.createElement('span');
+                l.className = 'item-view-meta-label';
+                l.textContent = modelNames.length > 1 ? 'models' : 'model';
+                const wrap = document.createElement('span');
+                wrap.className = 'item-view-meta-value';
+                modelNames.forEach((raw, i) => {
+                    const nm = normalize(raw);            // "kate-moss" → "kate moss"
+                    const link = document.createElement('span');
+                    link.className = 'iv-link';
+                    link.textContent = nm.toUpperCase();
+                    link.addEventListener('click', () => jumpToArchiveQuery(nm));
+                    wrap.appendChild(link);
+                    if (i < modelNames.length - 1) wrap.appendChild(document.createTextNode(', '));
+                });
+                row.appendChild(l); row.appendChild(wrap);
+                itemViewMetaEl.appendChild(row);
+                continue;
+            }
             if (!value) continue;
             const row = document.createElement('div');
             row.className = 'item-view-meta-row';
             const l = document.createElement('span');
             l.className = 'item-view-meta-label';
             l.textContent = label;
-            const v = document.createElement('span');
-            v.className = 'item-view-meta-value';
-            v.textContent = value;
-            row.appendChild(l); row.appendChild(v);
+            row.appendChild(l);
+            row.appendChild(metaValueEl(value, query));
             itemViewMetaEl.appendChild(row);
         }
     }
@@ -2466,8 +2672,8 @@ document.addEventListener('DOMContentLoaded', () => {
         tl.fromTo(itemViewInfo, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.45, ease: 'power2.out' }, 0.18);
     }
 
-    function closeItemView() {
-        if (!itemViewOpen) return;
+    function closeItemView(onDone) {
+        if (!itemViewOpen) { if (typeof onDone === 'function') onDone(); return; }
         itemViewOpen = false;
 
         if (cursorPillEl) cursorPillEl.classList.remove('visible');
@@ -2505,6 +2711,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
                 itemViewState = null;
                 document.body.classList.remove('item-view-open');
+                if (typeof onDone === 'function') onDone();
             },
         });
 
@@ -2551,6 +2758,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
         if (itemViewOpen)      { closeItemView(); }
+        else if (currentPerson){ closePersonPage(); }
         else if (archiveOpen)  { closeArchive(); }
     });
 

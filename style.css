@@ -296,7 +296,7 @@ body {
     opacity: 0;
     pointer-events: none;
     transition: opacity 1.2s ease-in-out;
-    overflow-y: auto;
+    overflow: hidden;
 }
 
 #people-content.visible {
@@ -346,19 +346,22 @@ body {
     color: #424242;
 }
 
-.people-grid {
-    display: flex;
-    flex-direction: row;
-    gap: 48px;
-    margin-left: 147px;
-    padding-left: 36px;
-}
-
-.people-column {
+/* Full collaborator list — pinned to the right margin, scrollable */
+.people-list {
+    margin-left: auto;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    align-items: flex-end;
+    text-align: right;
+    gap: 8px;
+    max-height: 100vh;
+    overflow-y: auto;
+    padding: 80px 36px 80px 80px;
+    -ms-overflow-style: none;
+    scrollbar-width: none;
 }
+
+.people-list::-webkit-scrollbar { display: none; }
 
 .people-entry {
     font-family: 'Klein', sans-serif;
@@ -369,13 +372,99 @@ body {
     color: #bbbdc0;
     -webkit-font-smoothing: antialiased;
     line-height: 12px;
-    cursor: pointer;
+    cursor: default;
     transition: color 300ms ease-out;
 }
 
-.people-entry:hover {
+/* Only people with a dedicated page (currently Kate Moss) are clickable */
+.people-entry-active {
+    cursor: pointer;
+}
+
+.people-entry-active:hover {
     color: #424242;
 }
+
+/* ===== PERSON PAGE (video background + credits) ===== */
+#person-stage {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    z-index: 17;
+    display: none;
+    opacity: 0;
+    overflow: hidden;
+}
+
+#person-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+}
+
+/* Soft scrim on the right so the white credits stay legible over the video */
+#person-scrim {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(to right, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+}
+
+#person-stage .item-view-back {
+    color: rgba(255, 255, 255, 0.7);
+    z-index: 5;
+}
+#person-stage .item-view-back:hover { color: #ffffff; }
+
+#person-info {
+    position: absolute;
+    right: 36px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 240px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 14px;
+    text-align: right;
+    z-index: 4;
+}
+
+#person-info .item-view-title { color: #ffffff; }
+#person-info .item-view-meta-label { color: rgba(255, 255, 255, 0.55); }
+#person-info .item-view-meta-value { color: #ffffff; }
+
+.person-view-works {
+    margin-top: 10px;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0px;
+    color: rgba(255, 255, 255, 0.7);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.person-view-works:hover { color: #ffffff; }
+
+/* Clickable item-view fields (year, model, photographer…) */
+.item-view-meta-value.iv-link {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-color: transparent;
+    text-underline-offset: 3px;
+    transition: color 200ms ease-out, text-decoration-color 200ms ease-out;
+}
+.item-view-meta-value.iv-link:hover { text-decoration-color: currentColor; }
 
 /* ===== SEARCH TRANSITION ===== */
 
@@ -1252,6 +1341,21 @@ body.timeline-open .menu {
         text-align: left;
         max-height: 34vh;
         overflow-y: auto;
+    }
+
+    /* Person page: credits anchored to the bottom-left over the video */
+    #person-info {
+        top: auto;
+        bottom: 24px;
+        left: 16px;
+        right: 16px;
+        width: auto;
+        transform: none;
+        align-items: flex-start;
+        text-align: left;
+    }
+    #person-scrim {
+        background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0) 45%);
     }
 
     /* Counter shows on mobile, in the credits block, in place of the number line */
