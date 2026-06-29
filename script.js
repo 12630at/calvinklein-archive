@@ -921,8 +921,10 @@ document.addEventListener('DOMContentLoaded', () => {
             el.textContent  = item.text.toUpperCase();
             el.dataset.type = item.type;
             el.addEventListener('click', () => {
-                if (item.type === 'people') reverseSearchAndGoToPeople();
-                else if (item.type === 'archive') reverseSearchAndGoToArchiveItem(item);
+                if (item.type === 'people') {
+                    if (PEOPLE_DATA[item.text]) reverseSearchAndGoToPerson(item.text);
+                    else reverseSearchAndGoToPeople();
+                } else if (item.type === 'archive') reverseSearchAndGoToArchiveItem(item);
             });
             searchResultsEl.appendChild(el);
         }
@@ -1021,6 +1023,16 @@ document.addEventListener('DOMContentLoaded', () => {
         reverseSearch(() => playPeopleTransition());
     }
 
+    // A searched name that has its own page (e.g. Kate Moss) → close the search and
+    // GSAP-flash straight into that person page, with the people list underneath
+    // so the page's "← people" back returns to the list.
+    function reverseSearchAndGoToPerson(name) {
+        reverseSearch(() => {
+            showPeopleStageInstant();
+            openPersonPage(name);
+        });
+    }
+
     function reverseSearchAndGoToArchiveItem(item) {
         const c = item.manifest?.csv;
         const query = item.queryHint
@@ -1078,7 +1090,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 const matches = filterResults(input.value);
                 if (!matches.length) return;
                 const first = matches[0];
-                if (first.type === 'people')  reverseSearchAndGoToPeople();
+                if (first.type === 'people') {
+                    if (PEOPLE_DATA[first.text]) reverseSearchAndGoToPerson(first.text);
+                    else reverseSearchAndGoToPeople();
+                }
                 else if (first.type === 'archive') reverseSearchAndGoToArchiveItem(first);
             }
         });

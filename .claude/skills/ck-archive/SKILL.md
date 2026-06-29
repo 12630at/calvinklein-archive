@@ -136,7 +136,9 @@ first token after the subcategory; `campaign` = any remaining tokens (before the
     looping video background (`assets/index/backgrounds/page_people_<name>.mp4`), centre-right
     credits, centre-left "← people" back (`closePersonPage`), and **VIEW WORKS**
     (`openPersonWorks`) → opens the archive scoped to that person (`archiveScope`); its back
-    (`returnToPersonFromWorks`) is an Adobe-Flash zoom back to the person page. The scope label
+    (`returnToPersonFromWorks`) is an Adobe-Flash zoom back to the person page. A search hit for
+    a name that has a page (in `PEOPLE_DATA`) opens that person page directly
+    (`reverseSearchAndGoToPerson`, people list left underneath for back). The scope label
     is set via `setArchiveScopeLabel` (tracks `currentScopeLabel`); scope state is cleared in
     `openArchive`/`closeArchive`/`forceCloseArchiveInstant`.
 - **`figma_data.json`** — design reference. `assets/` (logos, favicon, `calvinklein_intro.mp3`,
