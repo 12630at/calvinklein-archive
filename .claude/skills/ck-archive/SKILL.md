@@ -138,7 +138,10 @@ first token after the subcategory; `campaign` = any remaining tokens (before the
     (`openPersonWorks`) → opens the archive scoped to that person (`archiveScope`); its back
     (`returnToPersonFromWorks`) is an Adobe-Flash zoom back to the person page. A search hit for
     a name that has a page (in `PEOPLE_DATA`) opens that person page directly
-    (`reverseSearchAndGoToPerson`, people list left underneath for back). The scope label
+    (`reverseSearchAndGoToPerson`, people list left underneath for back). An archive-type
+    search hit (`reverseSearchAndGoToArchiveItem`) scopes the canvas to that value and sets it
+    as the menu's first item — same as clicking a field in the item view (list view follows).
+    The scope label
     is set via `setArchiveScopeLabel` (tracks `currentScopeLabel`); scope state is cleared in
     `openArchive`/`closeArchive`/`forceCloseArchiveInstant`.
 - **`figma_data.json`** — design reference. `assets/` (logos, favicon, `calvinklein_intro.mp3`,

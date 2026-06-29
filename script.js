@@ -1037,12 +1037,19 @@ document.addEventListener('DOMContentLoaded', () => {
         const c = item.manifest?.csv;
         const query = item.queryHint
             ?? (c ? (c.campaign ? normalize(c.campaign) : c.description || c.year) : item.text);
-        reverseSearch(async () => {
+        const label = item.text;
+        reverseSearch(() => {
+            // Same as clicking a field in the item view: scope the canvas to the
+            // searched value and make it the menu's first item; the list view (and
+            // category filters) follow the scope. No prior item, so back just exits.
+            archiveScope           = query;
+            archiveScopePerson     = null;
+            archiveCtxStack.length = 0;
             if (!archiveOpen) {
-                await openArchive();
-                setTimeout(() => applyArchiveFilter(query), 1200);
+                openArchive().then(() => setArchiveScopeLabel(label));
             } else {
-                applyArchiveFilter(query);
+                setArchiveScopeLabel(label);
+                applyArchiveFilter('');
             }
         });
     }
