@@ -476,6 +476,108 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // ----- 2000s-style white flash transition -----
+    const flashOverlay = document.getElementById('flash-overlay');
+    function flash2000(midCb) {
+        return new Promise(resolve => {
+            const tl = gsap.timeline({ onComplete: resolve });
+            tl.set(flashOverlay, { opacity: 0 });
+            tl.to(flashOverlay, { opacity: 1, duration: 0.16, ease: 'power2.in' });
+            tl.add(() => { if (midCb) midCb(); });
+            tl.to(flashOverlay, { opacity: 0, duration: 0.5, ease: 'power2.out' });
+        });
+    }
+
+    // ----- People list: inertia (friction) scroll + edge blur -----
+    const peopleListEl    = document.querySelector('.people-list');
+    const peopleListInner = document.querySelector('.people-list-inner');
+    let   plScroll = 0, plTarget = 0, plMax = 0, plRAF = null;
+    const PL_EASE = 0.11;   // friction — lower = longer glide
+    const PL_EDGE = 70;     // px blur zone at top & bottom
+
+    function plMeasure() {
+        plMax = Math.max(0, peopleListInner.scrollHeight - peopleListEl.clientHeight);
+        plTarget = Math.max(0, Math.min(plMax, plTarget));
+        plScroll = Math.max(0, Math.min(plMax, plScroll));
+    }
+
+    function plRender() {
+        peopleListInner.style.transform = `translate3d(0, ${-plScroll}px, 0)`;
+        const listH = peopleListEl.clientHeight;
+        for (const el of peopleListInner.children) {
+            const mid = el.offsetTop - plScroll + el.offsetHeight / 2;
+            let d;
+            if (mid < PL_EDGE)            d = mid / PL_EDGE;
+            else if (mid > listH - PL_EDGE) d = (listH - mid) / PL_EDGE;
+            else                          d = 1;
+            d = Math.max(0, Math.min(1, d));
+            el.style.opacity = d.toFixed(3);
+            el.style.filter  = `blur(${((1 - d) * 5).toFixed(2)}px)`;
+        }
+    }
+
+    function plStep() {
+        const dd = plTarget - plScroll;
+        if (Math.abs(dd) < 0.4) { plScroll = plTarget; plRender(); plRAF = null; return; }
+        plScroll += dd * PL_EASE;
+        plRender();
+        plRAF = requestAnimationFrame(plStep);
+    }
+    function plKick() { if (!plRAF) plRAF = requestAnimationFrame(plStep); }
+
+    function peopleResetScroll() {
+        plScroll = 0; plTarget = 0;
+        plMeasure();
+        plRender();
+    }
+    function peopleRefresh() { plMeasure(); plRender(); }
+
+    if (peopleListEl) {
+        peopleListEl.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            plMeasure();
+            plTarget = Math.max(0, Math.min(plMax, plTarget + e.deltaY));
+            plKick();
+        }, { passive: false });
+
+        let plDragY = null, plDragStart = 0, plVel = 0, plLastY = 0, plLastT = 0;
+        peopleListEl.addEventListener('touchstart', (e) => {
+            plMeasure();
+            plDragY = e.touches[0].clientY;
+            plDragStart = plTarget;
+            plVel = 0; plLastY = plDragY; plLastT = performance.now();
+        }, { passive: true });
+        peopleListEl.addEventListener('touchmove', (e) => {
+            if (plDragY === null) return;
+            const y = e.touches[0].clientY;
+            plTarget = Math.max(0, Math.min(plMax, plDragStart + (plDragY - y)));
+            const now = performance.now(), dt = Math.max(8, now - plLastT);
+            plVel = (plLastY - y) / dt; plLastY = y; plLastT = now;
+            plKick();
+        }, { passive: true });
+        peopleListEl.addEventListener('touchend', () => {
+            if (plDragY === null) return;
+            plDragY = null;
+            plTarget = Math.max(0, Math.min(plMax, plTarget + plVel * 280)); // inertia
+            plKick();
+        });
+    }
+
+    window.addEventListener('resize', () => {
+        if (document.getElementById('people-content')?.classList.contains('visible')) peopleRefresh();
+    });
+
+    function peopleIntroAnimate() {
+        const entries = peopleListInner.querySelectorAll('.people-entry');
+        // gsap.from animates FROM these toward the resting (edge-blur) values
+        gsap.from(entries, {
+            opacity: 0, filter: 'blur(12px)', y: 14,
+            duration: 0.5, ease: 'power2.out',
+            stagger: { amount: 0.6, from: 'start' },
+        });
+    }
+
+    // 2000s flash intro: white flash, then the names settle in with a blur stagger.
     async function playPeopleTransition() {
         document.body.classList.add('page-open');
         const peopleStage = document.getElementById('people-stage');
@@ -486,8 +588,11 @@ document.addEventListener('DOMContentLoaded', () => {
         void peopleStage.offsetWidth;
         peopleStage.style.opacity = '1';
 
-        await sleep(250);
-        contentEl.classList.add('visible');
+        await flash2000(() => {
+            contentEl.classList.add('visible');
+            peopleResetScroll();
+        });
+        peopleIntroAnimate();
     }
 
     async function closePeopleStage() {
@@ -631,6 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
         peopleStage.style.opacity = '1';
         contentEl.classList.add('visible');
         document.body.classList.add('page-open');
+        requestAnimationFrame(peopleRefresh);
     }
 
     function setArchiveScopeLabel(name) {
@@ -659,6 +765,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 archiveScope       = data.query;
                 archiveScopePerson = name;
+                archiveReturnItem  = null;
                 currentPerson      = null;
                 await openArchive();          // filterImages is scoped → her works only
                 setArchiveScopeLabel(name);
@@ -666,16 +773,47 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // Back from a person-scoped archive → return to that person's page.
-    async function returnToPersonFromWorks() {
-        const name = archiveScopePerson;
-        showPeopleStageInstant();     // restore the list underneath
-        showPersonStageInstant(name); // person page on top (covers the archive)
-        archiveScope = null;
-        archiveScopePerson = null;
+    // Tear the archive down instantly (no menu morph) — used mid-flash so the
+    // swap to another page is seamless.
+    function forceCloseArchiveInstant() {
+        if (!archiveOpen) return;
+        archiveOpen = false;
+        archiveScope = null; archiveScopePerson = null; archiveReturnItem = null;
         setArchiveScopeLabel(null);
-        await closeArchive();
-        document.body.classList.add('page-open');
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+        if (listViewOpen) {
+            listViewOpen = false;
+            listViewBtn.textContent = 'LIST VIEW';
+            archiveList.style.display = 'none';
+            archiveList.setAttribute('aria-hidden', 'true');
+            archiveViewport.style.pointerEvents = '';
+        }
+        document.getElementById('list-view-btn').classList.remove('visible');
+        unmountAll();
+        archiveStage.style.display = 'none';
+        archiveStage.setAttribute('aria-hidden', 'true');
+        archiveStage.style.opacity = '';
+        menu.classList.remove('archive-active');
+        archivePrimary.style.opacity   = '';
+        archivePrimary.style.transform = '';
+        document.body.classList.remove('page-open');
+    }
+
+    // Back from a person-scoped archive → 2000s flash back to the person page.
+    function returnToPersonFromWorks() {
+        const name = archiveScopePerson;
+        return flash2000(() => {
+            forceCloseArchiveInstant();
+            showPeopleStageInstant();     // restore the list underneath
+            showPersonStageInstant(name); // person page on top (covers the archive)
+        });
+    }
+
+    // Back from a field-scoped archive → reopen the item view we came from.
+    function returnToItemFromScope() {
+        const m = archiveReturnItem;
+        archiveReturnItem = null;
+        if (m) openItemViewFromList(m);
     }
 
     document.querySelectorAll('.people-entry[data-person]').forEach(el => {
@@ -1023,8 +1161,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let archiveOpen     = false;
     let archiveManifest = null;
     let currentCategory = 'all';
-    let archiveScope       = null;   // person query that scopes the whole archive (VIEW WORKS)
+    let archiveScope       = null;   // query that scopes the whole archive (VIEW WORKS / field click)
     let archiveScopePerson = null;   // person name whose page we return to on back
+    let archiveReturnItem  = null;   // manifest of the item view to reopen on back (field click)
     let items           = [];                // [{id, x, y, w, h, rot, src}]
     let tileSize        = { w: 0, h: 0 };
     let canvasOffset    = { x: 0, y: 0 };
@@ -1569,8 +1708,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // infinite canvas filtered by that value. Works whether the item view was
     // opened from the canvas or from the list view; if a list view is open it is
     // closed so the filtered canvas is revealed.
-    function jumpToArchiveQuery(query) {
+    function jumpToArchiveQuery(query, label) {
         if (!query) return;
+        // Remember the item we came from so the menu back button can reopen it.
+        const sourceManifest = itemViewState ? itemViewState.currentManifest : null;
         const apply = () => {
             if (listViewOpen) {
                 listViewOpen = false;
@@ -1580,10 +1721,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 archiveViewport.style.pointerEvents = '';
                 unmountAll();
             }
+            // Scope the archive to the clicked field; the menu's first item becomes
+            // that field and the back button returns to the originating item.
+            archiveScope       = query;
+            archiveScopePerson = null;
+            archiveReturnItem  = sourceManifest;
             if (!archiveOpen) {
-                openArchive().then(() => setTimeout(() => applyArchiveFilter(query), 1200));
+                openArchive().then(() => setArchiveScopeLabel(label || query));
             } else {
-                applyArchiveFilter(query);
+                applyArchiveFilter('');   // rebuild canvas to the new scope
+                setArchiveScopeLabel(label || query);
             }
         };
         if (itemViewOpen) closeItemView(apply);
@@ -1760,6 +1907,7 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveOpen = false;
         archiveScope = null;
         archiveScopePerson = null;
+        archiveReturnItem = null;
         setArchiveScopeLabel(null);
         document.body.classList.remove('page-open');
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
@@ -1803,8 +1951,9 @@ document.addEventListener('DOMContentLoaded', () => {
     archive.addEventListener('click', (e) => { e.preventDefault(); openArchive(); });
     archiveBackBtn.addEventListener('click', (e) => {
         e.preventDefault();
-        if (archiveScopePerson) returnToPersonFromWorks();
-        else closeArchive();
+        if (archiveReturnItem)       returnToItemFromScope();
+        else if (archiveScopePerson) returnToPersonFromWorks();
+        else                         closeArchive();
     });
     archiveShowAll.addEventListener('click', (e) => { e.preventDefault(); setCategory('all'); });
 
@@ -2112,7 +2261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         v.textContent = value;
         if (query) {
             v.classList.add('iv-link');
-            v.addEventListener('click', () => jumpToArchiveQuery(query));
+            v.addEventListener('click', () => jumpToArchiveQuery(query, value));
         }
         return v;
     }
@@ -2164,7 +2313,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     const link = document.createElement('span');
                     link.className = 'iv-link';
                     link.textContent = nm.toUpperCase();
-                    link.addEventListener('click', () => jumpToArchiveQuery(nm));
+                    link.addEventListener('click', () => jumpToArchiveQuery(nm, nm));
                     wrap.appendChild(link);
                     if (i < modelNames.length - 1) wrap.appendChild(document.createTextNode(', '));
                 });
@@ -2787,10 +2936,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Escape closes item view, then archive
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        if (itemViewOpen)           { closeItemView(); }
-        else if (currentPerson)     { closePersonPage(); }
-        else if (archiveScopePerson){ returnToPersonFromWorks(); }
-        else if (archiveOpen)       { closeArchive(); }
+        if (itemViewOpen)            { closeItemView(); }
+        else if (currentPerson)      { closePersonPage(); }
+        else if (archiveReturnItem)  { returnToItemFromScope(); }
+        else if (archiveScopePerson) { returnToPersonFromWorks(); }
+        else if (archiveOpen)        { closeArchive(); }
     });
 
     // Preload archive manifest in background so search is always up to date

@@ -292,7 +292,7 @@ body {
     inset: 0;
     display: flex;
     flex-direction: row;
-    align-items: center;
+    align-items: stretch;
     opacity: 0;
     pointer-events: none;
     transition: opacity 1.2s ease-in-out;
@@ -347,22 +347,28 @@ body {
     color: #424242;
 }
 
-/* Full collaborator list — pinned to the right margin, scrollable */
+/* Full collaborator list — pinned to the right margin, starts from the top.
+   Scrolling + edge blur are driven by GSAP/JS (inertia), so the element itself
+   has overflow hidden and the inner wrapper is translated. */
 .people-list {
     margin-left: auto;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+    padding-right: 36px;
+    touch-action: none;
+}
+
+.people-list-inner {
     display: flex;
     flex-direction: column;
     align-items: flex-end;
     text-align: right;
-    gap: 8px;
-    max-height: 100vh;
-    overflow-y: auto;
-    padding: 80px 36px 80px 80px;
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    gap: 9px;
+    padding-top: 72px;     /* names begin at the top margin */
+    padding-bottom: 72px;
+    will-change: transform;
 }
-
-.people-list::-webkit-scrollbar { display: none; }
 
 .people-entry {
     font-family: 'Klein', sans-serif;
@@ -374,6 +380,8 @@ body {
     -webkit-font-smoothing: antialiased;
     line-height: 12px;
     cursor: default;
+    white-space: nowrap;
+    will-change: opacity, filter;
     transition: color 300ms ease-out;
 }
 
@@ -406,33 +414,31 @@ body {
     object-position: center;
 }
 
-/* Soft scrim on the left so the white credits stay legible over the video */
+/* Soft scrim on the right so the white credits stay legible over the video */
 #person-scrim {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(to left, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+    background: linear-gradient(to right, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
 }
 
-#person-stage .item-view-back {
-    color: rgba(255, 255, 255, 0.7);
-    top: 36px;
-    transform: none;
-    z-index: 5;
-}
-#person-stage .item-view-back:hover { color: #ffffff; }
+/* Left "← people" back nav, centre-left, in white over the video */
+#person-stage .person-nav { z-index: 5; }
+#person-stage .person-nav .people-nav-title { color: #ffffff; }
+#person-stage .person-nav .people-close { color: rgba(255, 255, 255, 0.7); }
+#person-stage .person-nav .people-close:hover { color: #ffffff; }
 
 #person-info {
     position: absolute;
-    left: 36px;
+    right: 36px;
     top: 50%;
     transform: translateY(-50%);
     width: 240px;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
+    align-items: flex-end;
     gap: 14px;
-    text-align: left;
+    text-align: right;
     z-index: 4;
 }
 
@@ -465,6 +471,16 @@ body {
     transition: opacity 200ms ease-out;
 }
 .iv-link:hover { opacity: 0.55; }
+
+/* 2000s-style white flash overlay for page transitions (driven by GSAP) */
+#flash-overlay {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    opacity: 0;
+    pointer-events: none;
+    z-index: 9000;
+}
 
 /* ===== SEARCH TRANSITION ===== */
 

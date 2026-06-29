@@ -93,12 +93,14 @@
                 <span class="people-nav-title">people</span>
             </nav>
             <div class="people-list">
+                <div class="people-list-inner">
                 <span class="people-entry people-entry-active" data-person="Kate Moss">Kate Moss</span>
                 <span class="people-entry">Brooke Shields</span>
                 <span class="people-entry">Mark Wahlberg</span>
                 <span class="people-entry">Christy Turlington</span>
                 <span class="people-entry">Naomi Campbell</span>
                 <span class="people-entry">Cindy Crawford</span>
+                <span class="people-entry">Lauren Hutton</span>
                 <span class="people-entry">Stephanie Seymour</span>
                 <span class="people-entry">Amber Valletta</span>
                 <span class="people-entry">Stella Tennant</span>
@@ -106,47 +108,65 @@
                 <span class="people-entry">Carolyn Murphy</span>
                 <span class="people-entry">Gisele B&uuml;ndchen</span>
                 <span class="people-entry">Natalia Vodianova</span>
+                <span class="people-entry">Daria Werbowy</span>
+                <span class="people-entry">Liya Kebede</span>
+                <span class="people-entry">Mariacarla Boscono</span>
                 <span class="people-entry">Hilary Rhoda</span>
                 <span class="people-entry">Edita Vilkeviciute</span>
+                <span class="people-entry">Anna Ewers</span>
+                <span class="people-entry">Liu Wen</span>
                 <span class="people-entry">Lara Stone</span>
                 <span class="people-entry">Eva Mendes</span>
                 <span class="people-entry">Scarlett Johansson</span>
                 <span class="people-entry">Bella Hadid</span>
                 <span class="people-entry">Gigi Hadid</span>
                 <span class="people-entry">Kendall Jenner</span>
+                <span class="people-entry">Kaia Gerber</span>
+                <span class="people-entry">Vittoria Ceretti</span>
                 <span class="people-entry">Tom Hintnaus</span>
                 <span class="people-entry">Antonio Sab&agrave;to Jr.</span>
                 <span class="people-entry">Travis Fimmel</span>
                 <span class="people-entry">Djimon Hounsou</span>
                 <span class="people-entry">Jamie Dornan</span>
                 <span class="people-entry">Shawn Mendes</span>
+                <span class="people-entry">Hero Fiennes Tiffin</span>
+                <span class="people-entry">Jacob Elordi</span>
                 <span class="people-entry">A$AP Rocky</span>
-                <span class="people-entry">Bruce Weber</span>
                 <span class="people-entry">Richard Avedon</span>
+                <span class="people-entry">Bruce Weber</span>
                 <span class="people-entry">Steven Meisel</span>
                 <span class="people-entry">Herb Ritts</span>
                 <span class="people-entry">Patrick Demarchelier</span>
                 <span class="people-entry">Peter Lindbergh</span>
                 <span class="people-entry">Mario Sorrenti</span>
+                <span class="people-entry">Steven Klein</span>
                 <span class="people-entry">David Sims</span>
                 <span class="people-entry">Craig McDean</span>
                 <span class="people-entry">Glen Luchford</span>
+                <span class="people-entry">Inez &amp; Vinoodh</span>
                 <span class="people-entry">Mert &amp; Marcus</span>
                 <span class="people-entry">Willy Vanderperre</span>
                 <span class="people-entry">Tyrone Lebon</span>
                 <span class="people-entry">Mikael Jansson</span>
+                <span class="people-entry">Collier Schorr</span>
+                <span class="people-entry">Alasdair McLellan</span>
+                <span class="people-entry">Solve Sundsbo</span>
                 <span class="people-entry">Sam Taylor-Johnson</span>
                 <span class="people-entry">Fabien Baron</span>
                 <span class="people-entry">Calvin Klein</span>
                 <span class="people-entry">Raf Simons</span>
                 <span class="people-entry">Francisco Costa</span>
                 <span class="people-entry">Italo Zucchelli</span>
+                <span class="people-entry">Narciso Rodriguez</span>
                 <span class="people-entry">Pieter Mulier</span>
                 <span class="people-entry">Kevin Carrigan</span>
                 <span class="people-entry">Veronica Leoni</span>
+                <span class="people-entry">Camilla Nickerson</span>
                 <span class="people-entry">Melanie Ward</span>
                 <span class="people-entry">Joe McKenna</span>
                 <span class="people-entry">Olivier Rizzo</span>
+                <span class="people-entry">Guido Palau</span>
+                <span class="people-entry">Pat McGrath</span>
                 <span class="people-entry">Solange</span>
                 <span class="people-entry">Patti Smith</span>
                 <span class="people-entry">FKA Twigs</span>
@@ -160,6 +180,7 @@
                 <span class="people-entry">Jeremy Allen White</span>
                 <span class="people-entry">Megan Thee Stallion</span>
                 <span class="people-entry">Alexa Demie</span>
+                </div>
             </div>
         </div>
     </div>
@@ -168,7 +189,10 @@
     <div id="person-stage" aria-hidden="true">
         <video id="person-bg" muted loop playsinline preload="auto"></video>
         <div id="person-scrim"></div>
-        <button class="item-view-back" id="person-back" aria-label="back to people">←</button>
+        <nav class="people-nav person-nav">
+            <button id="person-back" class="people-close" aria-label="back to people">←</button>
+            <span class="people-nav-title">people</span>
+        </nav>
         <aside id="person-info">
             <h2 class="item-view-title" id="person-name"></h2>
             <div class="item-view-meta" id="person-meta"></div>
@@ -277,6 +301,9 @@
             <a href="#" class="mobile-nav-item" id="m-archive-search">Search</a>
         </nav>
     </div>
+
+    <!-- 2000s-style white flash overlay used for page transitions -->
+    <div id="flash-overlay"></div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
     <script src="archive_dims.js"></script>
