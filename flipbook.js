@@ -75,7 +75,7 @@
         scene.add(key);
 
         const bookGroup = new THREE.Group();
-        bookGroup.rotation.x = -0.16;     // subtle tilt for depth
+        bookGroup.rotation.x = -0.1;      // subtle tilt for depth
         scene.add(bookGroup);
 
         // Soft contact shadow grounding the book on the white backdrop.
@@ -234,10 +234,13 @@
 
         // --- turning (drag + auto) ---------------------------------------
         // A turn is parametrised by progress p in [0,1] toward the target state.
+        // Exactly one turn can be in flight: `active` describes it, `drag` is set
+        // while a pointer drives it, `flipTween` while a tween settles it.
         let active = null;   // { leafIndex, dir, fromX, toX }
+        let flipTween = null;
 
         function beginFlip(dir) {
-            if (active || animating) return false;
+            if (active || animating || drag) return false;
             if (dir > 0 && currentLeaf >= maxLeaf) return false;
             if (dir < 0 && currentLeaf <= 0) return false;
             const leafIndex = dir > 0 ? currentLeaf : currentLeaf - 1;
@@ -277,34 +280,31 @@
             layout();                 // settle every leaf flat + restack + recentre
         }
 
+        // Run the settling tween for the current `active` turn from p→target.
+        function runTween(fromP, toP, commit, dur) {
+            if (flipTween) flipTween.kill();
+            animating = true;
+            const o = { p: fromP };
+            flipTween = gsap.to(o, {
+                p: toP, duration: dur, ease: 'power2.out',
+                onUpdate: () => setFlipProgress(o.p),
+                onComplete: () => { flipTween = null; animating = false; endFlip(commit); },
+            });
+        }
         // Auto turn (arrows / keyboard): tween progress 0→1, snappy.
         function autoFlip(dir) {
             if (!beginFlip(dir)) return;
-            animating = true;
-            const o = { p: 0 };
-            gsap.to(o, {
-                p: 1, duration: ARROW_DUR, ease: 'power2.inOut',
-                onUpdate: () => setFlipProgress(o.p),
-                onComplete: () => { animating = false; endFlip(true); },
-            });
-        }
-        // Snap a drag back/forward to the nearest rest.
-        function snap(commit, fromP) {
-            animating = true;
-            const o = { p: fromP };
-            gsap.to(o, {
-                p: commit ? 1 : 0, duration: FLIP_DUR * 0.5, ease: 'power2.out',
-                onUpdate: () => setFlipProgress(o.p),
-                onComplete: () => { animating = false; endFlip(commit); },
-            });
+            setFlipProgress(0);
+            runTween(0, 1, true, ARROW_DUR);
         }
 
         nextBtn.addEventListener('click', () => autoFlip(1));
         prevBtn.addEventListener('click', () => autoFlip(-1));
         document.addEventListener('keydown', onKey);
         function onKey(e) {
-            if (e.key === 'ArrowRight') autoFlip(1);
-            else if (e.key === 'ArrowLeft') autoFlip(-1);
+            if (e.repeat) return;            // ignore key auto-repeat (would queue flips)
+            if (e.key === 'ArrowRight') { e.preventDefault(); autoFlip(1); }
+            else if (e.key === 'ArrowLeft') { e.preventDefault(); autoFlip(-1); }
         }
 
         // --- pointer drag on the canvas ----------------------------------
@@ -313,17 +313,21 @@
         let drag = null;   // { startX, lastX, lastT, vx, dir, moved }
 
         cvs.addEventListener('pointerdown', (e) => {
-            if (active || animating) return;
+            if (e.button !== 0) return;          // primary button only
+            if (active || animating || drag) return;
             const rect = cvs.getBoundingClientRect();
             const nx = (e.clientX - rect.left) / rect.width;
             const dir = nx > 0.5 ? 1 : -1;
             if (!beginFlip(dir)) return;
-            drag = { startX: e.clientX, lastX: e.clientX, lastT: performance.now(), vx: 0, dir, moved: false, w: rect.width };
-            cvs.setPointerCapture(e.pointerId);
+            drag = { startX: e.clientX, lastX: e.clientX, lastT: performance.now(), vx: 0, dir, moved: false, w: rect.width, pid: e.pointerId };
+            try { cvs.setPointerCapture(e.pointerId); } catch (_) {}
             setFlipProgress(0);
         });
         cvs.addEventListener('pointermove', (e) => {
             if (!drag) return;
+            // If the button is no longer down, a pointerup was missed — finish the
+            // drag instead of letting the page follow the cursor on its own.
+            if (e.buttons === 0) { endDrag(e); return; }
             const dx = e.clientX - drag.startX;
             if (Math.abs(dx) > 4) drag.moved = true;
             // Drag spans roughly half the canvas for a full turn.
@@ -337,8 +341,8 @@
         });
         function endDrag(e) {
             if (!drag) return;
-            try { cvs.releasePointerCapture(e.pointerId); } catch (_) {}
             const d = drag; drag = null;
+            try { cvs.releasePointerCapture(d.pid); } catch (_) {}
             if (!d.moved) {                 // a plain click does nothing — turning is drag-only
                 endFlip(false);
                 return;
@@ -348,27 +352,42 @@
             const p = clamp(d.dir > 0 ? (-dx / span) : (dx / span), 0, 1);
             // Commit if dragged past halfway or flicked in the turn direction.
             const flick = (d.dir > 0 ? -d.vx : d.vx) > 0.5;
-            snap(p > 0.5 || flick, p);
+            runTween(p, (p > 0.5 || flick) ? 1 : 0, p > 0.5 || flick, FLIP_DUR * 0.5);
         }
         cvs.addEventListener('pointerup', endDrag);
         cvs.addEventListener('pointercancel', endDrag);
+        // Safety nets: if the pointer/window loses the drag, cancel it cleanly.
+        cvs.addEventListener('lostpointercapture', () => { if (drag) { const d = drag; drag = null; endFlip(false); } });
+        window.addEventListener('blur', onBlur);
+        function onBlur() { if (drag) { drag = null; } if (active && !flipTween) endFlip(false); }
 
         // --- camera fit + resize -----------------------------------------
+        const COUNTER_GAP = 26;    // px between the book's bottom edge and the counter
+        const BAR_H = 18;          // approx counter height
         function resize() {
-            // Size to the canvas wrapper (which on desktop reserves space for the
-            // credits column), so the book + counter centre in the reading area.
             const w = canvasWrap.clientWidth || root.clientWidth || window.innerWidth;
             const h = canvasWrap.clientHeight || root.clientHeight || window.innerHeight;
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
             const fovV = THREE.MathUtils.degToRad(camera.fov);
-            const margin = 1.24;
+            const margin = 1.34;
             const distH = (PAGE_H * margin / 2) / Math.tan(fovV / 2);
             const spreadW = PAGE_W * 2 * margin;
             const distW = (spreadW / 2) / (Math.tan(fovV / 2) * camera.aspect);
-            camera.position.set(0, 0.15, Math.max(distH, distW));
+            const dist = Math.max(distH, distW);
+            camera.position.set(0, 0, dist);
             camera.lookAt(0, 0, 0);
             camera.updateProjectionMatrix();
+
+            // Centre the book + counter as a single block. Lift the book by half
+            // the counter zone so the empty space above the book equals the space
+            // below the counter, then pin the counter just under the book's edge.
+            const pxPerWorld = h / (2 * dist * Math.tan(fovV / 2));
+            const shiftPx = (COUNTER_GAP + BAR_H) / 2;
+            bookGroup.position.y = shiftPx / pxPerWorld;   // book centred slightly high
+            const bookHalfPx   = (PAGE_H / 2) * pxPerWorld;
+            const bookBottomPx = (h / 2 - shiftPx) + bookHalfPx;
+            bar.style.bottom = Math.max(12, Math.round(h - bookBottomPx - COUNTER_GAP - BAR_H)) + 'px';
         }
         window.addEventListener('resize', resize);
         resize();
@@ -388,7 +407,9 @@
         }
         function dispose() {
             if (raf) cancelAnimationFrame(raf);
+            if (flipTween) flipTween.kill();
             window.removeEventListener('resize', resize);
+            window.removeEventListener('blur', onBlur);
             document.removeEventListener('keydown', onKey);
             gsap.killTweensOf(bookGroup.position);
             gsap.killTweensOf(bookGroup.rotation);

@@ -995,19 +995,14 @@ body.item-view-open .menu-archive-back {
     position: absolute;
     inset: 0;
 }
-/* Desktop: reserve the right credits column so the book + counter centre in
-   the reading area instead of being crowded by the credits. */
-@media (min-width: 601px) {
-    .flipbook-canvas { right: 240px; }
-}
 .flipbook-canvas canvas { display: block; cursor: grab; }
 .flipbook-canvas canvas:active { cursor: grabbing; }
 
-/* Bottom control bar: ‹  page counter  › — centred within the canvas area */
+/* Bottom control bar: ‹  page counter  › — centred under the book */
 .flipbook-bar {
     position: absolute;
     left: 50%;
-    bottom: 30px;
+    bottom: 26px;
     transform: translateX(-50%);
     display: flex;
     align-items: center;
