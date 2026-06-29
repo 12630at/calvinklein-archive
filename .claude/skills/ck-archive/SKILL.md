@@ -19,25 +19,38 @@ editorial images/videos with metadata. Open `index.html` in a browser to run it.
 `index.html` loads, in order: GSAP (animation lib, via CDN) → `archive_dims.js` → `script.js`.
 `style.css` is the stylesheet.
 
-- `script.js` `fetch()`es **`archive_index.csv`** (~line 913), splits by line, the first line is
-  the header, each later line is `split(',')` into a per-image object keyed by the header.
+- `script.js` `fetch()`es **`archive_index.csv`** (`loadArchiveManifest`), splits by line, the
+  first line is the header, each later line is parsed by **`parseCsvLine`** (a quote-aware
+  parser) into a per-image object keyed by the header. Use `parseCsvLine`, not `split(',')`,
+  because some fields are double-quoted (see CSV quoting note below).
 - Image/video pixel dimensions come from the global `ARCHIVE_DIMS` defined in **`archive_dims.js`**.
 - Files are served from `assets/index/...`; the `filename` column has **no extension** — the
   extension is taken from `ARCHIVE_DIMS` (`"jpg"`/`"mp4"`/omitted = `webp`).
+- `normalize(s)` (display + search helper) maps `_` **and `-`** to spaces, so a `model` value
+  like `kate-moss` (hyphen joins first+last name) reads/searches as `kate moss`.
 
 ## The three databases (must always stay in sync)
 
 All three describe the same set of images/videos and must contain the same entries.
 
-1. **`archive_index.csv`** — source of truth. 24 columns, comma-separated, no quoting:
+1. **`archive_index.csv`** — source of truth. 24 columns, comma-separated, **minimal quoting**
+   (write with `csv.QUOTE_MINIMAL`):
    `filename,year,season,category,subcategory,description,campaign,photographer,director,producer,production_company,model,stylist,art_director,creative_director,hair,makeup,set_designer,casting_director,agency,publication,issue_date,music,notes`
    Most metadata columns are empty; only the first ~6 are derived from the filename.
-   Ordering: grouped into sorted sections — `adv_print` (sorted by filename), then `edi`,
-   then `adv_tv`, then `adv_billboard` (sorted). New rows go into their section in sorted
-   position. (A few stray rows may sit at the end from past appends — leave them.)
+   **`model`** holds one or more people; multiple models are **comma-separated inside the cell**
+   and each name uses a hyphen between first+last (e.g. `kate-moss,amber-valletta`). Because the
+   comma would break a bare CSV split, any cell containing a comma is **double-quoted** — so the
+   JS loader uses `parseCsvLine` and CSV writers must quote. Ordering: grouped into sorted
+   sections — `adv_print` (by filename), then `edi`, then `adv_tv`, then `adv_billboard`. New
+   rows go into their section in sorted position. (A few stray rows may sit at the end — leave
+   them.)
 
 2. **`archive_index.xlsx`** — sheet name `archive`, mirrors the CSV exactly (same rows, same
    order, 24 columns). Regenerate it from the CSV (don't hand-edit) so it can never drift.
+   **If the user hand-edits the xlsx** (e.g. fills `model`), sync it INTO the CSV: read the
+   xlsx, write the CSV with `QUOTE_MINIMAL`, then regenerate the xlsx from that CSV so the two
+   match. (Watch for values entered in the wrong adjacent column, e.g. a model name landing in
+   `production_company`.)
 
 3. **`archive_dims.js`** — `const ARCHIVE_DIMS = { "filename_without_ext": [w,h] , ... }`.
    `[w,h]` for `.webp`, `[w,h,"jpg"]` for other images, `[w,h,"mp4"]` for videos.
@@ -89,20 +102,50 @@ first token after the subcategory; `campaign` = any remaining tokens (before the
 
 ## Where the UI lives (layout, menu, animations, styles)
 
-- **`index.html`** — page markup/structure (menu, archive, people, search containers).
-- **`style.css`** — all styling and CSS animation. Menu styles start ~`.menu` (line ~151).
-  CSS `@keyframes`: `flashIn`/`flashOut`, `orbitIn`/`orbitOut`, `searchFall`; many
-  `transition:`/`animation:` rules. Edit here for layout (grid, gutters, spacing), menu look,
-  and pure-CSS animation timing/easing.
-- **`script.js`** — behavior + JS-driven animation (uses **GSAP**). Key spots: `play()` intro
-  sequence (~132), menu hover handlers (~349), orbit (`buildOrbitSlots`/`runOrbitRotation`
-  ~407), people transition (~479), search transitions (~559–854), CSV loader (~913).
-  Edit here for interaction logic and GSAP timelines/sequencing.
-- **`figma_data.json`** — design reference. `assets/` (logo, `calvinklein_intro.mp3`,
-  search background) and `fonts/` hold static assets.
+- **`index.html`** — page markup/structure: `#stage` (intro), `.menu` (+ archive-mode primary
+  `.menu-primary-archive` whose first item `#archive-show-all` doubles as the scope label),
+  `#archive-stage` (infinite canvas + `#archive-list` list view + `#list-view-btn`),
+  `#item-view`, `#people-stage` (`.people-list` → `.people-list-inner` of `.people-entry`s),
+  `#person-stage` (video page), `#timeline-stage`, `#search-stage`, mobile overlay.
+  `<head>` sets the **favicon** to `assets/favicon_monogram_white.svg` (white monogram, for
+  GitHub Pages). There is **no `profile`** menu item (removed, desktop + mobile + search data).
+- **`style.css`** — all styling and CSS animation. Menu ~`.menu`. CSS `@keyframes`:
+  `flashIn`/`flashOut`, `orbitIn`/`orbitOut` (orbit now unused), `searchFall`. Edit here for
+  layout/spacing, menu look, pure-CSS timing/easing.
+- **`script.js`** — behavior + JS-driven animation (uses **GSAP**), all inside one
+  `DOMContentLoaded`. Reference by function name (line numbers drift):
+  - intro `play()` / `skipToLogo()`; CSV `loadArchiveManifest` + `parseCsvLine`.
+  - **Archive infinite canvas**: virtualized masonry (`buildItems`/`syncMounted`), drag +
+    wheel inertia, `setCategory`, `applyArchiveFilter`, `filterByQuery` (searches **all** csv
+    fields), `filterImages` (respects `archiveScope`), list view (`openListView` respects the
+    active `currentSearchQuery`/scope), `openItemView`/`openItemViewFromList`/`closeItemView`
+    (`closeItemView(onDone)` takes an optional callback).
+  - **Item-view fields are clickable** (`renderItemMeta` → `metaValueEl`, `.iv-link`): every
+    populated credit (year/model/photographer/…) calls `jumpToArchiveQuery(query, label)`,
+    which scopes the canvas to that field, sets the menu's first item to the clicked label, and
+    **pushes the prior context onto `archiveCtxStack`**. The archive back button
+    (`archiveBackStep`) pops one level — restoring that canvas (scope/category/search) and
+    reopening the exact item with an Adobe-Flash zoom — so a single back returns to the previous
+    item. `model` may be multi-value → one `.iv-link` per name.
+  - **People page** (`playPeopleTransition`): right/top-aligned `.people-list` with a
+    GSAP-driven **inertia (friction) scroll + edge blur** (`plRender`/`plStep`/`peopleRefresh`;
+    names blur as they pass the top line `plTopRef` and the bottom edge). Intro = Adobe-Flash
+    vector-zoom cascade (`peopleIntroAnimate`). Only entries with `data-person` (currently just
+    **Kate Moss**) are clickable; data lives in `PEOPLE_DATA`.
+  - **Person page** `#person-stage` (`openPersonPage` flash open, `showPersonStageInstant`):
+    looping video background (`assets/index/backgrounds/page_people_<name>.mp4`), centre-right
+    credits, centre-left "← people" back (`closePersonPage`), and **VIEW WORKS**
+    (`openPersonWorks`) → opens the archive scoped to that person (`archiveScope`); its back
+    (`returnToPersonFromWorks`) is an Adobe-Flash zoom back to the person page. The scope label
+    is set via `setArchiveScopeLabel` (tracks `currentScopeLabel`); scope state is cleared in
+    `openArchive`/`closeArchive`/`forceCloseArchiveInstant`.
+- **`figma_data.json`** — design reference. `assets/` (logos, favicon, `calvinklein_intro.mp3`,
+  `assets/index/backgrounds/` person videos) and `fonts/` hold static assets.
 
-When changing a menu layout or an animation: check `style.css` first (CSS keyframes/
-transitions); if the motion is scripted, it's a GSAP timeline in `script.js`.
+"Flash animation" in this project means **Adobe-Flash-2000s style** vector motion (scale +
+blur + springy `expo.out`/cubic-bezier easing, staggered) — NOT a white camera-flash overlay.
+When changing a menu layout or animation: check `style.css` first (CSS keyframes/transitions);
+if the motion is scripted, it's a GSAP timeline in `script.js`.
 
 ## Branch policy — ALL THREE BRANCHES MUST ALWAYS MATCH
 

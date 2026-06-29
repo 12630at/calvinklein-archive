@@ -365,8 +365,8 @@ body {
     align-items: flex-end;
     text-align: right;
     gap: 9px;
-    padding-top: 72px;     /* names begin at the top margin */
-    padding-bottom: 72px;
+    padding-top: 40px;     /* names begin at the top-right margin */
+    padding-bottom: 80px;
     will-change: transform;
 }
 

@@ -559,17 +559,23 @@ document.addEventListener('DOMContentLoaded', () => {
         if (document.getElementById('people-content')?.classList.contains('visible')) peopleRefresh();
     });
 
-    // Adobe-Flash-style intro: names vector-zoom in from the right, blurred and
-    // oversized, snapping to place with a springy expo ease and a cascade.
+    // Adobe-Flash-style intro: names vector-zoom in from the right — oversized and
+    // heavily blurred — snapping into place with a springy ease and a clear
+    // top-to-bottom cascade. Explicit end values keep it from being washed out by
+    // the edge-blur; the edge blur is (re)applied once the cascade finishes.
     function peopleIntroAnimate() {
-        const entries = peopleListInner.querySelectorAll('.people-entry');
-        gsap.set(entries, { transformOrigin: 'right center' });
-        gsap.from(entries, {
-            opacity: 0, filter: 'blur(16px)', scale: 1.7, x: -50,
-            duration: 0.75, ease: 'expo.out',
-            stagger: { amount: 0.7, from: 'start' },
-            clearProps: 'transform',   // leave entries transform-free for scroll
-        });
+        const entries = Array.from(peopleListInner.children);
+        if (!entries.length) return;
+        gsap.killTweensOf(entries);
+        gsap.set(entries, { transformOrigin: 'right center', filter: 'blur(0px)' });
+        gsap.fromTo(entries,
+            { opacity: 0, scale: 2.6, x: -110, filter: 'blur(22px)' },
+            {
+                opacity: 1, scale: 1, x: 0, filter: 'blur(0px)',
+                duration: 0.9, ease: 'expo.out',
+                stagger: { amount: 1.0, from: 'start' },
+                onComplete: () => { gsap.set(entries, { clearProps: 'transform' }); peopleRefresh(); },
+            });
     }
 
     async function playPeopleTransition() {
@@ -582,8 +588,11 @@ document.addEventListener('DOMContentLoaded', () => {
         void peopleStage.offsetWidth;
         peopleStage.style.opacity = '1';
 
+        // Reveal the content instantly so the per-name vector-zoom reads clearly
         contentEl.classList.add('visible');
-        peopleResetScroll();
+        gsap.set(contentEl, { opacity: 1 });
+        plScroll = 0; plTarget = 0; plMeasure();
+        peopleListInner.style.transform = 'translate3d(0,0,0)';
         peopleIntroAnimate();
     }
 
@@ -816,25 +825,42 @@ document.addEventListener('DOMContentLoaded', () => {
     // Back from a field-scoped archive → step back one context level: restore that
     // canvas (scope/category/search) and reopen the exact item we came from.
     function archiveBackStep() {
+        if (switching) return;
         const ctx = archiveCtxStack.pop();
         if (!ctx) { closeArchive(); return; }
-        archiveScope       = ctx.scope;
-        archiveScopePerson = ctx.scopePerson;
-        currentSearchQuery = ctx.searchQuery;
-        currentCategory    = ctx.category;
-        setArchiveScopeLabel(ctx.scopeLabel);
-        document.querySelectorAll('.menu-cat').forEach(el =>
-            el.classList.toggle('active', el.dataset.cat === ctx.category));
-        archiveShowAll.classList.toggle('cat-all-active', ctx.category === 'all');
-        // Rebuild the previous canvas instantly (it's covered by the item view)
-        unmountAll();
-        items = buildItems(filterByQuery(filterImages(ctx.category), ctx.searchQuery));
-        canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
-        canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
-        applyCanvasTransform();
-        archiveEmpty.classList.toggle('visible', items.length === 0);
-        syncMounted();
-        if (ctx.item) openItemViewFromList(ctx.item);
+        switching = true;
+        if (momentumTween) { momentumTween.kill(); momentumTween = null; }
+
+        // Adobe-Flash zoom-out of the current field canvas, then rebuild the
+        // previous context underneath and vector-zoom the prior item back in.
+        const tl = gsap.timeline({ onComplete: () => { switching = false; } });
+        tl.to(archiveCanvas, {
+            scale: 1.16, opacity: 0, filter: 'blur(18px)',
+            duration: 0.4, ease: 'power3.in', transformOrigin: 'center center',
+        });
+        tl.add(() => {
+            // Clear the zoom transform/filter first, then applyCanvasTransform can
+            // reset the pan translate cleanly.
+            gsap.set(archiveCanvas, { clearProps: 'transform,filter' });
+            archiveCanvas.style.opacity = '1';
+            archiveScope       = ctx.scope;
+            archiveScopePerson = ctx.scopePerson;
+            currentSearchQuery = ctx.searchQuery;
+            currentCategory    = ctx.category;
+            setArchiveScopeLabel(ctx.scopeLabel);
+            document.querySelectorAll('.menu-cat').forEach(el =>
+                el.classList.toggle('active', el.dataset.cat === ctx.category));
+            archiveShowAll.classList.toggle('cat-all-active', ctx.category === 'all');
+            // Rebuild the previous canvas (covered by the reopening item view)
+            unmountAll();
+            items = buildItems(filterByQuery(filterImages(ctx.category), ctx.searchQuery));
+            canvasOffset.x = -tileSize.w / 2 + window.innerWidth  / 2;
+            canvasOffset.y = -tileSize.h / 2 + window.innerHeight / 2;
+            applyCanvasTransform();
+            archiveEmpty.classList.toggle('visible', items.length === 0);
+            syncMounted();
+            if (ctx.item) openItemViewFromList(ctx.item);
+        });
     }
 
     document.querySelectorAll('.people-entry[data-person]').forEach(el => {
