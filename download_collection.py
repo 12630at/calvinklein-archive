@@ -5,14 +5,19 @@ Scarica le foto di una sfilata da firstview.com, le ordina in
   assets/index/collection/<anno>/<anno>_<ss|fw>_collection_<NNN>.jpg
 e aggiorna i tre database (archive_index.csv, archive_index.xlsx, archive_dims.js).
 
-Uso:
+Uso (automatico, consigliato):
     python3 download_collection.py "https://firstview.com/collection_images.php?id=54760"
+    Apre un browser invisibile, scrolla la pagina da solo fino a caricare TUTTE
+    le foto, le scarica, le ordina e aggiorna i database. Richiede Playwright:
+        pip3 install playwright && python3 -m playwright install chromium
+
+Altre opzioni:
     python3 download_collection.py URL --year 2003 --season ss   # forza i metadati
     python3 download_collection.py URL --no-db                   # solo file, niente database
     python3 download_collection.py URL --dry-run                 # mostra cosa farebbe, non scarica
+    python3 download_collection.py URL --no-browser              # solo HTML statico (no scroll)
     python3 download_collection.py --urls foto.txt --year 2002 --season fw
-        # pagine che caricano le foto SCROLLANDO (lazy-load): si incolla in
-        # foto.txt la lista completa delle URL presa dal browser (vedi README).
+        # fallback manuale: lista di URL incollata a mano in foto.txt.
 
 Note:
  - Nella pagina i thumbnail sono "thumb_XXXX.jpg"; la versione full e' lo stesso
@@ -105,6 +110,41 @@ def extract_full_urls(html, page_url):
         elif rank > best[source_id][0]:
             best[source_id] = (rank, full)  # preferisci URL assolute alle relative
     return [(sid, best[sid][1]) for sid in order]
+
+
+def fetch_with_browser(url):
+    """Apre la pagina in un Chromium invisibile, scrolla fino in fondo finche'
+    non smettono di caricarsi nuove foto (lazy-load), e restituisce l'HTML finale
+    con TUTTE le immagini renderizzate. Ritorna None se Playwright non e' installato."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        return None
+    count_js = (r"() => [...document.querySelectorAll('img')]"
+                r".filter(i => /thumb_[\w.-]+\.jpe?g/i.test(i.src||i.currentSrc||'')).length")
+    print("Apro il browser e scrollo la pagina (puo' volerci un minuto)...")
+    import os
+    exe = os.environ.get("CK_CHROMIUM_PATH")  # override opzionale del binario Chromium
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True, executable_path=exe or None)
+        page = browser.new_page(user_agent=UA)
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        prev, stable = -1, 0
+        for _ in range(150):
+            n = page.evaluate(count_js)
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            page.wait_for_timeout(800)
+            if n == prev:
+                stable += 1
+                if stable >= 3:        # 3 giri senza nuove foto = finito
+                    break
+            else:
+                stable = 0
+                print(f"  ...{n} foto caricate")
+            prev = n
+        html = page.content()
+        browser.close()
+    return html
 
 
 def read_urls_file(path):
@@ -221,6 +261,9 @@ def main():
                          "richiede anche --year e --season.")
     ap.add_argument("--year", help="Forza l'anno (es. 2003)")
     ap.add_argument("--season", choices=["ss", "fw"], help="Forza la stagione")
+    ap.add_argument("--no-browser", action="store_true",
+                    help="Non usare il browser: scarica solo l'HTML statico "
+                         "(prende solo le prime foto se la pagina ha il lazy-load)")
     ap.add_argument("--no-db", action="store_true", help="Aggiorna solo i file, non i database")
     ap.add_argument("--dry-run", action="store_true", help="Mostra cosa farebbe senza scaricare")
     ap.add_argument("--force-designer", action="store_true",
@@ -243,11 +286,20 @@ def main():
             sys.exit("ERRORE: serve l'URL della pagina, oppure --urls FILE "
                      "per le pagine che caricano le foto scrollando.")
         print(f"Pagina: {args.url}")
-        try:
-            html = fetch(args.url)
-        except (URLError, HTTPError) as e:
-            sys.exit(f"ERRORE rete: {e}\n(Se sei dietro un proxy che blocca firstview.com, "
-                     "lancia lo script da una rete che lo permette.)")
+        if args.no_browser:
+            try:
+                html = fetch(args.url)
+            except (URLError, HTTPError) as e:
+                sys.exit(f"ERRORE rete: {e}\n(Se sei dietro un proxy che blocca firstview.com, "
+                         "lancia lo script da una rete che lo permette.)")
+        else:
+            html = fetch_with_browser(args.url)
+            if html is None:
+                sys.exit(
+                    "Per l'automazione completa serve Playwright. Installalo una volta sola:\n"
+                    "  pip3 install playwright\n"
+                    "  python3 -m playwright install chromium\n"
+                    "In alternativa: --no-browser (prende solo le prime foto) o --urls FILE.")
 
         title = page_title(html)
         if title:
