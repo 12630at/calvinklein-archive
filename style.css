@@ -310,8 +310,9 @@ body {
     left: 36px;
     transform: translateY(-50%);
     display: flex;
-    flex-direction: column;
-    gap: 24px;
+    flex-direction: row;
+    align-items: center;
+    gap: 10px;
 }
 
 .people-nav-title {
@@ -405,31 +406,33 @@ body {
     object-position: center;
 }
 
-/* Soft scrim on the right so the white credits stay legible over the video */
+/* Soft scrim on the left so the white credits stay legible over the video */
 #person-scrim {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(to right, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+    background: linear-gradient(to left, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
 }
 
 #person-stage .item-view-back {
     color: rgba(255, 255, 255, 0.7);
+    top: 36px;
+    transform: none;
     z-index: 5;
 }
 #person-stage .item-view-back:hover { color: #ffffff; }
 
 #person-info {
     position: absolute;
-    right: 36px;
+    left: 36px;
     top: 50%;
     transform: translateY(-50%);
     width: 240px;
     display: flex;
     flex-direction: column;
-    align-items: flex-end;
+    align-items: flex-start;
     gap: 14px;
-    text-align: right;
+    text-align: left;
     z-index: 4;
 }
 
@@ -456,15 +459,12 @@ body {
 
 .person-view-works:hover { color: #ffffff; }
 
-/* Clickable item-view fields (year, model, photographer…) */
-.item-view-meta-value.iv-link {
+/* Clickable item-view fields (year, model, photographer…) — no underline */
+.iv-link {
     cursor: pointer;
-    text-decoration: underline;
-    text-decoration-color: transparent;
-    text-underline-offset: 3px;
-    transition: color 200ms ease-out, text-decoration-color 200ms ease-out;
+    transition: opacity 200ms ease-out;
 }
-.item-view-meta-value.iv-link:hover { text-decoration-color: currentColor; }
+.iv-link:hover { opacity: 0.55; }
 
 /* ===== SEARCH TRANSITION ===== */
 

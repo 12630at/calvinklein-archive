@@ -479,8 +479,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function playPeopleTransition() {
         document.body.classList.add('page-open');
         const peopleStage = document.getElementById('people-stage');
-        const bottle      = document.getElementById('people-bottle');
-        const orbitEl     = document.getElementById('people-orbit');
         const contentEl   = document.getElementById('people-content');
 
         peopleStage.removeAttribute('aria-hidden');
@@ -488,33 +486,7 @@ document.addEventListener('DOMContentLoaded', () => {
         void peopleStage.offsetWidth;
         peopleStage.style.opacity = '1';
 
-        await sleep(500);
-        bottle.style.opacity = '1';
-        await sleep(600);
-
-        const nameEls = buildOrbitSlots(orbitEl);
-
-        // Drives rotation + trail opacity per frame; resolves at exactly 0° after ORBIT_TURNS rotations
-        await runOrbitRotation(bottle, nameEls);
-
-        // Trail has naturally faded; ensure all names are invisible before cleanup
-        for (const el of nameEls) {
-            el.style.opacity = '0';
-            el.style.filter  = 'blur(4px)';
-        }
-
-        await sleep(300);
-
-        bottle.style.transition = 'opacity 600ms ease-in-out';
-        bottle.style.opacity    = '0';
-
-        await sleep(700);
-
-        orbitEl.querySelectorAll('.orbit-slot').forEach(s => s.remove());
-        bottle.style.transform  = '';
-        bottle.style.transition = '';
-        bottle.style.opacity    = '0';
-
+        await sleep(250);
         contentEl.classList.add('visible');
     }
 
@@ -553,21 +525,19 @@ document.addEventListener('DOMContentLoaded', () => {
             video: 'assets/index/backgrounds/page_people_katemoss.mp4',
             query: 'kate moss',
             meta: [
-                ['role',        'Model'],
-                ['born',        '1974 — Croydon, London'],
-                ['nationality', 'British'],
-                ['ck since',    '1992'],
-                ['campaigns',   'Obsession · CK One · Jeans'],
-                ['agency',      'Storm Management'],
+                ['role',     'Model'],
+                ['born',     '1974, London'],
+                ['ck since', '1992'],
+                ['agency',   'Storm Management'],
             ],
         },
     };
 
-    const personStage = document.getElementById('person-stage');
-    const personBg     = document.getElementById('person-bg');
-    const personNameEl = document.getElementById('person-name');
-    const personMetaEl = document.getElementById('person-meta');
-    const personInfo   = document.getElementById('person-info');
+    const personStage  = document.getElementById('person-stage');
+    const personBg      = document.getElementById('person-bg');
+    const personNameEl  = document.getElementById('person-name');
+    const personMetaEl  = document.getElementById('person-meta');
+    const personInfo    = document.getElementById('person-info');
     let   currentPerson = null;
 
     function buildPersonMeta(rows) {
@@ -587,18 +557,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Flash/GSAP open: clicked name punches toward the viewer and dissolves,
-    // then the video page flashes in.
-    function openPersonPage(name, sourceEl) {
+    function setPersonContent(name) {
         const data = PEOPLE_DATA[name];
-        if (!data || currentPerson) return;
+        if (!data) return false;
         currentPerson = name;
-
         personNameEl.textContent = name.toUpperCase();
         buildPersonMeta(data.meta);
         personBg.src = data.video;
         try { personBg.currentTime = 0; } catch (_) {}
         personBg.play().catch(() => {});
+        return true;
+    }
+
+    // Show the person page instantly (no flash) — used when returning from works.
+    function showPersonStageInstant(name) {
+        if (!setPersonContent(name)) return;
+        personStage.removeAttribute('aria-hidden');
+        personStage.style.display = 'block';
+        gsap.set(personStage, { opacity: 1, scale: 1, filter: 'none' });
+        gsap.set(personInfo, { opacity: 1, y: 0 });
+    }
+
+    // Flash/GSAP open: clicked name punches toward the viewer and dissolves,
+    // then the video page flashes in.
+    function openPersonPage(name, sourceEl) {
+        if (currentPerson) return;
+        if (!setPersonContent(name)) return;
 
         const tl = gsap.timeline();
         if (sourceEl) {
@@ -639,27 +623,59 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // VIEW WORKS → infinite canvas filtered to this person's works.
+    function showPeopleStageInstant() {
+        const peopleStage = document.getElementById('people-stage');
+        const contentEl   = document.getElementById('people-content');
+        peopleStage.removeAttribute('aria-hidden');
+        peopleStage.style.display = 'block';
+        peopleStage.style.opacity = '1';
+        contentEl.classList.add('visible');
+        document.body.classList.add('page-open');
+    }
+
+    function setArchiveScopeLabel(name) {
+        const showAll = document.getElementById('archive-show-all');
+        if (showAll) showAll.textContent = name ? name : 'archive';
+    }
+
+    // VIEW WORKS → the archive becomes a person-scoped infinite canvas: the
+    // "archive" menu label turns into the person's name and the archive back
+    // button returns to the person page.
     function openPersonWorks() {
-        const data = currentPerson ? PEOPLE_DATA[currentPerson] : null;
-        const query = data ? data.query : '';
+        const name = currentPerson;
+        const data = name ? PEOPLE_DATA[name] : null;
+        if (!data) return;
         gsap.to(personStage, {
             opacity: 0, duration: 0.4, ease: 'power2.in',
             onComplete: async () => {
-                teardownPersonStage();
-                // Close the people stage underneath instantly
+                // Hide person + people stages so the archive (below them) shows
+                personStage.style.display = 'none';
+                personStage.setAttribute('aria-hidden', 'true');
+                gsap.set(personStage, { clearProps: 'transform,filter,opacity' });
+                try { personBg.pause(); } catch (_) {}
                 const peopleStage = document.getElementById('people-stage');
-                const contentEl   = document.getElementById('people-content');
-                contentEl.classList.remove('visible');
                 peopleStage.style.display = 'none';
-                peopleStage.style.opacity = '0';
                 peopleStage.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('page-open');
-                if (!query) return;
-                await openArchive();
-                setTimeout(() => applyArchiveFilter(query), 1200);
+
+                archiveScope       = data.query;
+                archiveScopePerson = name;
+                currentPerson      = null;
+                await openArchive();          // filterImages is scoped → her works only
+                setArchiveScopeLabel(name);
             },
         });
+    }
+
+    // Back from a person-scoped archive → return to that person's page.
+    async function returnToPersonFromWorks() {
+        const name = archiveScopePerson;
+        showPeopleStageInstant();     // restore the list underneath
+        showPersonStageInstant(name); // person page on top (covers the archive)
+        archiveScope = null;
+        archiveScopePerson = null;
+        setArchiveScopeLabel(null);
+        await closeArchive();
+        document.body.classList.add('page-open');
     }
 
     document.querySelectorAll('.people-entry[data-person]').forEach(el => {
@@ -1007,6 +1023,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let archiveOpen     = false;
     let archiveManifest = null;
     let currentCategory = 'all';
+    let archiveScope       = null;   // person query that scopes the whole archive (VIEW WORKS)
+    let archiveScopePerson = null;   // person name whose page we return to on back
     let items           = [];                // [{id, x, y, w, h, rot, src}]
     let tileSize        = { w: 0, h: 0 };
     let canvasOffset    = { x: 0, y: 0 };
@@ -1155,9 +1173,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function filterImages(catLabel) {
         const code = CAT_MAP[catLabel];
-        if (code === null)       return archiveManifest;
-        if (code === '__none__') return [];
-        return archiveManifest.filter(m => m.category === code);
+        let base;
+        if (code === null)            base = archiveManifest;
+        else if (code === '__none__') base = [];
+        else                          base = archiveManifest.filter(m => m.category === code);
+        // When the archive is scoped to a person (VIEW WORKS) every view is
+        // restricted to that person's works.
+        if (archiveScope) base = filterByQuery(base, archiveScope);
+        return base;
     }
 
     // Masonry packing using real aspect ratios.
@@ -1487,13 +1510,10 @@ document.addEventListener('DOMContentLoaded', () => {
     function filterByQuery(manifests, query) {
         if (!query) return manifests;
         const q = normalize(query).toLowerCase().trim();
-        return manifests.filter(m => {
-            const c = m.csv;
-            return [c.year, c.campaign, c.description, c.subcategory,
-                    c.photographer, c.model, c.director, c.creative_director,
-                    c.art_director, c.publication]
-                .some(f => f && normalize(f).toLowerCase().includes(q));
-        });
+        // Search across every metadata field so any clickable credit filters.
+        return manifests.filter(m =>
+            Object.values(m.csv).some(f => f && normalize(f).toLowerCase().includes(q))
+        );
     }
 
     function applyArchiveFilter(query) {
@@ -1520,7 +1540,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         tl.call(() => {
             unmountAll();
-            items = buildItems(filterByQuery(archiveManifest, query));
+            // Stay within the active person scope (VIEW WORKS) when filtering.
+            const base = archiveScope ? filterByQuery(archiveManifest, archiveScope) : archiveManifest;
+            items = buildItems(filterByQuery(base, query));
             canvasOffset.x = -tileSize.w / 2 + cx;
             canvasOffset.y = -tileSize.h / 2 + cy;
             applyCanvasTransform();
@@ -1736,6 +1758,9 @@ document.addEventListener('DOMContentLoaded', () => {
     async function closeArchive() {
         if (!archiveOpen) return;
         archiveOpen = false;
+        archiveScope = null;
+        archiveScopePerson = null;
+        setArchiveScopeLabel(null);
         document.body.classList.remove('page-open');
         if (momentumTween) { momentumTween.kill(); momentumTween = null; }
 
@@ -1776,7 +1801,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     archive.addEventListener('click', (e) => { e.preventDefault(); openArchive(); });
-    archiveBackBtn.addEventListener('click', (e) => { e.preventDefault(); closeArchive(); });
+    archiveBackBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        if (archiveScopePerson) returnToPersonFromWorks();
+        else closeArchive();
+    });
     archiveShowAll.addEventListener('click', (e) => { e.preventDefault(); setCategory('all'); });
 
     document.querySelectorAll('.menu-cat').forEach(el => {
@@ -2101,23 +2130,24 @@ document.addEventListener('DOMContentLoaded', () => {
         // The comma separates multiple models; the hyphen joins first + last name.
         const modelNames = (csv.model || '').split(',').map(s => s.trim()).filter(Boolean);
 
-        // [label, displayValue, filterQuery] — query null ⇒ not clickable
+        // [label, displayValue, filterQuery] — every field is clickable when it
+        // has a value; the query is the raw csv value (filterByQuery normalizes it).
         const fields = [
-            ['date',              yearSeason,                      csv.year || ''],
-            ['category',          catLine,                         ''],
-            ['media',             mediaLine,                       ''],
-            ['line',              prettify(csv.description),       normalize(csv.description)],
-            ['photographer',      prettify(csv.photographer),      normalize(csv.photographer)],
+            ['date',              yearSeason,                      csv.year],
+            ['category',          catLine,                         csv.category],
+            ['media',             mediaLine,                       csv.subcategory],
+            ['line',              prettify(csv.description),       csv.description],
+            ['photographer',      prettify(csv.photographer),      csv.photographer],
             ['__model__',         '',                              ''],
-            ['director',          prettify(csv.director),          normalize(csv.director)],
-            ['stylist',           prettify(csv.stylist),           ''],
-            ['art director',      prettify(csv.art_director),      normalize(csv.art_director)],
-            ['creative director', prettify(csv.creative_director), normalize(csv.creative_director)],
-            ['hair',              prettify(csv.hair),              ''],
-            ['makeup',            prettify(csv.makeup),            ''],
-            ['publication',       prettify(csv.publication),       normalize(csv.publication)],
-            ['issue',             prettify(csv.issue_date),        ''],
-            ['music',             prettify(csv.music),             ''],
+            ['director',          prettify(csv.director),          csv.director],
+            ['stylist',           prettify(csv.stylist),           csv.stylist],
+            ['art director',      prettify(csv.art_director),      csv.art_director],
+            ['creative director', prettify(csv.creative_director), csv.creative_director],
+            ['hair',              prettify(csv.hair),              csv.hair],
+            ['makeup',            prettify(csv.makeup),            csv.makeup],
+            ['publication',       prettify(csv.publication),       csv.publication],
+            ['issue',             prettify(csv.issue_date),        csv.issue_date],
+            ['music',             prettify(csv.music),             csv.music],
         ];
         for (const [label, value, query] of fields) {
             if (label === '__model__') {
@@ -2757,9 +2787,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Escape closes item view, then archive
     document.addEventListener('keydown', (e) => {
         if (e.key !== 'Escape') return;
-        if (itemViewOpen)      { closeItemView(); }
-        else if (currentPerson){ closePersonPage(); }
-        else if (archiveOpen)  { closeArchive(); }
+        if (itemViewOpen)           { closeItemView(); }
+        else if (currentPerson)     { closePersonPage(); }
+        else if (archiveScopePerson){ returnToPersonFromWorks(); }
+        else if (archiveOpen)       { closeArchive(); }
     });
 
     // Preload archive manifest in background so search is always up to date
