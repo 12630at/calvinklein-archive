@@ -295,7 +295,7 @@ body {
     align-items: stretch;
     opacity: 0;
     pointer-events: none;
-    transition: opacity 1.2s ease-in-out;
+    transition: opacity 0.45s ease-in-out;
     overflow: hidden;
 }
 
@@ -428,14 +428,17 @@ body {
 #person-stage .person-nav .people-close { color: rgba(255, 255, 255, 0.7); }
 #person-stage .person-nav .people-close:hover { color: #ffffff; }
 
+/* Full-height flex column so the whole credits block stays vertically centred
+   even while GSAP animates its translateY (no reliance on translate(-50%)). */
 #person-info {
     position: absolute;
     right: 36px;
-    top: 50%;
-    transform: translateY(-50%);
+    top: 0;
+    height: 100%;
     width: 240px;
     display: flex;
     flex-direction: column;
+    justify-content: center;
     align-items: flex-end;
     gap: 14px;
     text-align: right;
@@ -471,16 +474,6 @@ body {
     transition: opacity 200ms ease-out;
 }
 .iv-link:hover { opacity: 0.55; }
-
-/* 2000s-style white flash overlay for page transitions (driven by GSAP) */
-#flash-overlay {
-    position: fixed;
-    inset: 0;
-    background: #ffffff;
-    opacity: 0;
-    pointer-events: none;
-    z-index: 9000;
-}
 
 /* ===== SEARCH TRANSITION ===== */
 
@@ -1362,10 +1355,12 @@ body.timeline-open .menu {
     /* Person page: credits anchored to the bottom-left over the video */
     #person-info {
         top: auto;
+        height: auto;
         bottom: 24px;
         left: 16px;
         right: 16px;
         width: auto;
+        justify-content: flex-end;
         transform: none;
         align-items: flex-start;
         text-align: left;
