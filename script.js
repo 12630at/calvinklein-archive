@@ -1443,8 +1443,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const N = images.length;
         let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
+        // Sparse sets (e.g. collections, ~19 clips) look stretched and gappy
+        // with many thin columns: cap columns so each keeps enough items. Bigger
+        // tiles → far less inter-row white space and fewer videos on screen.
+        cols = Math.min(cols, Math.max(2, Math.ceil(N / 5)));
 
-        const GAP = 72;
+        const GAP = N < 60 ? 40 : 72;   // tighter packing for small categories
         let COL_W = 290;
         let tileW = cols * (COL_W + GAP);   // includes trailing GAP
 
@@ -1529,6 +1533,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return VIDEO_EXTS.includes(src.slice(dot + 1).toLowerCase());
     }
 
+    // The infinite canvas tiles items, so the same clip can be mounted in
+    // several tile copies. Only one element per distinct clip decodes/plays at a
+    // time (duplicates hold their first frame) — this caps the video decode load
+    // that was making the collections page lag.
+    const playingVideos = new Set();
+    function releaseVideoEl(el) {
+        if (el.dataset && el.dataset.lead === '1') {
+            playingVideos.delete(el.dataset.vsrc);
+            const v = el.querySelector('video');
+            if (v) { try { v.pause(); } catch (_) {} }
+        }
+    }
+
     function createImgEl(it, wx, wy) {
         const isVideo = isVideoSrc(it.src);
 
@@ -1550,15 +1567,25 @@ document.addEventListener('DOMContentLoaded', () => {
             vid.src         = it.src;
             vid.muted       = true;
             vid.loop        = true;
-            vid.autoplay    = true;
             vid.playsInline = true;
+            vid.preload     = 'metadata';
             vid.setAttribute('muted', '');
             vid.setAttribute('playsinline', '');
             vid.style.width  = '100%';
             vid.style.height = '100%';
             vid.style.display = 'block';
-            vid.addEventListener('loadedmetadata', () => vid.play().catch(() => {}));
-            vid.play().catch(() => {});
+
+            // Lead = the one element allowed to play this clip; duplicates stay
+            // paused on their poster frame so the same video isn't decoded twice.
+            if (!playingVideos.has(it.src)) {
+                playingVideos.add(it.src);
+                wrap.dataset.lead = '1';
+                wrap.dataset.vsrc = it.src;
+                vid.autoplay = true;
+                vid.setAttribute('autoplay', '');
+                vid.addEventListener('loadedmetadata', () => vid.play().catch(() => {}));
+                vid.play().catch(() => {});
+            }
             wrap.appendChild(vid);
             return wrap;
         }
@@ -1618,6 +1645,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const [key, el] of mounted) {
             if (!needed.has(key)) {
+                releaseVideoEl(el);
                 el.remove();
                 mounted.delete(key);
             }
@@ -1625,8 +1653,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function unmountAll() {
-        for (const [, el] of mounted) el.remove();
+        for (const [, el] of mounted) { releaseVideoEl(el); el.remove(); }
         mounted.clear();
+        playingVideos.clear();
     }
 
     // ----- Drag with momentum + click detection -----
@@ -3206,7 +3235,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     gsap.fromTo(para,
                         { opacity: 0, y: goingUp ? -16 : 16, filter: 'blur(4px)' },
                         { opacity: 1, y: 0, filter: 'blur(0px)',
-                          duration: 0.9, delay: 0.55,
+                          duration: 0.62, delay: 0.38,
                           ease: 'expo.out', overwrite: true });
                 } else {
                     if (year.classList.contains('is-shown')) {
