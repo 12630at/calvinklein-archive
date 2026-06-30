@@ -1441,14 +1441,22 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
 
-        const N = images.length;
-        let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
-        // Sparse sets (e.g. collections, ~19 clips) look stretched and gappy
-        // with many thin columns: cap columns so each keeps enough items. Bigger
-        // tiles → far less inter-row white space and fewer videos on screen.
-        cols = Math.min(cols, Math.max(2, Math.ceil(N / 5)));
+        // Sparse categories (e.g. collections) can't fill the infinite canvas on
+        // their own and end up looking like a thin, over-tidy grid. Repeat the set
+        // so the SAME masonry packs a dense, varied field like the big categories
+        // — the canvas already tiles, so this just enriches each tile.
+        let pool = images;
+        const MIN_ITEMS = 56;
+        if (images.length < MIN_ITEMS) {
+            const reps = Math.ceil(MIN_ITEMS / images.length);
+            pool = [];
+            for (let r = 0; r < reps; r++) pool = pool.concat(images);
+        }
 
-        const GAP = N < 60 ? 40 : 72;   // tighter packing for small categories
+        const N = pool.length;
+        let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
+
+        const GAP = 72;
         let COL_W = 290;
         let tileW = cols * (COL_W + GAP);   // includes trailing GAP
 
@@ -1459,7 +1467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Pseudo-random deterministic order → mixes portrait/landscape in every row
-        const ordered = images.slice().sort(() => Math.random() - 0.5);
+        const ordered = pool.slice().sort(() => Math.random() - 0.5);
 
         const colY     = new Array(cols).fill(0);
         const colItems = Array.from({ length: cols }, () => []);
@@ -1533,19 +1541,6 @@ document.addEventListener('DOMContentLoaded', () => {
         return VIDEO_EXTS.includes(src.slice(dot + 1).toLowerCase());
     }
 
-    // The infinite canvas tiles items, so the same clip can be mounted in
-    // several tile copies. Only one element per distinct clip decodes/plays at a
-    // time (duplicates hold their first frame) — this caps the video decode load
-    // that was making the collections page lag.
-    const playingVideos = new Set();
-    function releaseVideoEl(el) {
-        if (el.dataset && el.dataset.lead === '1') {
-            playingVideos.delete(el.dataset.vsrc);
-            const v = el.querySelector('video');
-            if (v) { try { v.pause(); } catch (_) {} }
-        }
-    }
-
     function createImgEl(it, wx, wy) {
         const isVideo = isVideoSrc(it.src);
 
@@ -1567,25 +1562,15 @@ document.addEventListener('DOMContentLoaded', () => {
             vid.src         = it.src;
             vid.muted       = true;
             vid.loop        = true;
+            vid.autoplay    = true;
             vid.playsInline = true;
-            vid.preload     = 'metadata';
             vid.setAttribute('muted', '');
             vid.setAttribute('playsinline', '');
             vid.style.width  = '100%';
             vid.style.height = '100%';
             vid.style.display = 'block';
-
-            // Lead = the one element allowed to play this clip; duplicates stay
-            // paused on their poster frame so the same video isn't decoded twice.
-            if (!playingVideos.has(it.src)) {
-                playingVideos.add(it.src);
-                wrap.dataset.lead = '1';
-                wrap.dataset.vsrc = it.src;
-                vid.autoplay = true;
-                vid.setAttribute('autoplay', '');
-                vid.addEventListener('loadedmetadata', () => vid.play().catch(() => {}));
-                vid.play().catch(() => {});
-            }
+            vid.addEventListener('loadedmetadata', () => vid.play().catch(() => {}));
+            vid.play().catch(() => {});
             wrap.appendChild(vid);
             return wrap;
         }
@@ -1645,7 +1630,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
         for (const [key, el] of mounted) {
             if (!needed.has(key)) {
-                releaseVideoEl(el);
                 el.remove();
                 mounted.delete(key);
             }
@@ -1653,9 +1637,8 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function unmountAll() {
-        for (const [, el] of mounted) { releaseVideoEl(el); el.remove(); }
+        for (const [, el] of mounted) el.remove();
         mounted.clear();
-        playingVideos.clear();
     }
 
     // ----- Drag with momentum + click detection -----
