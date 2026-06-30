@@ -3547,9 +3547,10 @@ document.addEventListener('DOMContentLoaded', () => {
             cdx[i] = cx0 - (r.left + r.width / 2);
             cdy[i] = (cy0 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
         });
-        // Park the ghosts at the centre stack, hidden, ready to re-materialise.
+        // Park the ghosts at the centre stack, hidden, ready to re-materialise —
+        // small + blurred so they visibly focus in (a morph, not a hard cut).
         aboutGhosts.forEach((g, i) =>
-            gsap.set(g, { x: cdx[i], y: cdy[i], autoAlpha: 0, scale: 1.12, filter: 'blur(6px)' }));
+            gsap.set(g, { x: cdx[i], y: cdy[i], autoAlpha: 0, scale: 0.84, filter: 'blur(9px)' }));
 
         const tl = gsap.timeline({ onComplete: finish });
 
@@ -3560,19 +3561,22 @@ document.addEventListener('DOMContentLoaded', () => {
             duration: 0.55, ease: 'power2.in', stagger: { each: 0.014, from: 'edges' },
         }, 0);
 
-        // 2) Once the paragraph is gone, the menu words materialise at the centre.
-        tl.addLabel('reform', 0.6);
+        // 2) As the paragraph finishes collapsing, the menu words grow/focus in
+        // out of that same centre cluster — overlapping the tail of the collapse
+        // (no empty pause) with a gentle opacity ramp (power2.out, not expo) so
+        // it morphs in smoothly instead of snapping.
+        tl.addLabel('reform', 0.42);
         tl.to(aboutGhosts, {
             autoAlpha: 1, scale: 1, filter: 'blur(0px)',
-            duration: 0.5, ease: 'expo.out', stagger: 0.05,
+            duration: 0.62, ease: 'power2.out', stagger: 0.07,
         }, 'reform');
 
         // 3) Then they fly from the centre back to their home positions on the
         // left — the intro animation played in reverse.
         tl.to(aboutGhosts, {
             x: 0, y: 0,
-            duration: 0.85, ease: 'expo.inOut', stagger: 0.06,
-        }, 'reform+=0.55');
+            duration: 0.9, ease: 'expo.inOut', stagger: 0.06,
+        }, 'reform+=0.62');
     }
 
     if (aboutEl) {
