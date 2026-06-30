@@ -3375,10 +3375,16 @@ document.addEventListener('DOMContentLoaded', () => {
     // Click "about": the menu word flows fluidly to the centre of the screen
     // (FLIP morph), lands with an Adobe-Flash vector-zoom punch, then the short
     // bio blooms in line-by-line, staggered — the 2000s Flash feel.
+    // Built per the GSAP skills: timeline `defaults`, labels + position
+    // parameters, `autoAlpha` for hidden/non-interactive fades, and a
+    // prefers-reduced-motion path that reveals everything instantly.
     const aboutEl    = document.getElementById('about');
     const aboutStage = document.getElementById('about-stage');
     const aboutClose = document.getElementById('about-close');
     let aboutInFlight = false;
+
+    const aboutPrefersReducedMotion = () =>
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function openAbout() {
         if (aboutInFlight) return;
@@ -3406,27 +3412,40 @@ document.addEventListener('DOMContentLoaded', () => {
         const dx = (srcRect.left + srcRect.width  / 2) - (dstRect.left + dstRect.width  / 2);
         const dy = (srcRect.top  + srcRect.height / 2) - (dstRect.top  + dstRect.height / 2);
 
-        gsap.set(lines, { opacity: 0, y: 30, scale: 1.18, filter: 'blur(10px)' });
-        gsap.set(nav,   { opacity: 0, x: -24, filter: 'blur(8px)' });
+        // Reduced motion: reveal in place, no morph/blur (gsap-core a11y guidance).
+        if (aboutPrefersReducedMotion()) {
+            gsap.set([headline, nav, ...lines],
+                { clearProps: 'transform,filter', autoAlpha: 1 });
+            aboutInFlight = false;
+            return;
+        }
 
-        const tl = gsap.timeline({ onComplete: () => { aboutInFlight = false; } });
+        gsap.set(lines, { autoAlpha: 0, y: 30, scale: 1.18, filter: 'blur(10px)' });
+        gsap.set(nav,   { autoAlpha: 0, x: -24, filter: 'blur(8px)' });
+
+        // Most child tweens share expo.out — hoist it into the timeline defaults.
+        const tl = gsap.timeline({
+            defaults: { ease: 'expo.out' },
+            onComplete: () => { aboutInFlight = false; },
+        });
 
         // 1) The word slides from the menu and grows fluidly into the centre.
         tl.fromTo(headline,
-            { x: dx, y: dy, scale: scale, filter: 'blur(2px)', opacity: 0.85 },
-            { x: 0, y: 0, scale: 1, filter: 'blur(0px)', opacity: 1,
-              duration: 1.0, ease: 'expo.out' }, 0);
-        // 2) Flash vector-zoom punch + springy settle on arrival.
-        tl.to(headline, { scale: 1.06, duration: 0.16, ease: 'power2.in' }, 0.9)
+            { x: dx, y: dy, scale: scale, autoAlpha: 0.85, filter: 'blur(2px)' },
+            { x: 0, y: 0, scale: 1, autoAlpha: 1, filter: 'blur(0px)', duration: 1.0 }, 0);
+        // 2) Adobe-Flash vector-zoom punch + springy settle on arrival.
+        tl.addLabel('land', 0.9)
+          .to(headline, { scale: 1.06, duration: 0.16, ease: 'power2.in' }, 'land')
           .to(headline, { scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' }, '>');
-        // 3) Nav snaps in from the left.
-        tl.fromTo(nav,
-            { opacity: 0, x: -24, filter: 'blur(8px)' },
-            { opacity: 1, x: 0, filter: 'blur(0px)', duration: 0.5, ease: 'back.out(2.2)' }, 0.55);
-        // 4) The bio blooms in, line by line.
-        tl.to(lines,
-            { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
-              duration: 0.7, ease: 'expo.out', stagger: 0.12 }, 0.7);
+        // 3) Nav snaps in from the left, then the bio blooms in line by line.
+        tl.addLabel('reveal', 0.7)
+          .fromTo(nav,
+            { autoAlpha: 0, x: -24, filter: 'blur(8px)' },
+            { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.5, ease: 'back.out(2.2)' },
+            'reveal-=0.15')
+          .to(lines,
+            { autoAlpha: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, stagger: 0.12 },
+            'reveal');
     }
 
     function closeAbout() {
@@ -3436,24 +3455,25 @@ document.addEventListener('DOMContentLoaded', () => {
         const headline = document.getElementById('about-headline');
         const lines    = aboutStage.querySelectorAll('.about-line');
 
-        const tl = gsap.timeline({
-            onComplete: () => {
-                aboutStage.style.opacity = '0';
-                setTimeout(() => {
-                    aboutStage.style.display = 'none';
-                    aboutStage.setAttribute('aria-hidden', 'true');
-                    document.body.classList.remove('about-open', 'page-open');
-                    gsap.set(headline, { clearProps: 'all' });
-                    aboutInFlight = false;
-                }, 600);
-            }
-        });
+        const finish = () => {
+            aboutStage.style.opacity = '0';
+            setTimeout(() => {
+                aboutStage.style.display = 'none';
+                aboutStage.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('about-open', 'page-open');
+                gsap.set(headline, { clearProps: 'all' });
+                aboutInFlight = false;
+            }, 600);
+        };
+
+        if (aboutPrefersReducedMotion()) { finish(); return; }
+
+        const tl = gsap.timeline({ defaults: { ease: 'power2.in' }, onComplete: finish });
         tl.to(lines,
-            { opacity: 0, y: -14, filter: 'blur(6px)',
-              duration: 0.3, ease: 'power2.in', stagger: { each: 0.05, from: 'end' } }, 0);
-        tl.to(headline,
-            { scale: 1.16, filter: 'blur(14px)', opacity: 0,
-              duration: 0.45, ease: 'power2.in' }, 0.12);
+            { autoAlpha: 0, y: -14, filter: 'blur(6px)',
+              duration: 0.3, stagger: { each: 0.05, from: 'end' } }, 0)
+          .to(headline,
+            { scale: 1.16, autoAlpha: 0, filter: 'blur(14px)', duration: 0.45 }, 0.12);
     }
 
     if (aboutEl) {

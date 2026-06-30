@@ -1284,14 +1284,15 @@ body.timeline-open .menu {
     pointer-events: none;
 }
 
-/* The big word the menu "about" flows into and transforms from. */
+/* The word the menu "about" flows into and transforms from. Same normal
+   text size as the bio — no oversized hero type — just uppercased as a label. */
 #about-headline {
-    margin: 0 0 28px;
+    margin: 0 0 24px;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: clamp(56px, 11vw, 132px);
-    line-height: 0.9;
-    letter-spacing: -2px;
+    font-size: 16px;
+    line-height: 1.45;
+    letter-spacing: 0;
     text-transform: uppercase;
     color: #424242;
     -webkit-font-smoothing: antialiased;
@@ -1320,14 +1321,11 @@ body.timeline-open .menu {
 
 .about-line:last-child { margin-bottom: 0; }
 
-/* The closing disclaimer line, set smaller and lighter. */
+/* The closing disclaimer line: same normal size, just lighter so it reads
+   as a footnote without changing the type scale. */
 .about-line-fine {
     margin-top: 24px;
-    font-size: 12px;
-    line-height: 1.5;
-    letter-spacing: 0;
     color: #bbbdc0;
-    text-transform: uppercase;
 }
 
 /* Hide the regular .menu while the about page is open. */
