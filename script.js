@@ -3427,25 +3427,37 @@ document.addEventListener('DOMContentLoaded', () => {
         aboutStage.removeAttribute('aria-hidden');
         aboutStage.style.opacity = '1';
 
-        const wordsByLine = aboutWordsByLine();
-        const allWords = wordsByLine.flat();
+        const allWords = aboutWordsByLine().flat();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const cx0 = vw / 2, cy0 = vh / 2;   // where the menu collapses
 
-        // Bio words + nav start hidden, ready to flash in.
-        gsap.set(allWords, { autoAlpha: 0, y: 34, scale: 0.92, filter: 'blur(8px)' });
+        // Clear any leftover transforms so we can measure each word's natural
+        // (final) centre, then start it pulled toward the screen centre — so the
+        // paragraph emerges OUT OF the collapsed menu, not in from the top.
+        gsap.set(allWords, { clearProps: 'all' });
         gsap.set(aboutNav, { autoAlpha: 0, x: -20, filter: 'blur(6px)' });
 
         // Reduced motion: reveal the paragraph instantly, skip the fly-in.
         if (aboutReduced()) {
-            gsap.set(allWords, { clearProps: 'all' });
             gsap.set(aboutNav, { autoAlpha: 1, x: 0, filter: 'none' });
             return;
         }
+
+        const wordStart = allWords.map(w => {
+            const r = w.getBoundingClientRect();
+            return {
+                x: (cx0 - (r.left + r.width  / 2)) * 0.7,
+                y: (cy0 - (r.top  + r.height / 2)) * 0.7,
+            };
+        });
+        allWords.forEach((w, i) => {
+            gsap.set(w, { autoAlpha: 0, x: wordStart[i].x, y: wordStart[i].y, scale: 0.55, filter: 'blur(8px)' });
+        });
 
         // Build the menu-word "ghosts" at the exact on-screen menu positions and
         // pre-compute how far each must travel to land in a centred stack.
         aboutGhosts.forEach(g => g.remove());
         aboutGhosts = [];
-        const vw = window.innerWidth, vh = window.innerHeight;
         const lineH = 22;
         const totalH = (menuItems.length - 1) * lineH;
         const dx = [], dy = [];
@@ -3458,8 +3470,8 @@ document.addEventListener('DOMContentLoaded', () => {
             g.style.top  = r.top + 'px';
             aboutStage.appendChild(g);
             aboutGhosts.push(g);
-            dx[i] = (vw / 2) - (r.left + r.width / 2);
-            dy[i] = (vh / 2 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
+            dx[i] = cx0 - (r.left + r.width / 2);
+            dy[i] = (cy0 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
         });
 
         aboutTl = gsap.timeline({ defaults: { ease: 'expo.out' } });
@@ -3473,20 +3485,18 @@ document.addEventListener('DOMContentLoaded', () => {
             stagger: 0.06,
         }, 0);
 
-        // Phase 2 — transform into the paragraph: the ghosts flash out while the
-        // bio words flash in, word by word, line by line (intro feel).
+        // Phase 2 — transform into the paragraph: the ghosts flash out at the
+        // centre while the bio words bloom outward from that same point, word by
+        // word (kinetic-typography feel), settling into the single paragraph.
         aboutTl.addLabel('morph', 0.78);
         aboutTl.to(aboutGhosts, {
             autoAlpha: 0, scale: 1.18, filter: 'blur(8px)',
             duration: 0.4, ease: 'power2.in', stagger: 0.03,
         }, 'morph');
-
-        wordsByLine.forEach((words, li) => {
-            aboutTl.to(words, {
-                autoAlpha: 1, y: 0, scale: 1, filter: 'blur(0px)',
-                duration: 0.5, stagger: 0.025,
-            }, 'morph+=' + (0.05 + li * 0.24).toFixed(2));
-        });
+        aboutTl.to(allWords, {
+            autoAlpha: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)',
+            duration: 0.6, stagger: { each: 0.02, from: 'center' },
+        }, 'morph+=0.05');
 
         // Nav fades in once the text has assembled.
         aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.45 }, '>-0.15');
@@ -3519,8 +3529,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const tl = gsap.timeline({ defaults: { ease: 'power2.in' }, onComplete: finish });
         tl.to([aboutNav, ...aboutGhosts], { autoAlpha: 0, filter: 'blur(6px)', duration: 0.25 }, 0);
         tl.to(allWords, {
-            autoAlpha: 0, y: -16, filter: 'blur(6px)',
-            duration: 0.35, stagger: { each: 0.02, from: 'end' },
+            autoAlpha: 0, scale: 0.8, filter: 'blur(6px)',
+            duration: 0.35, stagger: { each: 0.02, from: 'center' },
         }, 0);
     }
 

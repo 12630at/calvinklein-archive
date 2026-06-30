@@ -215,6 +215,10 @@ body {
     color: #424242;
 }
 
+#about:hover {
+    color: #424242;
+}
+
 /* ===== PEOPLE PAGE TRANSITION ===== */
 #people-stage {
     position: fixed;
@@ -1311,13 +1315,6 @@ body.timeline-open .menu {
 .about-word {
     display: inline-block;
     will-change: opacity, transform, filter;
-}
-
-/* The closing disclaimer line: same normal size, just lighter so it reads
-   as a footnote without changing the type scale. */
-.about-line-fine {
-    margin-top: 24px;
-    color: #bbbdc0;
 }
 
 /* Menu-word "ghosts": clones of the nav items that fly from the menu to the
