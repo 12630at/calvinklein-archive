@@ -2415,6 +2415,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ['photographer',      prettify(csv.photographer),      csv.photographer],
             ['__model__',         '',                              ''],
             ['director',          prettify(csv.director),          csv.director],
+            ['producer',          prettify(csv.producer),          csv.producer],
+            ['production',        prettify(csv.production_company), csv.production_company],
             ['stylist',           prettify(csv.stylist),           csv.stylist],
             ['art director',      prettify(csv.art_director),      csv.art_director],
             ['creative director', prettify(csv.creative_director), csv.creative_director],
