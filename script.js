@@ -3480,27 +3480,27 @@ document.addEventListener('DOMContentLoaded', () => {
         aboutTl.to(aboutGhosts, {
             x: i => dx[i],
             y: i => dy[i],
-            duration: 0.55,
+            duration: 0.65,
             ease: 'expo.inOut',
-            stagger: 0.04,
+            stagger: 0.05,
         }, 0);
 
         // Phase 2 — direct morph: the ghosts dissolve at the centre at the very
         // same instant the bio words bloom out of that same point, word by word.
         // Both run at 'morph' (heavy overlap) so there is no gap between the menu
         // vanishing and the paragraph appearing.
-        aboutTl.addLabel('morph', 0.5);
+        aboutTl.addLabel('morph', 0.55);
         aboutTl.to(aboutGhosts, {
             autoAlpha: 0, scale: 1.18, filter: 'blur(8px)',
-            duration: 0.3, ease: 'power2.in', stagger: 0.02,
+            duration: 0.34, ease: 'power2.in', stagger: 0.025,
         }, 'morph');
         aboutTl.to(allWords, {
             autoAlpha: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)',
-            duration: 0.55, stagger: { each: 0.018, from: 'center' },
+            duration: 0.62, stagger: { each: 0.02, from: 'center' },
         }, 'morph');
 
         // Nav fades in once the text has assembled.
-        aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.45 }, '>-0.1');
+        aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.5 }, '>-0.1');
     }
 
     function closeAbout() {
@@ -3536,19 +3536,43 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (aboutReduced() || aboutGhosts.length === 0) { finish(); return; }
 
+        // Recompute the centre-stack offsets (the hidden menu items keep their
+        // layout) so the ghosts can re-form at the centre, then return home.
+        const menuItems = Array.from(document.querySelectorAll(aboutMenuSel));
+        const mRects = menuItems.map(el => el.getBoundingClientRect());
+        const lineH = 22, totalH = (aboutGhosts.length - 1) * lineH;
+        const cdx = [], cdy = [];
+        aboutGhosts.forEach((g, i) => {
+            const r = mRects[i] || mRects[0];
+            cdx[i] = cx0 - (r.left + r.width / 2);
+            cdy[i] = (cy0 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
+        });
+        // Park the ghosts at the centre stack, hidden, ready to re-materialise.
+        aboutGhosts.forEach((g, i) =>
+            gsap.set(g, { x: cdx[i], y: cdy[i], autoAlpha: 0, scale: 1.12, filter: 'blur(6px)' }));
+
         const tl = gsap.timeline({ onComplete: finish });
-        // Nav out + the paragraph collapses back to the centre point.
-        tl.to(aboutNav, { autoAlpha: 0, filter: 'blur(6px)', duration: 0.2, ease: 'power2.in' }, 0);
+
+        // 1) Nav out + the paragraph collapses to the centre and disappears.
+        tl.to(aboutNav, { autoAlpha: 0, filter: 'blur(6px)', duration: 0.3, ease: 'power2.in' }, 0);
         tl.to(allWords, {
             x: i => wordEnd[i].x, y: i => wordEnd[i].y, scale: 0.5, autoAlpha: 0, filter: 'blur(8px)',
-            duration: 0.4, ease: 'power2.in', stagger: { each: 0.012, from: 'edges' },
+            duration: 0.55, ease: 'power2.in', stagger: { each: 0.014, from: 'edges' },
         }, 0);
-        // The menu words re-form at the centre and fly back to their home
-        // positions — phase 1 played in reverse.
+
+        // 2) Once the paragraph is gone, the menu words materialise at the centre.
+        tl.addLabel('reform', 0.6);
         tl.to(aboutGhosts, {
-            x: 0, y: 0, scale: 1, autoAlpha: 1, filter: 'blur(0px)',
-            duration: 0.6, ease: 'expo.inOut', stagger: 0.05,
-        }, 0.22);
+            autoAlpha: 1, scale: 1, filter: 'blur(0px)',
+            duration: 0.5, ease: 'expo.out', stagger: 0.05,
+        }, 'reform');
+
+        // 3) Then they fly from the centre back to their home positions on the
+        // left — the intro animation played in reverse.
+        tl.to(aboutGhosts, {
+            x: 0, y: 0,
+            duration: 0.85, ease: 'expo.inOut', stagger: 0.06,
+        }, 'reform+=0.55');
     }
 
     if (aboutEl) {
