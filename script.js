@@ -3372,82 +3372,156 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ===== ABOUT PAGE =====
-    // Click "about": the menu word flows fluidly to the centre of the screen
-    // (FLIP morph), lands with an Adobe-Flash vector-zoom punch, then the short
-    // bio blooms in line-by-line, staggered — the 2000s Flash feel.
-    // Pure CSS transitions + vanilla JS (no GSAP): JS measures the FLIP start,
-    // feeds it to CSS via --about-fx/fy/fs custom properties, then toggles the
-    // .is-open / .is-closing classes that drive the transitions. Stagger and
-    // easing live in style.css; prefers-reduced-motion is handled there too.
+    // Click "about": the menu words glide to the centre of the screen, line by
+    // line — echoing the site's kinetic-typography intro — then transform into
+    // a short bio paragraph that assembles word by word, line by line. Driven
+    // with GSAP (timeline + labels + per-word stagger). No "about" title.
     const aboutEl    = document.getElementById('about');
     const aboutStage = document.getElementById('about-stage');
     const aboutClose = document.getElementById('about-close');
-    let aboutInFlight = false;
+    const aboutNav   = aboutStage.querySelector('.about-nav');
+    const aboutLines = Array.from(aboutStage.querySelectorAll('.about-line'));
+    const aboutMenuSel = '.menu .menu-primary:not(.menu-primary-archive) .menu-item';
+    let aboutOpen = false;
+    let aboutTl = null;
+    let aboutSplitDone = false;
+    let aboutGhosts = [];
+
+    const aboutReduced = () =>
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Wrap every bio word in its own span so GSAP can animate them one by one.
+    function aboutEnsureSplit() {
+        if (aboutSplitDone) return;
+        aboutLines.forEach(line => {
+            const words = line.textContent.trim().split(/\s+/);
+            line.textContent = '';
+            words.forEach((w, i) => {
+                const span = document.createElement('span');
+                span.className = 'about-word';
+                span.textContent = w;
+                line.appendChild(span);
+                if (i < words.length - 1) line.appendChild(document.createTextNode(' '));
+            });
+        });
+        aboutSplitDone = true;
+    }
+
+    const aboutWordsByLine = () =>
+        aboutLines.map(l => Array.from(l.querySelectorAll('.about-word')));
 
     function openAbout() {
-        if (aboutInFlight) return;
-        aboutInFlight = true;
+        if (aboutOpen) return;
+        aboutOpen = true;
+        aboutEnsureSplit();
+        if (aboutTl) { aboutTl.kill(); aboutTl = null; }
 
-        const headline = document.getElementById('about-headline');
+        const menuItems = Array.from(document.querySelectorAll(aboutMenuSel));
+        const rects = menuItems.map(el => el.getBoundingClientRect());
 
-        // Measure the menu word BEFORE hiding the menu so the FLIP start point
-        // is the real on-screen position of "about".
-        const srcRect = aboutEl.getBoundingClientRect();
+        // Hide the live menu items instantly so the ghosts take over seamlessly.
+        menuItems.forEach(el => { el.style.visibility = 'hidden'; });
 
         document.body.classList.add('about-open', 'page-open');
-        aboutStage.classList.remove('is-closing');
         aboutStage.style.display = 'block';
         aboutStage.removeAttribute('aria-hidden');
         aboutStage.style.opacity = '1';
 
-        // Measure the headline in its natural (final) position: temporarily
-        // strip the transform so getBoundingClientRect is unscaled.
-        headline.style.transition = 'none';
-        headline.style.transform  = 'none';
-        const dstRect = headline.getBoundingClientRect();
-        const scale = srcRect.height / dstRect.height;
-        const dx = (srcRect.left + srcRect.width  / 2) - (dstRect.left + dstRect.width  / 2);
-        const dy = (srcRect.top  + srcRect.height / 2) - (dstRect.top  + dstRect.height / 2);
+        const wordsByLine = aboutWordsByLine();
+        const allWords = wordsByLine.flat();
 
-        // Feed the FLIP start into CSS, then drop the temp inline styles so the
-        // stylesheet's start state (translate+scale, blurred) takes over.
-        headline.style.setProperty('--about-fx', dx + 'px');
-        headline.style.setProperty('--about-fy', dy + 'px');
-        headline.style.setProperty('--about-fs', scale);
-        headline.style.removeProperty('transform');
-        headline.style.removeProperty('transition');
+        // Bio words + nav start hidden, ready to flash in.
+        gsap.set(allWords, { autoAlpha: 0, y: 34, scale: 0.92, filter: 'blur(8px)' });
+        gsap.set(aboutNav, { autoAlpha: 0, x: -20, filter: 'blur(6px)' });
 
-        // Commit the start state, then flip the class to transition to centre.
-        void aboutStage.offsetWidth;
-        aboutStage.classList.add('is-open');
+        // Reduced motion: reveal the paragraph instantly, skip the fly-in.
+        if (aboutReduced()) {
+            gsap.set(allWords, { clearProps: 'all' });
+            gsap.set(aboutNav, { autoAlpha: 1, x: 0, filter: 'none' });
+            return;
+        }
 
-        // Clear the lock once the longest transition (bio bloom) has finished —
-        // instantly when reduced motion is on, since nothing animates.
-        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-        setTimeout(() => { aboutInFlight = false; }, reduce ? 0 : 1800);
+        // Build the menu-word "ghosts" at the exact on-screen menu positions and
+        // pre-compute how far each must travel to land in a centred stack.
+        aboutGhosts.forEach(g => g.remove());
+        aboutGhosts = [];
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const lineH = 22;
+        const totalH = (menuItems.length - 1) * lineH;
+        const dx = [], dy = [];
+        menuItems.forEach((el, i) => {
+            const r = rects[i];
+            const g = document.createElement('div');
+            g.className = 'about-ghost';
+            g.textContent = el.textContent;
+            g.style.left = r.left + 'px';
+            g.style.top  = r.top + 'px';
+            aboutStage.appendChild(g);
+            aboutGhosts.push(g);
+            dx[i] = (vw / 2) - (r.left + r.width / 2);
+            dy[i] = (vh / 2 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
+        });
+
+        aboutTl = gsap.timeline({ defaults: { ease: 'expo.out' } });
+
+        // Phase 1 — the menu words glide to the centre, line by line.
+        aboutTl.to(aboutGhosts, {
+            x: i => dx[i],
+            y: i => dy[i],
+            duration: 0.7,
+            ease: 'expo.inOut',
+            stagger: 0.06,
+        }, 0);
+
+        // Phase 2 — transform into the paragraph: the ghosts flash out while the
+        // bio words flash in, word by word, line by line (intro feel).
+        aboutTl.addLabel('morph', 0.78);
+        aboutTl.to(aboutGhosts, {
+            autoAlpha: 0, scale: 1.18, filter: 'blur(8px)',
+            duration: 0.4, ease: 'power2.in', stagger: 0.03,
+        }, 'morph');
+
+        wordsByLine.forEach((words, li) => {
+            aboutTl.to(words, {
+                autoAlpha: 1, y: 0, scale: 1, filter: 'blur(0px)',
+                duration: 0.5, stagger: 0.025,
+            }, 'morph+=' + (0.05 + li * 0.24).toFixed(2));
+        });
+
+        // Nav fades in once the text has assembled.
+        aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.45 }, '>-0.15');
     }
 
     function closeAbout() {
-        if (aboutInFlight) return;
-        aboutInFlight = true;
+        if (!aboutOpen) return;
+        aboutOpen = false;
+        // Close can interrupt the open animation — kill it first.
+        if (aboutTl) { aboutTl.kill(); aboutTl = null; }
 
-        const headline = document.getElementById('about-headline');
+        const allWords = aboutWordsByLine().flat();
 
-        aboutStage.classList.remove('is-open');
-        aboutStage.classList.add('is-closing');
-        aboutStage.style.opacity = '0';
+        const finish = () => {
+            aboutStage.style.opacity = '0';
+            setTimeout(() => {
+                aboutStage.style.display = 'none';
+                aboutStage.setAttribute('aria-hidden', 'true');
+                document.body.classList.remove('about-open', 'page-open');
+                aboutGhosts.forEach(g => g.remove());
+                aboutGhosts = [];
+                // Restore the live menu items for the next open.
+                document.querySelectorAll(aboutMenuSel)
+                    .forEach(el => { el.style.visibility = ''; });
+            }, 600);
+        };
 
-        setTimeout(() => {
-            aboutStage.style.display = 'none';
-            aboutStage.setAttribute('aria-hidden', 'true');
-            aboutStage.classList.remove('is-closing');
-            document.body.classList.remove('about-open', 'page-open');
-            // Reset the FLIP custom props so the next open re-measures cleanly.
-            headline.style.removeProperty('--about-fx');
-            headline.style.removeProperty('--about-fy');
-            headline.style.removeProperty('--about-fs');
-            aboutInFlight = false;
-        }, 650);
+        if (aboutReduced()) { finish(); return; }
+
+        const tl = gsap.timeline({ defaults: { ease: 'power2.in' }, onComplete: finish });
+        tl.to([aboutNav, ...aboutGhosts], { autoAlpha: 0, filter: 'blur(6px)', duration: 0.25 }, 0);
+        tl.to(allWords, {
+            autoAlpha: 0, y: -16, filter: 'blur(6px)',
+            duration: 0.35, stagger: { each: 0.02, from: 'end' },
+        }, 0);
     }
 
     if (aboutEl) {

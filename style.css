@@ -1231,36 +1231,20 @@ body.timeline-open .menu {
     overflow: hidden;
 }
 
-/* Same fixed nav as the other pages: back arrow + title.
-   Slides in from the left when the page opens (CSS transition, no GSAP).
-   The vertical centring translateY(-50%) is kept inside every transform. */
+/* Same fixed nav as the other pages: back arrow + title. GSAP reveals it
+   after the text has assembled; the vertical centring translateY(-50%) is
+   kept and GSAP animates opacity/filter on top of it. */
 .about-nav {
     position: absolute;
     top: 50%;
     left: 36px;
-    transform: translate(-24px, -50%);
+    transform: translateY(-50%);
     display: flex;
     flex-direction: row;
     align-items: center;
     gap: 8px;
-    z-index: 2;
+    z-index: 3;
     opacity: 0;
-    filter: blur(8px);
-    transition: opacity 0.5s cubic-bezier(0.19, 1, 0.22, 1) 0.5s,
-                transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) 0.5s,
-                filter 0.5s cubic-bezier(0.19, 1, 0.22, 1) 0.5s;
-}
-
-#about-stage.is-open .about-nav {
-    opacity: 1;
-    transform: translate(0, -50%);
-    filter: blur(0);
-}
-
-#about-stage.is-closing .about-nav {
-    opacity: 0;
-    filter: blur(8px);
-    transition: opacity 0.3s ease-in, filter 0.3s ease-in;
 }
 
 .about-back-btn {
@@ -1290,7 +1274,7 @@ body.timeline-open .menu {
     line-height: 12px;
 }
 
-/* Centred column: the morphing headline sits above the bio. */
+/* Centred column that holds the bio paragraph once it has assembled. */
 #about-content {
     position: absolute;
     inset: 0;
@@ -1301,47 +1285,7 @@ body.timeline-open .menu {
     text-align: center;
     padding: 0 48px;
     pointer-events: none;
-}
-
-/* The word the menu "about" flows into and transforms from. Same normal
-   text size as the bio — no oversized hero type — just uppercased as a label.
-   The FLIP start (menu-word position/size) is fed in via the --about-fx/fy/fs
-   custom properties set by JS; CSS transitions the morph (no GSAP). The
-   back.out-style curve on transform gives the Adobe-Flash vector-zoom punch. */
-#about-headline {
-    margin: 0 0 24px;
-    font-family: 'Klein', sans-serif;
-    font-weight: 350;
-    font-size: 16px;
-    line-height: 1.45;
-    letter-spacing: 0;
-    text-transform: uppercase;
-    color: #424242;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    transform-origin: 50% 50%;
-    opacity: 0;
-    transform: translate(var(--about-fx, 0px), var(--about-fy, 0px)) scale(var(--about-fs, 0.8));
-    filter: blur(2px);
-    transition: opacity 0.9s cubic-bezier(0.19, 1, 0.22, 1),
-                transform 1.0s cubic-bezier(0.34, 1.56, 0.64, 1),
-                filter 0.9s cubic-bezier(0.19, 1, 0.22, 1);
-    will-change: opacity, transform, filter;
-}
-
-#about-stage.is-open #about-headline {
-    opacity: 1;
-    transform: translate(0px, 0px) scale(1);
-    filter: blur(0);
-}
-
-#about-stage.is-closing #about-headline {
-    opacity: 0;
-    transform: translate(0px, 0px) scale(1.16);
-    filter: blur(14px);
-    transition: opacity 0.45s cubic-bezier(0.55, 0, 1, 0.45) 0.12s,
-                transform 0.45s cubic-bezier(0.55, 0, 1, 0.45) 0.12s,
-                filter 0.45s cubic-bezier(0.55, 0, 1, 0.45) 0.12s;
+    z-index: 2;
 }
 
 #about-body {
@@ -1358,56 +1302,15 @@ body.timeline-open .menu {
     color: #424242;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    opacity: 0;
-    transform: translateY(30px) scale(1.18);
-    filter: blur(10px);
-    transition: opacity 0.7s cubic-bezier(0.19, 1, 0.22, 1),
-                transform 0.7s cubic-bezier(0.19, 1, 0.22, 1),
-                filter 0.7s cubic-bezier(0.19, 1, 0.22, 1);
-    will-change: opacity, transform, filter;
 }
 
 .about-line:last-child { margin-bottom: 0; }
 
-/* Bio blooms in line by line after the headline lands (staggered delays). */
-#about-stage.is-open .about-line {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: blur(0);
-}
-#about-stage.is-open .about-line:nth-child(1) { transition-delay: 0.70s; }
-#about-stage.is-open .about-line:nth-child(2) { transition-delay: 0.82s; }
-#about-stage.is-open .about-line:nth-child(3) { transition-delay: 0.94s; }
-#about-stage.is-open .about-line:nth-child(4) { transition-delay: 1.06s; }
-
-/* On close the bio blurs out quickly, last line first. */
-#about-stage.is-closing .about-line {
-    opacity: 0;
-    transform: translateY(-14px);
-    filter: blur(6px);
-    transition: opacity 0.3s ease-in, transform 0.3s ease-in, filter 0.3s ease-in;
-}
-#about-stage.is-closing .about-line:nth-child(4) { transition-delay: 0s; }
-#about-stage.is-closing .about-line:nth-child(3) { transition-delay: 0.05s; }
-#about-stage.is-closing .about-line:nth-child(2) { transition-delay: 0.10s; }
-#about-stage.is-closing .about-line:nth-child(1) { transition-delay: 0.15s; }
-
-/* Accessibility: users who prefer reduced motion get an instant reveal. */
-@media (prefers-reduced-motion: reduce) {
-    #about-headline,
-    .about-nav,
-    .about-line {
-        transition: none !important;
-    }
-    #about-stage.is-open #about-headline,
-    #about-stage.is-open .about-nav,
-    #about-stage.is-open .about-line {
-        opacity: 1;
-        filter: blur(0);
-    }
-    #about-stage.is-open #about-headline,
-    #about-stage.is-open .about-line { transform: none; }
-    #about-stage.is-open .about-nav   { transform: translate(0, -50%); }
+/* Each bio word animates individually (kinetic typography, intro-style),
+   so they are inline-blocks GSAP can transform without reflowing the line. */
+.about-word {
+    display: inline-block;
+    will-change: opacity, transform, filter;
 }
 
 /* The closing disclaimer line: same normal size, just lighter so it reads
@@ -1415,6 +1318,26 @@ body.timeline-open .menu {
 .about-line-fine {
     margin-top: 24px;
     color: #bbbdc0;
+}
+
+/* Menu-word "ghosts": clones of the nav items that fly from the menu to the
+   centre, then dissolve into the paragraph. Styled exactly like .menu-item. */
+.about-ghost {
+    position: absolute;
+    margin: 0;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #bbbdc0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transform-origin: 50% 50%;
+    pointer-events: none;
+    z-index: 4;
 }
 
 /* Hide the regular .menu while the about page is open. */
