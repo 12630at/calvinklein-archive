@@ -984,6 +984,58 @@ body.item-view-open .menu-archive-back {
     cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='9,6 22,14 9,22' fill='white'/></svg>") 14 14, pointer;
 }
 
+/* ===== FLIPBOOK (EPHEMERA zine) ===== */
+.flipbook-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+}
+
+.flipbook-canvas {
+    position: absolute;
+    inset: 0;
+}
+.flipbook-canvas canvas { display: block; cursor: grab; }
+.flipbook-canvas canvas:active { cursor: grabbing; }
+
+/* Bottom control bar: ‹  page counter  › — centred under the book */
+.flipbook-bar {
+    position: absolute;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    z-index: 2;
+}
+
+.flipbook-arrow {
+    font-family: 'Klein', sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.flipbook-arrow:hover { color: #424242; }
+
+.flipbook-counter {
+    min-width: 96px;
+    text-align: center;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+}
+
+
 /* ===== TIMELINE PAGE ===== */
 
 /* Hover state for the timeline menu item */
