@@ -3371,6 +3371,101 @@ document.addEventListener('DOMContentLoaded', () => {
         timelineClose.addEventListener('click', closeTimeline);
     }
 
+    // ===== ABOUT PAGE =====
+    // Click "about": the menu word flows fluidly to the centre of the screen
+    // (FLIP morph), lands with an Adobe-Flash vector-zoom punch, then the short
+    // bio blooms in line-by-line, staggered — the 2000s Flash feel.
+    const aboutEl    = document.getElementById('about');
+    const aboutStage = document.getElementById('about-stage');
+    const aboutClose = document.getElementById('about-close');
+    let aboutInFlight = false;
+
+    function openAbout() {
+        if (aboutInFlight) return;
+        aboutInFlight = true;
+
+        const headline = document.getElementById('about-headline');
+        const lines    = aboutStage.querySelectorAll('.about-line');
+        const nav       = aboutStage.querySelector('.about-nav');
+
+        // Measure the menu word BEFORE hiding the menu so the FLIP start point
+        // is the real on-screen position of "about".
+        const srcRect = aboutEl.getBoundingClientRect();
+
+        document.body.classList.add('about-open', 'page-open');
+        aboutStage.style.display = 'block';
+        aboutStage.removeAttribute('aria-hidden');
+        void aboutStage.offsetWidth;
+        aboutStage.style.opacity = '1';
+
+        // Headline at its natural centred position, then compute the transform
+        // that overlaps it onto the menu word (FLIP first/last).
+        gsap.set(headline, { clearProps: 'all' });
+        const dstRect = headline.getBoundingClientRect();
+        const scale = srcRect.height / dstRect.height;
+        const dx = (srcRect.left + srcRect.width  / 2) - (dstRect.left + dstRect.width  / 2);
+        const dy = (srcRect.top  + srcRect.height / 2) - (dstRect.top  + dstRect.height / 2);
+
+        gsap.set(lines, { opacity: 0, y: 30, scale: 1.18, filter: 'blur(10px)' });
+        gsap.set(nav,   { opacity: 0, x: -24, filter: 'blur(8px)' });
+
+        const tl = gsap.timeline({ onComplete: () => { aboutInFlight = false; } });
+
+        // 1) The word slides from the menu and grows fluidly into the centre.
+        tl.fromTo(headline,
+            { x: dx, y: dy, scale: scale, filter: 'blur(2px)', opacity: 0.85 },
+            { x: 0, y: 0, scale: 1, filter: 'blur(0px)', opacity: 1,
+              duration: 1.0, ease: 'expo.out' }, 0);
+        // 2) Flash vector-zoom punch + springy settle on arrival.
+        tl.to(headline, { scale: 1.06, duration: 0.16, ease: 'power2.in' }, 0.9)
+          .to(headline, { scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' }, '>');
+        // 3) Nav snaps in from the left.
+        tl.fromTo(nav,
+            { opacity: 0, x: -24, filter: 'blur(8px)' },
+            { opacity: 1, x: 0, filter: 'blur(0px)', duration: 0.5, ease: 'back.out(2.2)' }, 0.55);
+        // 4) The bio blooms in, line by line.
+        tl.to(lines,
+            { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)',
+              duration: 0.7, ease: 'expo.out', stagger: 0.12 }, 0.7);
+    }
+
+    function closeAbout() {
+        if (aboutInFlight) return;
+        aboutInFlight = true;
+
+        const headline = document.getElementById('about-headline');
+        const lines    = aboutStage.querySelectorAll('.about-line');
+
+        const tl = gsap.timeline({
+            onComplete: () => {
+                aboutStage.style.opacity = '0';
+                setTimeout(() => {
+                    aboutStage.style.display = 'none';
+                    aboutStage.setAttribute('aria-hidden', 'true');
+                    document.body.classList.remove('about-open', 'page-open');
+                    gsap.set(headline, { clearProps: 'all' });
+                    aboutInFlight = false;
+                }, 600);
+            }
+        });
+        tl.to(lines,
+            { opacity: 0, y: -14, filter: 'blur(6px)',
+              duration: 0.3, ease: 'power2.in', stagger: { each: 0.05, from: 'end' } }, 0);
+        tl.to(headline,
+            { scale: 1.16, filter: 'blur(14px)', opacity: 0,
+              duration: 0.45, ease: 'power2.in' }, 0.12);
+    }
+
+    if (aboutEl) {
+        aboutEl.addEventListener('click', (e) => {
+            e.preventDefault();
+            openAbout();
+        });
+    }
+    if (aboutClose) {
+        aboutClose.addEventListener('click', closeAbout);
+    }
+
     // ===== MOBILE BURGER MENU =====
     const mobileTrigger    = document.getElementById('mobile-trigger');
     const mobileOverlay    = document.getElementById('mobile-overlay');
@@ -3492,6 +3587,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mSearch = document.getElementById('m-search');
     if (mSearch) mSearch.addEventListener('click', _mobileGo('search', 50));
+
+    const mAbout = document.getElementById('m-about');
+    if (mAbout) mAbout.addEventListener('click', _mobileGo('about', 50));
 
     const mArchiveBack = document.getElementById('m-archive-back');
     if (mArchiveBack) mArchiveBack.addEventListener('click', () => {

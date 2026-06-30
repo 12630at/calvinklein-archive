@@ -1219,6 +1219,123 @@ body.timeline-open .menu {
     pointer-events: none;
 }
 
+/* ===== ABOUT PAGE ===== */
+#about-stage {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    z-index: 16;
+    display: none;
+    opacity: 0;
+    transition: opacity 600ms ease-in-out;
+    overflow: hidden;
+}
+
+/* Same fixed nav as the other pages: back arrow + title. */
+.about-nav {
+    position: absolute;
+    top: 50%;
+    left: 36px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    z-index: 2;
+}
+
+.about-back-btn {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.about-back-btn:hover { color: #424242; }
+
+.about-nav-title {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+    line-height: 12px;
+}
+
+/* Centred column: the morphing headline sits above the bio. */
+#about-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 48px;
+    pointer-events: none;
+}
+
+/* The big word the menu "about" flows into and transforms from. */
+#about-headline {
+    margin: 0 0 28px;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: clamp(56px, 11vw, 132px);
+    line-height: 0.9;
+    letter-spacing: -2px;
+    text-transform: uppercase;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transform-origin: 50% 50%;
+    will-change: opacity, transform, filter;
+}
+
+#about-body {
+    max-width: 560px;
+}
+
+.about-line {
+    margin: 0 0 16px;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 16px;
+    line-height: 1.45;
+    letter-spacing: -0.2px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    opacity: 0;
+    will-change: opacity, transform, filter;
+}
+
+.about-line:last-child { margin-bottom: 0; }
+
+/* The closing disclaimer line, set smaller and lighter. */
+.about-line-fine {
+    margin-top: 24px;
+    font-size: 12px;
+    line-height: 1.5;
+    letter-spacing: 0;
+    color: #bbbdc0;
+    text-transform: uppercase;
+}
+
+/* Hide the regular .menu while the about page is open. */
+body.about-open .menu {
+    opacity: 0;
+    pointer-events: none;
+}
+
 /* ===== LIST VIEW BUTTON ===== */
 #list-view-btn {
     position: absolute;
@@ -1401,6 +1518,7 @@ body.timeline-open .menu {
     .menu           { left: 16px; }
     .people-nav     { left: 16px; }
     .timeline-nav   { left: 16px; }
+    .about-nav      { left: 16px; }
     .timeline-year-col { right: 16px; }
 
     /* Item view: single column — image (centered) on top, credits underneath. */
