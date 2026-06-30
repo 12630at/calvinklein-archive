@@ -3375,77 +3375,56 @@ document.addEventListener('DOMContentLoaded', () => {
     // Click "about": the menu word flows fluidly to the centre of the screen
     // (FLIP morph), lands with an Adobe-Flash vector-zoom punch, then the short
     // bio blooms in line-by-line, staggered — the 2000s Flash feel.
-    // Built per the GSAP skills: timeline `defaults`, labels + position
-    // parameters, `autoAlpha` for hidden/non-interactive fades, and a
-    // prefers-reduced-motion path that reveals everything instantly.
+    // Pure CSS transitions + vanilla JS (no GSAP): JS measures the FLIP start,
+    // feeds it to CSS via --about-fx/fy/fs custom properties, then toggles the
+    // .is-open / .is-closing classes that drive the transitions. Stagger and
+    // easing live in style.css; prefers-reduced-motion is handled there too.
     const aboutEl    = document.getElementById('about');
     const aboutStage = document.getElementById('about-stage');
     const aboutClose = document.getElementById('about-close');
     let aboutInFlight = false;
-
-    const aboutPrefersReducedMotion = () =>
-        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function openAbout() {
         if (aboutInFlight) return;
         aboutInFlight = true;
 
         const headline = document.getElementById('about-headline');
-        const lines    = aboutStage.querySelectorAll('.about-line');
-        const nav       = aboutStage.querySelector('.about-nav');
 
         // Measure the menu word BEFORE hiding the menu so the FLIP start point
         // is the real on-screen position of "about".
         const srcRect = aboutEl.getBoundingClientRect();
 
         document.body.classList.add('about-open', 'page-open');
+        aboutStage.classList.remove('is-closing');
         aboutStage.style.display = 'block';
         aboutStage.removeAttribute('aria-hidden');
-        void aboutStage.offsetWidth;
         aboutStage.style.opacity = '1';
 
-        // Headline at its natural centred position, then compute the transform
-        // that overlaps it onto the menu word (FLIP first/last).
-        gsap.set(headline, { clearProps: 'all' });
+        // Measure the headline in its natural (final) position: temporarily
+        // strip the transform so getBoundingClientRect is unscaled.
+        headline.style.transition = 'none';
+        headline.style.transform  = 'none';
         const dstRect = headline.getBoundingClientRect();
         const scale = srcRect.height / dstRect.height;
         const dx = (srcRect.left + srcRect.width  / 2) - (dstRect.left + dstRect.width  / 2);
         const dy = (srcRect.top  + srcRect.height / 2) - (dstRect.top  + dstRect.height / 2);
 
-        // Reduced motion: reveal in place, no morph/blur (gsap-core a11y guidance).
-        if (aboutPrefersReducedMotion()) {
-            gsap.set([headline, nav, ...lines],
-                { clearProps: 'transform,filter', autoAlpha: 1 });
-            aboutInFlight = false;
-            return;
-        }
+        // Feed the FLIP start into CSS, then drop the temp inline styles so the
+        // stylesheet's start state (translate+scale, blurred) takes over.
+        headline.style.setProperty('--about-fx', dx + 'px');
+        headline.style.setProperty('--about-fy', dy + 'px');
+        headline.style.setProperty('--about-fs', scale);
+        headline.style.removeProperty('transform');
+        headline.style.removeProperty('transition');
 
-        gsap.set(lines, { autoAlpha: 0, y: 30, scale: 1.18, filter: 'blur(10px)' });
-        gsap.set(nav,   { autoAlpha: 0, x: -24, filter: 'blur(8px)' });
+        // Commit the start state, then flip the class to transition to centre.
+        void aboutStage.offsetWidth;
+        aboutStage.classList.add('is-open');
 
-        // Most child tweens share expo.out — hoist it into the timeline defaults.
-        const tl = gsap.timeline({
-            defaults: { ease: 'expo.out' },
-            onComplete: () => { aboutInFlight = false; },
-        });
-
-        // 1) The word slides from the menu and grows fluidly into the centre.
-        tl.fromTo(headline,
-            { x: dx, y: dy, scale: scale, autoAlpha: 0.85, filter: 'blur(2px)' },
-            { x: 0, y: 0, scale: 1, autoAlpha: 1, filter: 'blur(0px)', duration: 1.0 }, 0);
-        // 2) Adobe-Flash vector-zoom punch + springy settle on arrival.
-        tl.addLabel('land', 0.9)
-          .to(headline, { scale: 1.06, duration: 0.16, ease: 'power2.in' }, 'land')
-          .to(headline, { scale: 1, duration: 0.55, ease: 'elastic.out(1, 0.5)' }, '>');
-        // 3) Nav snaps in from the left, then the bio blooms in line by line.
-        tl.addLabel('reveal', 0.7)
-          .fromTo(nav,
-            { autoAlpha: 0, x: -24, filter: 'blur(8px)' },
-            { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.5, ease: 'back.out(2.2)' },
-            'reveal-=0.15')
-          .to(lines,
-            { autoAlpha: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, stagger: 0.12 },
-            'reveal');
+        // Clear the lock once the longest transition (bio bloom) has finished —
+        // instantly when reduced motion is on, since nothing animates.
+        const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+        setTimeout(() => { aboutInFlight = false; }, reduce ? 0 : 1800);
     }
 
     function closeAbout() {
@@ -3453,27 +3432,22 @@ document.addEventListener('DOMContentLoaded', () => {
         aboutInFlight = true;
 
         const headline = document.getElementById('about-headline');
-        const lines    = aboutStage.querySelectorAll('.about-line');
 
-        const finish = () => {
-            aboutStage.style.opacity = '0';
-            setTimeout(() => {
-                aboutStage.style.display = 'none';
-                aboutStage.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('about-open', 'page-open');
-                gsap.set(headline, { clearProps: 'all' });
-                aboutInFlight = false;
-            }, 600);
-        };
+        aboutStage.classList.remove('is-open');
+        aboutStage.classList.add('is-closing');
+        aboutStage.style.opacity = '0';
 
-        if (aboutPrefersReducedMotion()) { finish(); return; }
-
-        const tl = gsap.timeline({ defaults: { ease: 'power2.in' }, onComplete: finish });
-        tl.to(lines,
-            { autoAlpha: 0, y: -14, filter: 'blur(6px)',
-              duration: 0.3, stagger: { each: 0.05, from: 'end' } }, 0)
-          .to(headline,
-            { scale: 1.16, autoAlpha: 0, filter: 'blur(14px)', duration: 0.45 }, 0.12);
+        setTimeout(() => {
+            aboutStage.style.display = 'none';
+            aboutStage.setAttribute('aria-hidden', 'true');
+            aboutStage.classList.remove('is-closing');
+            document.body.classList.remove('about-open', 'page-open');
+            // Reset the FLIP custom props so the next open re-measures cleanly.
+            headline.style.removeProperty('--about-fx');
+            headline.style.removeProperty('--about-fy');
+            headline.style.removeProperty('--about-fs');
+            aboutInFlight = false;
+        }, 650);
     }
 
     if (aboutEl) {
