@@ -251,11 +251,13 @@
                 toX:   centerXFor(currentLeaf + dir),
             };
             // The turning page stays glued at the spread's depth (z = 0) — no
-            // lift. Push the page it will land on one step back so it stacks
-            // underneath cleanly instead of z-fighting.
+            // lift. Push the page it will land on back so the turning page stacks
+            // on top cleanly. Use HALF a step: a full Z_STEP would land it exactly
+            // on top of the NEXT stacked leaf (which already rests at -Z_STEP),
+            // z-fighting and flashing the opposite page to the wrong photo.
             leaves[leafIndex].pivot.position.z = 0;
             const coverIdx = dir > 0 ? leafIndex - 1 : leafIndex + 1;
-            if (leaves[coverIdx]) leaves[coverIdx].pivot.position.z = -Z_STEP;
+            if (leaves[coverIdx]) leaves[coverIdx].pivot.position.z = -Z_STEP * 0.5;
             return true;
         }
 

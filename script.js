@@ -3150,6 +3150,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let timelineObserver  = null;
     let timelineScrollDir = 'down';
     let timelineLastTop   = 0;
+    let timelineIntroActive = false;   // page-intro is playing; scroll reveal paused
 
     // Track scroll direction so animations come from above when scrolling up.
     timelineScroll.addEventListener('scroll', () => {
@@ -3174,7 +3175,7 @@ document.addEventListener('DOMContentLoaded', () => {
         entries.forEach(entry => {
             const year = entry.querySelector('.timeline-year');
             const para = entry.querySelector('.timeline-paragraph');
-            year.classList.remove('flash-in', 'flash-out', 'from-above', 'to-below');
+            year.classList.remove('flash-in', 'flash-out', 'from-above', 'to-below', 'is-shown');
             gsap.set(year, { clearProps: 'all' });
             gsap.set(para, { opacity: 0, y: 16, filter: 'blur(4px)', clearProps: 'scale' });
         });
@@ -3184,6 +3185,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // follows after a short delay (year first, then paragraph).
         // Direction of the flash depends on timelineScrollDir.
         timelineObserver = new IntersectionObserver((records) => {
+            // While the Flash intro plays it owns the first entry — don't let the
+            // observer double-animate it (or anything else) until the intro ends.
+            if (timelineIntroActive) return;
             for (const record of records) {
                 const entry = record.target;
                 const year  = entry.querySelector('.timeline-year');
@@ -3194,7 +3198,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     year.classList.remove('flash-out', 'to-below');
                     // from-above only when scrolling up
                     year.classList.toggle('from-above', goingUp);
-                    year.classList.add('flash-in');
+                    // is-shown tracks "currently revealed" independently of the
+                    // flash-in keyframe, so an intro-revealed year still flashes out.
+                    year.classList.add('flash-in', 'is-shown');
 
                     gsap.killTweensOf(para);
                     gsap.fromTo(para,
@@ -3203,8 +3209,8 @@ document.addEventListener('DOMContentLoaded', () => {
                           duration: 0.9, delay: 0.55,
                           ease: 'expo.out', overwrite: true });
                 } else {
-                    if (year.classList.contains('flash-in')) {
-                        year.classList.remove('flash-in', 'from-above');
+                    if (year.classList.contains('is-shown')) {
+                        year.classList.remove('flash-in', 'from-above', 'is-shown');
                         // to-below only when scrolling up (entry exits downward)
                         year.classList.toggle('to-below', goingUp);
                         year.classList.add('flash-out');
@@ -3221,6 +3227,48 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         entries.forEach(e => timelineObserver.observe(e));
+
+        // Adobe-Flash-2000s page intro: the stage zooms in from a blurred
+        // over-scale, the nav snaps in with a springy overshoot, then the first
+        // year and phrase bloom in, staggered. The observer is paused until this
+        // finishes so it doesn't fight the intro on the first entry.
+        playTimelineIntro(entries[0]);
+    }
+
+    function playTimelineIntro(firstEntry) {
+        timelineIntroActive = true;
+        const nav  = timelineStage.querySelector('.timeline-nav');
+        const year = firstEntry ? firstEntry.querySelector('.timeline-year') : null;
+        const para = firstEntry ? firstEntry.querySelector('.timeline-paragraph') : null;
+
+        const tl = gsap.timeline({
+            onComplete: () => {
+                timelineIntroActive = false;
+                // Mark the first year revealed so it flashes out on scroll.
+                if (year) year.classList.add('is-shown');
+            }
+        });
+
+        // Whole page rushes in from an over-scaled blur — classic Flash vector zoom.
+        tl.fromTo(timelineStage,
+            { scale: 1.08, filter: 'blur(22px)' },
+            { scale: 1, filter: 'blur(0px)', duration: 0.8, ease: 'expo.out' }, 0);
+        // Nav snaps in from the left with a springy overshoot.
+        tl.fromTo(nav,
+            { opacity: 0, x: -26, filter: 'blur(8px)' },
+            { opacity: 1, x: 0, filter: 'blur(0px)', duration: 0.6, ease: 'back.out(2.2)' }, 0.1);
+        // The first year zooms toward the viewer and snaps into place.
+        if (year) {
+            tl.fromTo(year,
+                { opacity: 0, y: 0, scale: 2.1, filter: 'blur(20px)' },
+                { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.75, ease: 'expo.out' }, 0.18);
+        }
+        // The phrase blooms in just after — staggered for the 2000s feel.
+        if (para) {
+            tl.fromTo(para,
+                { opacity: 0, y: 28, scale: 1.25, filter: 'blur(10px)' },
+                { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'expo.out' }, 0.42);
+        }
     }
 
     function closeTimeline() {

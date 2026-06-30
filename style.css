@@ -1113,32 +1113,46 @@ body.item-view-open .menu-archive-back {
     display: none;
 }
 
-/* Each entry = one viewport. Year + paragraph centered.
+/* Each entry = one viewport. The phrase is centred in the viewport; the year
+   is pinned to the right margin (see .timeline-year-col).
    scroll-snap-align: center snaps the entry centre to the viewport centre. */
 .timeline-entry {
+    position: relative;
     height: 100vh;
     scroll-snap-align: center;
     scroll-snap-stop: always;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    gap: 36px;
     padding: 0 48px;
 }
 
-/* The year — large, 2000s soft type. Starts invisible
-   and is animated in when its entry enters the viewport.
+/* Right-margin, vertically-centred anchor for the year. Centring lives here
+   (flex), leaving the year's own transform free for the flash animation. */
+.timeline-year-col {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 36px;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* The year — standard size/font, same treatment as the other page labels.
+   Starts invisible and is animated in when its entry enters the viewport.
    Clickable: zooms into the archive page filtered to that year. */
 .timeline-year {
+    pointer-events: auto;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: clamp(72px, 14vw, 220px);
-    line-height: 0.9;
-    letter-spacing: -0.06em;
+    font-size: 14px;
+    line-height: 12px;
+    letter-spacing: -0.35px;
     text-transform: uppercase;
-    color: rgba(40, 40, 40, 0.85);
+    color: #424242;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     opacity: 0;
@@ -1387,6 +1401,7 @@ body.timeline-open .menu {
     .menu           { left: 16px; }
     .people-nav     { left: 16px; }
     .timeline-nav   { left: 16px; }
+    .timeline-year-col { right: 16px; }
 
     /* Item view: single column — image (centered) on top, credits underneath. */
     body.item-view-open .menu { display: none; }
