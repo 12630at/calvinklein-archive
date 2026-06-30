@@ -3446,12 +3446,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const wordStart = allWords.map(w => {
             const r = w.getBoundingClientRect();
             return {
-                x: (cx0 - (r.left + r.width  / 2)) * 0.7,
-                y: (cy0 - (r.top  + r.height / 2)) * 0.7,
+                x: (cx0 - (r.left + r.width  / 2)) * 0.82,
+                y: (cy0 - (r.top  + r.height / 2)) * 0.82,
             };
         });
         allWords.forEach((w, i) => {
-            gsap.set(w, { autoAlpha: 0, x: wordStart[i].x, y: wordStart[i].y, scale: 0.55, filter: 'blur(8px)' });
+            gsap.set(w, { autoAlpha: 0, x: wordStart[i].x, y: wordStart[i].y, scale: 0.5, filter: 'blur(8px)' });
         });
 
         // Build the menu-word "ghosts" at the exact on-screen menu positions and
@@ -3480,26 +3480,27 @@ document.addEventListener('DOMContentLoaded', () => {
         aboutTl.to(aboutGhosts, {
             x: i => dx[i],
             y: i => dy[i],
-            duration: 0.7,
+            duration: 0.55,
             ease: 'expo.inOut',
-            stagger: 0.06,
+            stagger: 0.04,
         }, 0);
 
-        // Phase 2 — transform into the paragraph: the ghosts flash out at the
-        // centre while the bio words bloom outward from that same point, word by
-        // word (kinetic-typography feel), settling into the single paragraph.
-        aboutTl.addLabel('morph', 0.78);
+        // Phase 2 — direct morph: the ghosts dissolve at the centre at the very
+        // same instant the bio words bloom out of that same point, word by word.
+        // Both run at 'morph' (heavy overlap) so there is no gap between the menu
+        // vanishing and the paragraph appearing.
+        aboutTl.addLabel('morph', 0.5);
         aboutTl.to(aboutGhosts, {
             autoAlpha: 0, scale: 1.18, filter: 'blur(8px)',
-            duration: 0.4, ease: 'power2.in', stagger: 0.03,
+            duration: 0.3, ease: 'power2.in', stagger: 0.02,
         }, 'morph');
         aboutTl.to(allWords, {
             autoAlpha: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)',
-            duration: 0.6, stagger: { each: 0.02, from: 'center' },
-        }, 'morph+=0.05');
+            duration: 0.55, stagger: { each: 0.018, from: 'center' },
+        }, 'morph');
 
         // Nav fades in once the text has assembled.
-        aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.45 }, '>-0.15');
+        aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.45 }, '>-0.1');
     }
 
     function closeAbout() {
@@ -3509,29 +3510,45 @@ document.addEventListener('DOMContentLoaded', () => {
         if (aboutTl) { aboutTl.kill(); aboutTl = null; }
 
         const allWords = aboutWordsByLine().flat();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const cx0 = vw / 2, cy0 = vh / 2;
 
+        // The reverse of opening: the paragraph collapses back toward the centre.
+        const wordEnd = allWords.map(w => {
+            const r = w.getBoundingClientRect();
+            return {
+                x: (cx0 - (r.left + r.width  / 2)) * 0.82,
+                y: (cy0 - (r.top  + r.height / 2)) * 0.82,
+            };
+        });
+
+        // Seamless hand-off: the ghosts have flown back onto the menu positions,
+        // so reveal the real menu items and drop the stage in the same frame.
         const finish = () => {
-            aboutStage.style.opacity = '0';
-            setTimeout(() => {
-                aboutStage.style.display = 'none';
-                aboutStage.setAttribute('aria-hidden', 'true');
-                document.body.classList.remove('about-open', 'page-open');
-                aboutGhosts.forEach(g => g.remove());
-                aboutGhosts = [];
-                // Restore the live menu items for the next open.
-                document.querySelectorAll(aboutMenuSel)
-                    .forEach(el => { el.style.visibility = ''; });
-            }, 600);
+            document.querySelectorAll(aboutMenuSel).forEach(el => { el.style.visibility = ''; });
+            aboutStage.style.display = 'none';
+            aboutStage.style.opacity = '';
+            aboutStage.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('about-open', 'page-open');
+            aboutGhosts.forEach(g => g.remove());
+            aboutGhosts = [];
         };
 
-        if (aboutReduced()) { finish(); return; }
+        if (aboutReduced() || aboutGhosts.length === 0) { finish(); return; }
 
-        const tl = gsap.timeline({ defaults: { ease: 'power2.in' }, onComplete: finish });
-        tl.to([aboutNav, ...aboutGhosts], { autoAlpha: 0, filter: 'blur(6px)', duration: 0.25 }, 0);
+        const tl = gsap.timeline({ onComplete: finish });
+        // Nav out + the paragraph collapses back to the centre point.
+        tl.to(aboutNav, { autoAlpha: 0, filter: 'blur(6px)', duration: 0.2, ease: 'power2.in' }, 0);
         tl.to(allWords, {
-            autoAlpha: 0, scale: 0.8, filter: 'blur(6px)',
-            duration: 0.35, stagger: { each: 0.02, from: 'center' },
+            x: i => wordEnd[i].x, y: i => wordEnd[i].y, scale: 0.5, autoAlpha: 0, filter: 'blur(8px)',
+            duration: 0.4, ease: 'power2.in', stagger: { each: 0.012, from: 'edges' },
         }, 0);
+        // The menu words re-form at the centre and fly back to their home
+        // positions — phase 1 played in reverse.
+        tl.to(aboutGhosts, {
+            x: 0, y: 0, scale: 1, autoAlpha: 1, filter: 'blur(0px)',
+            duration: 0.6, ease: 'expo.inOut', stagger: 0.05,
+        }, 0.22);
     }
 
     if (aboutEl) {
