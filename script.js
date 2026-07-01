@@ -1872,17 +1872,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         archiveShowAll.classList.toggle('cat-all-active', catLabel === 'all');
 
-        // If list view is open, rebuild the list for the new category
+        // If list view is open, rebuild it and replay the SAME stream-in intro as
+        // opening the list (header + rows fade-up), scrolled back to the top — so
+        // switching section isn't anchored to the old scroll position.
         if (listViewOpen) {
             currentCategory    = catLabel;
             currentSearchQuery = '';
             listManifests = filterImages(catLabel);
             buildListView(listManifests);
-            const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
-            gsap.fromTo(rows,
-                { opacity: 0, x: -24 },
-                { opacity: 1, x: 0, duration: 0.4, ease: 'back.out(1.2)', stagger: { amount: 0.4, from: 'start' } }
-            );
+            if (archiveList) archiveList.scrollTop = 0;
+            animateListStreamIn();
             return;
         }
 
@@ -2244,6 +2243,24 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         table.appendChild(tbody);
         archiveListInner.appendChild(table);
+    }
+
+    // Header + rows stream in top-to-bottom (mobile-menu-style fade-up). Shared by
+    // opening the list and switching section while the list is open.
+    function animateListStreamIn() {
+        const ths  = archiveListInner.querySelectorAll('.archive-list-thead th');
+        const rows = archiveListInner.querySelectorAll('.archive-list-row');
+        gsap.set(ths,  { opacity: 0, y: 10 });
+        gsap.set(rows, { opacity: 0, y: 10 });
+        const tl = gsap.timeline();
+        tl.to(ths, {
+            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
+            stagger: { amount: 0.2, from: 'start' },
+        });
+        tl.to(rows, {
+            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
+            stagger: { amount: 1.2, from: 'start' },
+        }, '-=0.15');
     }
 
     function openListView() {
@@ -3070,18 +3087,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const st = itemViewState;
 
-        // Flipbook has no clone image — fade the shell out and dispose three.js.
+        // Flipbook has no clone image — the book shrinks + fades in sync with the
+        // backdrop so the archive behind is revealed as it returns (rather than the
+        // book vanishing first, then the page coming back). Dispose three.js last.
         if (st && st.isFlipbook) {
+            // Reveal the source tile up front so it's already there behind the
+            // backdrop as it clears — no empty gap during the return.
+            if (st.sourceEl) st.sourceEl.classList.remove('is-hidden');
+            if (st.fromList && listViewOpen) {
+                const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                gsap.to(rows, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.2 } });
+            }
             const tl = gsap.timeline({
                 onComplete: () => {
                     itemView.style.display = 'none';
                     itemView.setAttribute('aria-hidden', 'true');
                     st.flipbook.dispose();
-                    if (st.sourceEl) st.sourceEl.classList.remove('is-hidden');
-                    if (st.fromList && listViewOpen) {
-                        const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
-                        gsap.to(rows, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.2 } });
-                    }
                     itemViewState = null;
                     document.body.classList.remove('item-view-open');
                     itemView.classList.remove('is-flipbook');
@@ -3089,8 +3110,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
             });
             tl.to(itemViewInfo, { x: 30, opacity: 0, duration: 0.3, ease: 'power2.in' }, 0);
-            tl.to(st.flipbook.el, { opacity: 0, scale: 0.85, duration: 0.4, ease: 'power3.in' }, 0);
-            tl.to(itemViewBackdrop, { opacity: 0, duration: 0.4, ease: 'power2.in' }, 0.1);
+            tl.to(st.flipbook.el, { opacity: 0, scale: 0.6, duration: 0.5, ease: 'power2.inOut' }, 0);
+            tl.to(itemViewBackdrop, { opacity: 0, duration: 0.5, ease: 'power2.inOut' }, 0);
             return;
         }
         const clone = st.cloneImg;
@@ -3678,26 +3699,39 @@ document.addEventListener('DOMContentLoaded', () => {
         header.appendChild(item);
     }
 
-    // Archive nav: wrap [ ← archive ] into a centred header (once) and mark the
-    // active scope/category so it mirrors the desktop archive menu.
-    function applyMobileArchiveActiveState() {
+    // Restore the archive nav to its canonical order (undo any header wrap).
+    function clearMobileArchiveHeader() {
         mobileNavArchive.querySelectorAll('.mobile-nav-item-active')
             .forEach(el => el.classList.remove('mobile-nav-item-active'));
+        const header = mobileNavArchive.querySelector('.mobile-nav-header');
+        if (!header) return;
+        const back   = document.getElementById('m-archive-back');
+        const all    = document.getElementById('m-archive-all');
+        const cats   = ['collections', 'advertising', 'editorials', 'ephemera']
+            .map(c => mobileNavArchive.querySelector(`.mobile-cat-item[data-cat="${c}"]`));
+        const search = document.getElementById('m-archive-search');
+        [back, all, ...cats, search].filter(Boolean)
+            .forEach(el => mobileNavArchive.appendChild(el));   // re-append moves them out of the header
+        header.remove();
+    }
+
+    // Archive nav: the back arrow sits beside the ACTIVE item (archive scope or
+    // the current category), mirroring the desktop archive menu.
+    function applyMobileArchiveActiveState() {
+        clearMobileArchiveHeader();
         const back = document.getElementById('m-archive-back');
-        const all  = document.getElementById('m-archive-all');
-        if (back && all && !mobileNavArchive.querySelector('.mobile-nav-header')) {
-            const header = document.createElement('div');
-            header.className = 'mobile-nav-header';
-            all.parentNode.insertBefore(header, back);
-            header.appendChild(back);
-            header.appendChild(all);
-        }
-        if (currentCategory && currentCategory !== 'all') {
-            const cat = mobileNavArchive.querySelector(`.mobile-cat-item[data-cat="${currentCategory}"]`);
-            if (cat) cat.classList.add('mobile-nav-item-active');
-        } else if (all) {
-            all.classList.add('mobile-nav-item-active');
-        }
+        const activeItem = (currentCategory && currentCategory !== 'all')
+            ? mobileNavArchive.querySelector(`.mobile-cat-item[data-cat="${currentCategory}"]`)
+            : document.getElementById('m-archive-all');
+        if (!back || !activeItem) return;
+        back.classList.add('mobile-nav-back');
+        activeItem.classList.add('mobile-nav-item-active');
+
+        const header = document.createElement('div');
+        header.className = 'mobile-nav-header';
+        mobileNavArchive.insertBefore(header, activeItem);
+        header.appendChild(back);
+        header.appendChild(activeItem);
     }
 
     function openMobileOverlay() {
@@ -3865,6 +3899,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const hasMorph = typeof window !== 'undefined' && window.MorphSVGPlugin;
         if (hasMorph) { try { gsap.registerPlugin(window.MorphSVGPlugin); } catch (_) {} }
 
+        const menuWords = () => defaultPrimary
+            ? Array.from(defaultPrimary.querySelectorAll('.menu-item')) : [];
+
+        // The real menu is display:none once a page opens, so we can't measure it
+        // from inside the morph — snapshot the word positions on press (layout is
+        // static, so a fresh snapshot on each menu press is enough).
+        let cachedRects = null;
+        function cacheMenuRects() {
+            const words = menuWords();
+            if (!words.length) return;
+            cachedRects = words.map(w => {
+                const r = w.getBoundingClientRect();
+                return { text: w.textContent, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+            });
+        }
+        if (menu) menu.addEventListener('pointerdown', () => { if (isMobileView()) cacheMenuRects(); }, true);
+
+        function triggerCenter() {
+            const t = mobileTrigger.getBoundingClientRect();
+            return { x: t.left + t.width / 2, y: t.top + t.height / 2 };
+        }
+
         // Resting state: the real, filled monogram.
         function setMonoDrawn() {
             if (kPath) gsap.set(kPath, { attr: { d: realK } });
@@ -3872,33 +3928,56 @@ document.addEventListener('DOMContentLoaded', () => {
             gsap.set(monoShapes, { fillOpacity: 1 });
         }
 
-        // home → page: bars morph into the C and K, trigger springs in.
+        // The menu words (ghosts) collapse from their positions into the monogram —
+        // the same "fly to a point and dissolve" idea as the About transition.
+        function flyGhostsIntoMonogram() {
+            if (!cachedRects) return;
+            const c = triggerCenter();
+            cachedRects.forEach((it, i) => {
+                const g = document.createElement('span');
+                g.className = 'menu-morph-ghost';
+                g.textContent = it.text;
+                g.style.left = it.cx + 'px';
+                g.style.top  = it.cy + 'px';
+                document.body.appendChild(g);
+                gsap.set(g, { xPercent: -50, yPercent: -50 });
+                gsap.to(g, {
+                    x: c.x - it.cx, y: c.y - it.cy,
+                    scale: 0.15, opacity: 0, filter: 'blur(3px)',
+                    duration: 0.5, ease: 'power2.in', delay: i * 0.03,
+                    onComplete: () => g.remove(),
+                });
+            });
+        }
+
+        // home → page: the menu collapses into the monogram, which forms out of the
+        // two bars via true form-to-form MorphSVG interpolation.
         function morphMonogramIn() {
             gsap.killTweensOf(monoShapes);
             gsap.killTweensOf(mobileTrigger);
             mobileTrigger.classList.remove('morphing-out');
             gsap.set(monoShapes, { fillOpacity: 1 });
-            if (reduce() || !hasMorph) {
-                setMonoDrawn();
-                gsap.fromTo(mobileTrigger, { opacity: 0, scale: 0.7, y: 8 },
-                    { opacity: 1, scale: 1, y: 0, duration: reduce() ? 0 : 0.45, ease: 'back.out(2)', clearProps: 'transform' });
-                return;
-            }
-            if (kPath) gsap.set(kPath, { morphSVG: seedK });
-            if (cPath) gsap.set(cPath, { morphSVG: seedC });
+            if (reduce()) { setMonoDrawn(); gsap.set(mobileTrigger, { clearProps: 'all' }); return; }
+            if (hasMorph) {
+                if (kPath) gsap.set(kPath, { morphSVG: seedK });
+                if (cPath) gsap.set(cPath, { morphSVG: seedC });
+                if (kPath) gsap.to(kPath, { morphSVG: realK, duration: 0.6, ease: 'power2.inOut' });
+                if (cPath) gsap.to(cPath, { morphSVG: realC, duration: 0.6, ease: 'power2.inOut', delay: 0.06 });
+            } else { setMonoDrawn(); }
             gsap.fromTo(mobileTrigger, { opacity: 0, scale: 0.7, y: 8 },
                 { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'back.out(2)', clearProps: 'transform' });
-            if (kPath) gsap.to(kPath, { morphSVG: realK, duration: 0.6, ease: 'power2.inOut' });
-            if (cPath) gsap.to(cPath, { morphSVG: realC, duration: 0.6, ease: 'power2.inOut', delay: 0.06 });
+            flyGhostsIntoMonogram();
         }
 
-        // page → home: the glyphs collapse back into bars, then the trigger fades.
+        // page → home: the monogram collapses back into bars and fades out.
         function morphMonogramOut(done) {
             gsap.killTweensOf(monoShapes);
             gsap.killTweensOf(mobileTrigger);
-            if (reduce() || !hasMorph) { if (done) done(); return; }
-            if (kPath) gsap.to(kPath, { morphSVG: seedK, duration: 0.38, ease: 'power2.inOut' });
-            if (cPath) gsap.to(cPath, { morphSVG: seedC, duration: 0.38, ease: 'power2.inOut' });
+            if (reduce()) { if (done) done(); return; }
+            if (hasMorph) {
+                if (kPath) gsap.to(kPath, { morphSVG: seedK, duration: 0.38, ease: 'power2.inOut' });
+                if (cPath) gsap.to(cPath, { morphSVG: seedC, duration: 0.38, ease: 'power2.inOut' });
+            }
             gsap.to(mobileTrigger, { opacity: 0, scale: 0.7, y: 8, duration: 0.42, ease: 'power2.in',
                 onComplete: () => {
                     setMonoDrawn();
@@ -3907,17 +3986,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 } });
         }
 
-        // The home word-menu re-forms with a springy, staggered bloom.
-        function morphMenuIn() {
-            const words = defaultPrimary ? Array.from(defaultPrimary.querySelectorAll('.menu-item')) : [];
+        // page → home: the real menu words bloom OUT of the monogram to their spots.
+        function morphMenuOut() {
+            const words = menuWords();
             if (!words.length) return;
             gsap.killTweensOf(words);
             if (reduce()) { gsap.set(words, { clearProps: 'all' }); return; }
-            gsap.fromTo(words,
-                { opacity: 0, scale: 0.6, y: 6, filter: 'blur(6px)' },
-                { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)', duration: 0.5, ease: 'expo.out',
-                  stagger: { each: 0.05, from: 'start' },
-                  onComplete: () => gsap.set(words, { clearProps: 'transform,filter,opacity' }) });
+            // If the words aren't measurable yet (e.g. the menu is still in
+            // archive-active state on archive close), skip the fly-out.
+            const r0 = words[0].getBoundingClientRect();
+            if (!r0.width || !r0.height) { gsap.set(words, { clearProps: 'all' }); return; }
+            const c = triggerCenter();
+            words.forEach((w, i) => {
+                const r = w.getBoundingClientRect();
+                const dx = c.x - (r.left + r.width / 2);
+                const dy = c.y - (r.top + r.height / 2);
+                gsap.fromTo(w,
+                    { x: dx, y: dy, scale: 0.2, opacity: 0, filter: 'blur(4px)' },
+                    { x: 0, y: 0, scale: 1, opacity: 1, filter: 'blur(0px)',
+                      duration: 0.55, ease: 'expo.out', delay: i * 0.04,
+                      onComplete: () => gsap.set(w, { clearProps: 'transform,filter,opacity' }) });
+            });
         }
 
         let lastPageOpen = document.body.classList.contains('page-open');
@@ -3934,7 +4023,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 mobileTrigger.classList.add('morphing-out');
                 morphMonogramOut(() => mobileTrigger.classList.remove('morphing-out'));
-                morphMenuIn();
+                morphMenuOut();
             }
         }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
     })();

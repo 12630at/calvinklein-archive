@@ -1560,6 +1560,22 @@ body.about-open .menu {
 /* Current page shows as active (dark) in the menu, like the desktop menu. */
 .mobile-nav-item.mobile-nav-item-active { color: #424242; }
 
+/* Ghost menu words used by the home-menu ⇄ monogram morph (about-style). */
+.menu-morph-ghost {
+    position: fixed;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0px;
+    color: #bbbdc0;
+    -webkit-font-smoothing: antialiased;
+    pointer-events: none;
+    z-index: 65;
+    will-change: transform, opacity, filter;
+}
+
 /* Gallery prev/next arrows flanking the "01/02" counter in item view.
    Hidden on desktop (which uses the cursor pill); shown on mobile. */
 .item-view-counter-wrap {
@@ -1625,15 +1641,27 @@ body.about-open .menu {
     /* Timeline: no standalone "← timeline" nav — back lives in the monogram menu. */
     body.timeline-open .timeline-nav { display: none; }
 
-    /* Flipbook (ephemera): behave like other item views — book at the TOP, credits
-       below — instead of being pinned bottom-right. */
+    /* Timeline entries match the VISIBLE viewport (not 100vh, which overflows the
+       fixed stage on mobile and pushed the top-aligned year off-screen). */
+    .timeline-entry { height: 100%; }
+
+    /* Flipbook (ephemera): compact, vertically-centred block — book, page counter
+       and credits kept close together and centred. */
     #item-view.is-flipbook .flipbook-canvas {
-        top: 0;
+        top: 20vh;
         bottom: auto;
-        height: 56vh;
+        height: 34vh;
     }
-    #item-view.is-flipbook #item-view-info { top: 58vh; }
-    #item-view.is-flipbook .item-view-back { top: 58vh; }
+    #item-view.is-flipbook #item-view-info {
+        top: 55vh;
+        left: 0;
+        right: 0;
+        align-items: center;
+        text-align: center;
+        max-height: 30vh;
+    }
+    #item-view.is-flipbook .item-view-title { padding-left: 0; }
+    #item-view.is-flipbook .item-view-back { top: 20vh; left: 16px; }
 
     #item-view-info {
         top: var(--iv-info-top, 60%);
