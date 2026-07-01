@@ -1470,11 +1470,22 @@ body.about-open .menu {
     width: 28px;
     height: auto;
     display: block;
+    overflow: visible;
+}
+
+.mono-shape {
+    fill: #1a1919;
+    stroke: #1a1919;
+    stroke-width: 0;
+    /* keep stroke width constant regardless of the 28px downscale */
+    vector-effect: non-scaling-stroke;
 }
 
 #mobile-overlay {
     position: fixed;
-    bottom: 70px;
+    /* Trigger sits at bottom:16px with 10px top-padding + 28px logo = its top edge
+       is 54px from the viewport bottom; +12px gap → overlay bottom = 66px. */
+    bottom: 66px;
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
@@ -1514,12 +1525,65 @@ body.about-open .menu {
 .mobile-nav-item:hover,
 .mobile-nav-item:active { color: #424242; }
 
+/* Active-page row inside the monogram menu: back arrow to the LEFT of the
+   current page label, mirroring the desktop archive header. */
+.mobile-nav-header {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.mobile-nav-back {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.mobile-nav-back:hover,
+.mobile-nav-back:active { color: #424242; }
+
+/* Current page shows as active (dark) in the menu, like the desktop menu. */
+.mobile-nav-item.mobile-nav-item-active { color: #424242; }
+
+/* Gallery prev/next arrows flanking the "01/02" counter in item view.
+   Hidden on desktop (which uses the cursor pill); shown on mobile. */
+.item-view-counter-wrap {
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+.item-view-counter-arrow {
+    font-family: 'Klein', sans-serif;
+    font-size: 16px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.item-view-counter-arrow:hover,
+.item-view-counter-arrow:active { color: #424242; }
+
 /* ===== MOBILE ===== */
 @media (max-width: 600px) {
     /* Home: show desktop menu, hide trigger.
        Page open: hide menu, show trigger. */
     body.page-open .menu          { display: none !important; }
     body.page-open #mobile-trigger { display: block; }
+    /* Keep the monogram visible while it morphs out on the way back home. */
+    #mobile-trigger.morphing-out  { display: block; }
 
     .skip-intro-btn { bottom: 16px; }
     .menu           { left: 16px; }
@@ -1530,6 +1594,24 @@ body.about-open .menu {
 
     /* Item view: single column — image (centered) on top, credits underneath. */
     body.item-view-open .menu { display: none; }
+    /* No "ck" monogram menu on item-view screens (single image / video / flipbook). */
+    body.item-view-open #mobile-trigger { display: none !important; }
+
+    /* People list: pinned to the 16px right margin like the rest of mobile. */
+    .people-list { padding-right: 16px; }
+
+    /* Timeline: no standalone "← timeline" nav — back lives in the monogram menu. */
+    body.timeline-open .timeline-nav { display: none; }
+
+    /* Flipbook (ephemera): behave like other item views — book at the TOP, credits
+       below — instead of being pinned bottom-right. */
+    #item-view.is-flipbook .flipbook-canvas {
+        top: 0;
+        bottom: auto;
+        height: 56vh;
+    }
+    #item-view.is-flipbook #item-view-info { top: 58vh; }
+    #item-view.is-flipbook .item-view-back { top: 58vh; }
 
     #item-view-info {
         top: var(--iv-info-top, 60%);
@@ -1564,12 +1646,15 @@ body.about-open .menu {
     /* Counter shows on mobile, in the credits block, in place of the number line */
     .item-view-numbers { justify-content: flex-start; }
     .item-view-counter { display: block; }
+    .item-view-counter-wrap { display: flex; }
 
+    /* Back arrow sits inline to the LEFT of the item title (top of the credits). */
     .item-view-back {
-        top: 16px;
+        top: var(--iv-info-top, 60%);
         left: 16px;
         transform: none;
     }
+    body.item-view-open .item-view-title { padding-left: 22px; }
 
     #list-view-btn { right: 16px; }
 

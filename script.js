@@ -579,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function playPeopleTransition() {
-        document.body.classList.add('page-open');
+        document.body.classList.add('page-open', 'people-open');
         const peopleStage = document.getElementById('people-stage');
         const contentEl   = document.getElementById('people-content');
 
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         peopleStage.style.display = 'none';
         peopleStage.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('page-open');
+        document.body.classList.remove('page-open', 'people-open');
     }
 
     peopleEl.addEventListener('click', (e) => {
@@ -736,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
         peopleStage.style.display = 'block';
         peopleStage.style.opacity = '1';
         contentEl.classList.add('visible');
-        document.body.classList.add('page-open');
+        document.body.classList.add('page-open', 'people-open');
         requestAnimationFrame(peopleRefresh);
     }
 
@@ -2463,14 +2463,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const isMobileView = () => window.innerWidth <= 600;
 
+    // Wrap-around prev/next over the current photo group. Shared by the on-image
+    // click zones and the counter arrows.
+    function navigatePhoto(dir) {
+        if (!itemViewState) return;
+        const n = itemViewState.group.length;
+        if (n <= 1) return;
+        const next = dir === 'prev'
+            ? (itemViewState.currentIdx - 1 + n) % n
+            : (itemViewState.currentIdx + 1) % n;
+        switchItemPhoto(next);
+    }
+
     // Counter "01/02" — visible on mobile (CSS), in place of the old number line.
+    // Flanked by ‹ › arrows so photos can be scrolled from the counter too.
     function renderItemCounter(group, currentIdx) {
         itemViewNumbersEl.innerHTML = '';
         if (group.length <= 1) return;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'item-view-counter-wrap';
+
+        const prev = document.createElement('button');
+        prev.type = 'button';
+        prev.className = 'item-view-counter-arrow';
+        prev.setAttribute('aria-label', 'previous photo');
+        prev.textContent = '‹';   // ‹
+        prev.addEventListener('click', () => navigatePhoto('prev'));
+
         const counter = document.createElement('span');
         counter.className = 'item-view-counter';
         counter.textContent = counterText(currentIdx, group.length);
-        itemViewNumbersEl.appendChild(counter);
+
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'item-view-counter-arrow';
+        next.setAttribute('aria-label', 'next photo');
+        next.textContent = '›';   // ›
+        next.addEventListener('click', () => navigatePhoto('next'));
+
+        wrap.appendChild(prev);
+        wrap.appendChild(counter);
+        wrap.appendChild(next);
+        itemViewNumbersEl.appendChild(wrap);
     }
 
     function counterText(idx, total) {
@@ -2575,12 +2610,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pill = ensureCursorPill();
 
         const navTo = (dir) => {
-            if (!itemViewState) return;
-            const n = itemViewState.group.length;
-            const next = dir === 'prev'
-                ? (itemViewState.currentIdx - 1 + n) % n
-                : (itemViewState.currentIdx + 1) % n;
-            switchItemPhoto(next);
+            navigatePhoto(dir);
             if (!isMobileView()) pill.textContent = navPillLabel(dir);
         };
         const enter = (dir) => () => {
@@ -2628,6 +2658,7 @@ document.addEventListener('DOMContentLoaded', () => {
         itemViewOpen = true;
         document.body.classList.add('item-view-open');
         itemView.classList.remove('is-video');
+        itemView.classList.add('is-flipbook');   // mobile: book at top, credits below
 
         itemViewTitleEl.textContent = buildTitle(manifest.csv);
         renderItemMeta(manifest.csv);
@@ -3053,6 +3084,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     }
                     itemViewState = null;
                     document.body.classList.remove('item-view-open');
+                    itemView.classList.remove('is-flipbook');
                     if (typeof onDone === 'function') onDone();
                 },
             });
@@ -3598,11 +3630,60 @@ document.addEventListener('DOMContentLoaded', () => {
     const mobileNavArchive = document.getElementById('mobile-nav-archive');
     let mobileOverlayOpen  = false;
 
+    // Which non-archive page is open → the menu item to mark active + its close fn.
+    // Mirrors the desktop menu: current page shown active, back arrow to its left.
+    function currentMobilePage() {
+        const b = document.body.classList;
+        if (b.contains('timeline-open')) return { id: 'm-timeline', close: closeTimeline };
+        if (b.contains('about-open'))    return { id: 'm-about',    close: closeAbout };
+        if (b.contains('people-open'))   return { id: 'm-people',   close: closePeopleStage };
+        return null;
+    }
+
+    // Remove any injected active-page header, restoring the default nav order.
+    function clearMobileActiveState() {
+        mobileNavDefault.querySelectorAll('.mobile-nav-item-active')
+            .forEach(el => el.classList.remove('mobile-nav-item-active'));
+        const header = mobileNavDefault.querySelector('.mobile-nav-header');
+        if (header) {
+            const item = header.querySelector('.mobile-nav-item:not(.mobile-nav-back)');
+            if (item) mobileNavDefault.insertBefore(item, header);
+            header.remove();
+        }
+    }
+
+    // Wrap the active page's item in a [ ← label ] header row.
+    function applyMobileActiveState() {
+        clearMobileActiveState();
+        const page = currentMobilePage();
+        if (!page) return;
+        const item = document.getElementById(page.id);
+        if (!item) return;
+        item.classList.add('mobile-nav-item-active');
+
+        const header = document.createElement('div');
+        header.className = 'mobile-nav-header';
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'mobile-nav-item mobile-nav-back';
+        back.setAttribute('aria-label', 'back to home');
+        back.textContent = '←';
+        back.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeMobileOverlay(() => setTimeout(() => page.close(), 50));
+        });
+
+        item.parentNode.insertBefore(header, item);
+        header.appendChild(back);
+        header.appendChild(item);
+    }
+
     function openMobileOverlay() {
         mobileOverlayOpen = true;
         mobileTrigger.setAttribute('aria-expanded', 'true');
         const activeNav   = archiveOpen ? mobileNavArchive : mobileNavDefault;
         const inactiveNav = archiveOpen ? mobileNavDefault : mobileNavArchive;
+        if (!archiveOpen) applyMobileActiveState();
         activeNav.style.display   = 'flex';
         inactiveNav.style.display = 'none';
 
@@ -3737,4 +3818,88 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 50));
         });
     });
+
+    // ===== HOME MENU ⇄ MONOGRAM — SVG PATH MORPH (mobile) =====
+    // The word menu (home) and the monogram trigger (page open) swap places.
+    // Entering a page draws the monogram's paths ON; returning home draws them
+    // OFF while the word menu re-forms. Pure GSAP on the inlined SVG paths.
+    (function initMenuMorph() {
+        const monoShapes = Array.from(mobileTrigger.querySelectorAll('.mono-shape'));
+        const STROKE = 1;   // draw-on stroke width (non-scaling → screen px)
+        const reduce = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        const lengths = () => monoShapes.map(p => {
+            try { return p.getTotalLength(); } catch (_) { return 0; }
+        });
+
+        // Fully-formed, filled monogram (no stroke) — the resting state.
+        function setMonoDrawn() {
+            gsap.set(monoShapes, { strokeDashoffset: 0, strokeWidth: 0, fillOpacity: 1 });
+        }
+
+        // home → page: the paths draw themselves on, then the fill blooms in.
+        function morphMonogramIn() {
+            gsap.killTweensOf(monoShapes);
+            gsap.killTweensOf(mobileTrigger);
+            mobileTrigger.classList.remove('morphing-out');
+            if (reduce()) { gsap.set(mobileTrigger, { clearProps: 'all' }); setMonoDrawn(); return; }
+            const L = lengths();
+            monoShapes.forEach((p, i) => {
+                gsap.set(p, { strokeDasharray: L[i], strokeDashoffset: L[i], strokeWidth: STROKE, fillOpacity: 0 });
+            });
+            gsap.fromTo(mobileTrigger, { opacity: 0, scale: 0.7, y: 8 },
+                { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'back.out(2)', clearProps: 'transform' });
+            gsap.to(monoShapes, { strokeDashoffset: 0, duration: 0.6, ease: 'power2.inOut', stagger: 0.12 });
+            gsap.to(monoShapes, { fillOpacity: 1, duration: 0.4, delay: 0.34, ease: 'power1.out',
+                onComplete: () => gsap.set(monoShapes, { strokeWidth: 0 }) });
+        }
+
+        // page → home: fill fades, paths draw OFF, then the trigger collapses.
+        function morphMonogramOut(done) {
+            gsap.killTweensOf(monoShapes);
+            gsap.killTweensOf(mobileTrigger);
+            if (reduce()) { if (done) done(); return; }
+            const L = lengths();
+            monoShapes.forEach((p, i) => { gsap.set(p, { strokeDasharray: L[i], strokeWidth: STROKE }); });
+            gsap.to(monoShapes, { fillOpacity: 0, duration: 0.22, ease: 'power1.in' });
+            gsap.to(monoShapes, { strokeDashoffset: (i) => L[i], duration: 0.4, ease: 'power2.inOut', stagger: 0.08 });
+            gsap.to(mobileTrigger, { opacity: 0, scale: 0.7, y: 8, duration: 0.42, ease: 'power2.in',
+                onComplete: () => {
+                    setMonoDrawn();
+                    gsap.set(mobileTrigger, { clearProps: 'opacity,transform' });
+                    if (done) done();
+                } });
+        }
+
+        // The home word-menu re-forms with a springy, staggered bloom.
+        function morphMenuIn() {
+            const words = defaultPrimary ? Array.from(defaultPrimary.querySelectorAll('.menu-item')) : [];
+            if (!words.length) return;
+            gsap.killTweensOf(words);
+            if (reduce()) { gsap.set(words, { clearProps: 'all' }); return; }
+            gsap.fromTo(words,
+                { opacity: 0, scale: 0.6, y: 6, filter: 'blur(6px)' },
+                { opacity: 1, scale: 1, y: 0, filter: 'blur(0px)', duration: 0.5, ease: 'expo.out',
+                  stagger: { each: 0.05, from: 'start' },
+                  onComplete: () => gsap.set(words, { clearProps: 'transform,filter,opacity' }) });
+        }
+
+        let lastPageOpen = document.body.classList.contains('page-open');
+        // Booted straight into a page (deep-link): show the monogram already drawn.
+        if (lastPageOpen && isMobileView()) setMonoDrawn();
+
+        new MutationObserver(() => {
+            const open = document.body.classList.contains('page-open');
+            if (open === lastPageOpen) return;
+            lastPageOpen = open;
+            if (!isMobileView()) return;
+            if (open) {
+                morphMonogramIn();
+            } else {
+                mobileTrigger.classList.add('morphing-out');
+                morphMonogramOut(() => mobileTrigger.classList.remove('morphing-out'));
+                morphMenuIn();
+            }
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    })();
 });

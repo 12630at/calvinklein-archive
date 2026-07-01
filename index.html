@@ -291,9 +291,13 @@
         <div id="search-results"></div>
     </div>
 
-    <!-- Mobile menu trigger (monogram logo, bottom-center, mobile only) -->
+    <!-- Mobile menu trigger (monogram logo, bottom-center, mobile only).
+         Inlined SVG so its paths can be morphed (draw-on / draw-off) by GSAP. -->
     <button id="mobile-trigger" aria-label="Menu" aria-expanded="false">
-        <img src="assets/monogram_logo.svg" alt="CK" id="mobile-trigger-img">
+        <svg id="mobile-trigger-img" viewBox="0 0 31.05 17.86" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CK">
+            <polygon class="mono-shape" points="31.05 .23 28.67 .23 20.59 9.44 20.59 .23 18.6 .23 18.6 17.49 20.59 17.49 20.59 12.04 22.77 9.58 28.76 17.49 31.05 17.49 24.15 8.03 31.05 .23"/>
+            <path class="mono-shape" d="M8.74,1.86c3.46,0,5.19,2.19,5.8,3.31h2.06c-.55-1.77-2.94-5.18-7.87-5.18S0,3.84,0,8.93s3.76,8.93,8.74,8.93,7.32-3.48,7.82-5.13h-2c-.55,1.08-2.29,3.27-5.83,3.27-3.79,0-6.68-3.02-6.68-7.04S4.96,1.86,8.74,1.86Z"/>
+        </svg>
     </button>
 
     <!-- Mobile overlay menu -->
