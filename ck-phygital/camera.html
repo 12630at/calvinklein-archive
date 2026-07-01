@@ -96,9 +96,9 @@
     .cta2d { position:absolute; left:50%; bottom:118px; z-index:7;
       transform:translateX(-50%) translateY(14px); opacity:0; pointer-events:none;
       transition:opacity .8s ease, transform .8s ease;
-      font-family:"Klein",sans-serif; font-weight:400; font-size:15px; letter-spacing:.14em; text-transform:uppercase;
-      color:#111; background:rgba(255,255,255,.92); border:1px solid rgba(0,0,0,.12); border-radius:30px; padding:14px 26px;
-      box-shadow:0 6px 24px rgba(0,0,0,.18); cursor:pointer; }
+      font-family:"Klein",sans-serif; font-weight:400; font-size:15px; letter-spacing:0; text-transform:uppercase;
+      color:#111; background:transparent; border:none; border-radius:30px; padding:14px 26px;
+      cursor:pointer; }
     .cta2d.show { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
 
     .gate{ position:absolute; inset:0; z-index:12; display:none; flex-direction:column;
@@ -145,7 +145,7 @@
       </div>
     </div>
 
-    <div class="hint" id="hint">Inquadra il print Calvin Klein</div>
+    <div class="hint" id="hint">Scan the campaign</div>
     <div class="lookhint" id="lookhint">Muovi il telefono per esplorare l'archivio 360°</div>
 
     <button class="cta2d" id="cta">Discover the archive</button>
@@ -178,8 +178,9 @@
 
     const D_PHOTO     = 3.2;    // distanza della foto rivelata
     const PHOTO_W     = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
-    const RECOG_DELAY = 2200;   // attesa dopo il riconoscimento, prima di far partire l'animazione
-    const BURST_MS    = 850;    // glow 3D che si proietta dai bordi della foto verso la camera
+    const RECOG_DELAY = 2000;   // attesa dopo il riconoscimento (2s), prima che i bordi inizino a brillare
+    const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima della transizione
+    const BURST_MS    = 900;    // glow 3D che si proietta dai bordi della foto verso la camera
     const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
@@ -216,10 +217,10 @@
     }
 
     // ---------- stato mondo 360 ----------
-    let phase = 'scan';               // 'scan' | 'recognized' | 'burst' | 'world'
+    let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'burst' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
     let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false;
-    let worldT0 = 0, burstT0 = 0, previewMode = false;
+    let worldT0 = 0, burstT0 = 0, glowT0 = 0, previewMode = false;
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
 
@@ -432,14 +433,21 @@
     }
 
     // ---------- transizioni ----------
-    function startBurst() {               // riconoscimento -> glow 3D dai bordi della foto verso la camera
-      phase = 'burst';
-      burstT0 = performance.now();
-      if (navigator.vibrate) navigator.vibrate(60);
+    // 1) i bordi della foto iniziano a brillare (sopra il feed camera), poi la transizione
+    function startGlow() {
+      phase = 'glow';
+      glowT0 = performance.now();
+      if (navigator.vibrate) navigator.vibrate(30);
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
       document.body.classList.add('revealed');
-      if (glowMesh) glowMesh.visible = true;   // niente flash bianco generale: solo il glow dai margini
+      if (glowMesh) { glowMesh.visible = true; glowMesh.position.z = -D_PHOTO; glowMesh.scale.setScalar(1); }
+    }
+    // 2) il bagliore si proietta dai bordi verso la camera e sfuma nel mondo bianco
+    function startBurst() {
+      phase = 'burst';
+      burstT0 = performance.now();
+      if (navigator.vibrate) navigator.vibrate(60);
     }
     function enterWorld() {                // dal bagliore al mondo 3D bianco
       phase = 'world';
@@ -479,9 +487,17 @@
           }
           updateLook();
           renderer.render(worldScene, worldCam);
+        } else if (phase === 'glow') {
+          const gt = now - glowT0, e = easeOutCubic(clamp01(gt / GLOW_MS));
+          glowMesh.material.opacity = e * (0.9 + 0.1 * Math.sin(gt * 0.02)); // i bordi si accendono e "respirano"
+          glowMesh.position.z = -D_PHOTO;                                    // resta sui bordi, non proietta ancora
+          glowMesh.scale.setScalar(1);
+          updateLook();
+          renderer.render(worldScene, worldCam);                            // bg trasparente -> camera dietro + bordi accesi
+          if (gt >= GLOW_MS) startBurst();
         } else if (phase === 'burst') {
           const bt = now - burstT0, e = easeOutCubic(clamp01(bt / BURST_MS));
-          glowMesh.material.opacity = Math.sin(Math.PI * clamp01(e));    // pulse: sale dai bordi e svanisce
+          glowMesh.material.opacity = e < 0.55 ? 1 : clamp01((1 - e) / 0.45); // resta acceso, poi cede al whiteout
           glowMesh.position.z = -D_PHOTO + (D_PHOTO - 0.25) * e;          // i bordi si proiettano verso la camera
           glowMesh.scale.setScalar(1 + e * 1.6);                         // si espande dai margini (niente whiteout)
           ui.whiteout.style.opacity = String(clamp01((e - 0.55) / 0.45)); // ultima parte: l'ambiente sfuma verso il mondo bianco
@@ -507,7 +523,7 @@
         if (phase !== 'scan') return;
         phase = 'recognized';                 // blocca ri-trigger durante l'attesa
         if (navigator.vibrate) navigator.vibrate(30);
-        setTimeout(() => { if (phase === 'recognized') startBurst(); }, RECOG_DELAY);
+        setTimeout(() => { if (phase === 'recognized') startGlow(); }, RECOG_DELAY);
       };
       await buildWorld(mindar.renderer);
       startLoop();
