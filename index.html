@@ -36,7 +36,7 @@
             <a href="#" class="menu-item" id="people">people</a>
             <a href="#" class="menu-item" id="timeline">timeline</a>
             <a href="#" class="menu-item" id="search">search</a>
-            <a href="#" class="menu-item">about</a>
+            <a href="#" class="menu-item" id="about">about</a>
         </div>
 
         <!-- Secondary menu column (I201:418;201:394) — visible:false in Default, visible in Variant2 -->
@@ -209,65 +209,78 @@
         </nav>
         <div id="timeline-scroll">
             <section class="timeline-entry">
-                <span class="timeline-year">1968</span>
+                <div class="timeline-year-col"><span class="timeline-year">1968</span></div>
                 <p class="timeline-paragraph">Calvin Klein founds his namesake company in New York with childhood friend Barry Schwartz. The first collection is a line of women's coats and suits.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1973</span>
+                <div class="timeline-year-col"><span class="timeline-year">1973</span></div>
                 <p class="timeline-paragraph">Klein wins the Coty American Fashion Critics' Award — the youngest designer ever to receive it. The first of three consecutive wins.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1976</span>
+                <div class="timeline-year-col"><span class="timeline-year">1976</span></div>
                 <p class="timeline-paragraph">The launch of Calvin Klein jeans. A new American aesthetic begins to take shape — clean lines, minimal cuts, raw denim.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1980</span>
+                <div class="timeline-year-col"><span class="timeline-year">1980</span></div>
                 <p class="timeline-paragraph">A fifteen-year-old Brooke Shields appears in a television campaign whispering: "Nothing comes between me and my Calvins." Provocation enters fashion advertising.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1982</span>
+                <div class="timeline-year-col"><span class="timeline-year">1982</span></div>
                 <p class="timeline-paragraph">The men's underwear line debuts. Bruce Weber photographs the Olympic pole vaulter Tom Hintnaus on a Santorini rooftop — the image redefines masculinity in advertising.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1985</span>
+                <div class="timeline-year-col"><span class="timeline-year">1985</span></div>
                 <p class="timeline-paragraph">Obsession is launched. The fragrance, with its languorous Bruce Weber campaigns, becomes a cultural artifact of the decade.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1988</span>
+                <div class="timeline-year-col"><span class="timeline-year">1988</span></div>
                 <p class="timeline-paragraph">Eternity arrives. A counterpoint to Obsession — softer, romantic, domestic. Klein understands that contradiction is part of desire.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1992</span>
+                <div class="timeline-year-col"><span class="timeline-year">1992</span></div>
                 <p class="timeline-paragraph">Mark Wahlberg and Kate Moss appear together in the underwear campaign shot by Herb Ritts. The black-and-white image becomes one of the most reproduced fashion photographs of the era.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1994</span>
+                <div class="timeline-year-col"><span class="timeline-year">1994</span></div>
                 <p class="timeline-paragraph">CK One launches — the first major unisex fragrance. Cast by Steven Meisel, the campaign is the visual blueprint of a generation.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">1996</span>
+                <div class="timeline-year-col"><span class="timeline-year">1996</span></div>
                 <p class="timeline-paragraph">CK Be follows. The brand's reach into youth culture is now total — music, magazines, MTV, the bathroom shelves of every teenager in the western world.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">2003</span>
+                <div class="timeline-year-col"><span class="timeline-year">2003</span></div>
                 <p class="timeline-paragraph">Calvin Klein steps back. Francisco Costa is appointed Creative Director of Women's, Italo Zucchelli of Men's. A new minimal language begins.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">2008</span>
+                <div class="timeline-year-col"><span class="timeline-year">2008</span></div>
                 <p class="timeline-paragraph">Forty years of Calvin Klein. The archive is now a record of how a single brand mirrored — and shaped — American visual culture.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">2016</span>
+                <div class="timeline-year-col"><span class="timeline-year">2016</span></div>
                 <p class="timeline-paragraph">Raf Simons is appointed Chief Creative Officer. He merges all divisions under a single vision — American iconography refracted through European precision.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">2018</span>
+                <div class="timeline-year-col"><span class="timeline-year">2018</span></div>
                 <p class="timeline-paragraph">205W39NYC. Andy Warhol prints, prairie dresses, plastic firefighter coats. A spring/summer collection that reads American history as cinema.</p>
             </section>
             <section class="timeline-entry">
-                <span class="timeline-year">2020</span>
+                <div class="timeline-year-col"><span class="timeline-year">2020</span></div>
                 <p class="timeline-paragraph">The modern era. The brand returns to its essence: bodies, fabric, light. The archive continues to write itself.</p>
             </section>
+        </div>
+    </div>
+
+    <!-- About Page -->
+    <div id="about-stage" aria-hidden="true">
+        <nav class="about-nav">
+            <button id="about-close" class="about-back-btn" aria-label="back">&larr;</button>
+            <span class="about-nav-title">about</span>
+        </nav>
+        <div id="about-content">
+            <div id="about-body">
+                <p class="about-line">Founded in New York in 1968, Calvin Klein is an American fashion house built on a pure, sensual minimalism that redefined modern advertising and the way the world sees itself. This archive brings together the brand&rsquo;s campaigns, editorials and films across the decades &mdash; a living record of the images, the people and the craft behind one of fashion&rsquo;s most enduring visual languages.</p>
+            </div>
         </div>
     </div>
 
@@ -278,9 +291,13 @@
         <div id="search-results"></div>
     </div>
 
-    <!-- Mobile menu trigger (monogram logo, bottom-center, mobile only) -->
+    <!-- Mobile menu trigger (monogram logo, bottom-center, mobile only).
+         Inlined SVG so its paths can be morphed (draw-on / draw-off) by GSAP. -->
     <button id="mobile-trigger" aria-label="Menu" aria-expanded="false">
-        <img src="assets/monogram_logo.svg" alt="CK" id="mobile-trigger-img">
+        <svg id="mobile-trigger-img" viewBox="0 0 31.05 17.86" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CK">
+            <path id="mono-k" class="mono-shape" d="M31.05 .23 L28.67 .23 L20.59 9.44 L20.59 .23 L18.6 .23 L18.6 17.49 L20.59 17.49 L20.59 12.04 L22.77 9.58 L28.76 17.49 L31.05 17.49 L24.15 8.03 Z"/>
+            <path id="mono-c" class="mono-shape" d="M8.74,1.86c3.46,0,5.19,2.19,5.8,3.31h2.06c-.55-1.77-2.94-5.18-7.87-5.18S0,3.84,0,8.93s3.76,8.93,8.74,8.93,7.32-3.48,7.82-5.13h-2c-.55,1.08-2.29,3.27-5.83,3.27-3.79,0-6.68-3.02-6.68-7.04S4.96,1.86,8.74,1.86Z"/>
+        </svg>
     </button>
 
     <!-- Mobile overlay menu -->
@@ -290,7 +307,7 @@
             <a href="#" class="mobile-nav-item" id="m-people">People</a>
             <a href="#" class="mobile-nav-item" id="m-timeline">Timeline</a>
             <a href="#" class="mobile-nav-item" id="m-search">Search</a>
-            <a href="#" class="mobile-nav-item">About</a>
+            <a href="#" class="mobile-nav-item" id="m-about">About</a>
         </nav>
         <nav class="mobile-overlay-nav" id="mobile-nav-archive">
             <button class="mobile-nav-item" id="m-archive-back">←</button>
@@ -303,8 +320,11 @@
         </nav>
     </div>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/MorphSVGPlugin.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="archive_dims.js"></script>
+    <script src="flipbook.js"></script>
     <script src="script.js"></script>
 </body>
 </html>

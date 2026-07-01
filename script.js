@@ -579,7 +579,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     async function playPeopleTransition() {
-        document.body.classList.add('page-open');
+        document.body.classList.add('page-open', 'people-open');
         const peopleStage = document.getElementById('people-stage');
         const contentEl   = document.getElementById('people-content');
 
@@ -611,7 +611,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         peopleStage.style.display = 'none';
         peopleStage.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('page-open');
+        document.body.classList.remove('page-open', 'people-open');
     }
 
     peopleEl.addEventListener('click', (e) => {
@@ -736,7 +736,7 @@ document.addEventListener('DOMContentLoaded', () => {
         peopleStage.style.display = 'block';
         peopleStage.style.opacity = '1';
         contentEl.classList.add('visible');
-        document.body.classList.add('page-open');
+        document.body.classList.add('page-open', 'people-open');
         requestAnimationFrame(peopleRefresh);
     }
 
@@ -1248,8 +1248,36 @@ document.addEventListener('DOMContentLoaded', () => {
         advertising: 'adv',
         editorials:  'edi',
         collections: 'collection',
-        ephemera:    '__none__',
+        ephemera:    'ephemera',
     };
+
+    // EPHEMERA holds a single browsable item: the 1991 CK Jeans zine (Bruce
+    // Weber). It is not a per-image CSV row — it is one synthetic manifest entry
+    // whose cover (page_001) shows on the canvas and whose item view opens the
+    // 3D flipbook (page_001 = cover … page_115 = back cover).
+    const FLIPBOOK_DIR   = 'assets/index/ephemera/flipbook';
+    const FLIPBOOK_PAGES = 115;
+    function buildFlipbookManifest() {
+        const pages = [];
+        for (let i = 1; i <= FLIPBOOK_PAGES; i++) {
+            if (i === 16) continue;   // page_016 è errata — esclusa dalla rivista
+            pages.push(`${FLIPBOOK_DIR}/page_${String(i).padStart(3, '0')}.jpg`);
+        }
+        const csv = {
+            filename: 'flipbook_jeans_1991', year: '1991', season: '',
+            category: 'ephemera', subcategory: '', description: 'jeans',
+            campaign: '', photographer: 'bruce-weber', director: '', producer: '',
+            production_company: '', model: '', stylist: '', art_director: '',
+            creative_director: '', hair: '', makeup: '', set_designer: '',
+            casting_director: '', agency: '', publication: '', issue_date: '',
+            music: '', notes: '',
+        };
+        return {
+            path: pages[0], filename: 'flipbook_jeans_1991', category: 'ephemera',
+            dw: 2400, dh: 3228, csv, campaignKey: 'flipbook_jeans_1991',
+            isFlipbook: true, pages,
+        };
+    }
 
     function _hash(s) {
         let h = 2166136261;
@@ -1317,6 +1345,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 campaignKey: filename.replace(/_\d+$/, ''),
             };
         }).filter(Boolean);
+
+        // Inject the EPHEMERA flipbook (not a CSV row — see buildFlipbookManifest).
+        archiveManifest.push(buildFlipbookManifest());
 
         // Group items by campaign key for multi-photo navigation
         for (const m of archiveManifest) {
@@ -1410,7 +1441,19 @@ document.addEventListener('DOMContentLoaded', () => {
             return [];
         }
 
-        const N = images.length;
+        // Sparse categories (e.g. collections) can't fill the infinite canvas on
+        // their own and end up looking like a thin, over-tidy grid. Repeat the set
+        // so the SAME masonry packs a dense, varied field like the big categories
+        // — the canvas already tiles, so this just enriches each tile.
+        let pool = images;
+        const MIN_ITEMS = 56;
+        if (images.length < MIN_ITEMS) {
+            const reps = Math.ceil(MIN_ITEMS / images.length);
+            pool = [];
+            for (let r = 0; r < reps; r++) pool = pool.concat(images);
+        }
+
+        const N = pool.length;
         let cols = Math.max(2, Math.round(Math.sqrt(N * 1.33)));
 
         const GAP = 72;
@@ -1424,7 +1467,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Pseudo-random deterministic order → mixes portrait/landscape in every row
-        const ordered = images.slice().sort(() => Math.random() - 0.5);
+        const ordered = pool.slice().sort(() => Math.random() - 0.5);
 
         const colY     = new Array(cols).fill(0);
         const colItems = Array.from({ length: cols }, () => []);
@@ -1829,17 +1872,16 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         archiveShowAll.classList.toggle('cat-all-active', catLabel === 'all');
 
-        // If list view is open, rebuild the list for the new category
+        // If list view is open, rebuild it and replay the SAME stream-in intro as
+        // opening the list (header + rows fade-up), scrolled back to the top — so
+        // switching section isn't anchored to the old scroll position.
         if (listViewOpen) {
             currentCategory    = catLabel;
             currentSearchQuery = '';
             listManifests = filterImages(catLabel);
             buildListView(listManifests);
-            const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
-            gsap.fromTo(rows,
-                { opacity: 0, x: -24 },
-                { opacity: 1, x: 0, duration: 0.4, ease: 'back.out(1.2)', stagger: { amount: 0.4, from: 'start' } }
-            );
+            if (archiveList) archiveList.scrollTop = 0;
+            animateListStreamIn();
             return;
         }
 
@@ -2203,6 +2245,24 @@ document.addEventListener('DOMContentLoaded', () => {
         archiveListInner.appendChild(table);
     }
 
+    // Header + rows stream in top-to-bottom (mobile-menu-style fade-up). Shared by
+    // opening the list and switching section while the list is open.
+    function animateListStreamIn() {
+        const ths  = archiveListInner.querySelectorAll('.archive-list-thead th');
+        const rows = archiveListInner.querySelectorAll('.archive-list-row');
+        gsap.set(ths,  { opacity: 0, y: 10 });
+        gsap.set(rows, { opacity: 0, y: 10 });
+        const tl = gsap.timeline();
+        tl.to(ths, {
+            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
+            stagger: { amount: 0.2, from: 'start' },
+        });
+        tl.to(rows, {
+            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
+            stagger: { amount: 1.2, from: 'start' },
+        }, '-=0.15');
+    }
+
     function openListView() {
         if (listViewOpen || switching) return;
         listViewOpen = true;
@@ -2372,6 +2432,8 @@ document.addEventListener('DOMContentLoaded', () => {
             ['photographer',      prettify(csv.photographer),      csv.photographer],
             ['__model__',         '',                              ''],
             ['director',          prettify(csv.director),          csv.director],
+            ['producer',          prettify(csv.producer),          csv.producer],
+            ['production',        prettify(csv.production_company), csv.production_company],
             ['stylist',           prettify(csv.stylist),           csv.stylist],
             ['art director',      prettify(csv.art_director),      csv.art_director],
             ['creative director', prettify(csv.creative_director), csv.creative_director],
@@ -2418,14 +2480,49 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const isMobileView = () => window.innerWidth <= 600;
 
+    // Wrap-around prev/next over the current photo group. Shared by the on-image
+    // click zones and the counter arrows.
+    function navigatePhoto(dir) {
+        if (!itemViewState) return;
+        const n = itemViewState.group.length;
+        if (n <= 1) return;
+        const next = dir === 'prev'
+            ? (itemViewState.currentIdx - 1 + n) % n
+            : (itemViewState.currentIdx + 1) % n;
+        switchItemPhoto(next);
+    }
+
     // Counter "01/02" — visible on mobile (CSS), in place of the old number line.
+    // Flanked by ‹ › arrows so photos can be scrolled from the counter too.
     function renderItemCounter(group, currentIdx) {
         itemViewNumbersEl.innerHTML = '';
         if (group.length <= 1) return;
+
+        const wrap = document.createElement('div');
+        wrap.className = 'item-view-counter-wrap';
+
+        const prev = document.createElement('button');
+        prev.type = 'button';
+        prev.className = 'item-view-counter-arrow';
+        prev.setAttribute('aria-label', 'previous photo');
+        prev.textContent = '‹';   // ‹
+        prev.addEventListener('click', () => navigatePhoto('prev'));
+
         const counter = document.createElement('span');
         counter.className = 'item-view-counter';
         counter.textContent = counterText(currentIdx, group.length);
-        itemViewNumbersEl.appendChild(counter);
+
+        const next = document.createElement('button');
+        next.type = 'button';
+        next.className = 'item-view-counter-arrow';
+        next.setAttribute('aria-label', 'next photo');
+        next.textContent = '›';   // ›
+        next.addEventListener('click', () => navigatePhoto('next'));
+
+        wrap.appendChild(prev);
+        wrap.appendChild(counter);
+        wrap.appendChild(next);
+        itemViewNumbersEl.appendChild(wrap);
     }
 
     function counterText(idx, total) {
@@ -2530,12 +2627,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const pill = ensureCursorPill();
 
         const navTo = (dir) => {
-            if (!itemViewState) return;
-            const n = itemViewState.group.length;
-            const next = dir === 'prev'
-                ? (itemViewState.currentIdx - 1 + n) % n
-                : (itemViewState.currentIdx + 1) % n;
-            switchItemPhoto(next);
+            navigatePhoto(dir);
             if (!isMobileView()) pill.textContent = navPillLabel(dir);
         };
         const enter = (dir) => () => {
@@ -2576,11 +2668,57 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cursorPillEl) { cursorPillEl.classList.remove('visible'); }
     }
 
+    // Open the 3D flipbook item view (EPHEMERA zine). Reuses the item-view
+    // shell (backdrop + info panel + back button) but replaces the centre image
+    // with the three.js flipbook instead of a clone <img>.
+    function openFlipbookView(manifest, origRect, src) {
+        itemViewOpen = true;
+        document.body.classList.add('item-view-open');
+        itemView.classList.remove('is-video');
+        itemView.classList.add('is-flipbook');   // mobile: book at top, credits below
+
+        itemViewTitleEl.textContent = buildTitle(manifest.csv);
+        renderItemMeta(manifest.csv);
+        itemViewNumbersEl.innerHTML = '';
+
+        itemView.removeAttribute('aria-hidden');
+        itemView.style.display = 'block';
+
+        const fb = window.CKFlipbook.create({
+            mount: itemViewImgWrap,
+            pages: manifest.pages,
+        });
+
+        itemViewState = {
+            isFlipbook: true,
+            flipbook:   fb,
+            sourceEl:   src.sourceEl || null,
+            fromList:   !!src.fromList,
+            origRect,
+            currentManifest: manifest,
+            group: [manifest], currentIdx: 0, isVideo: false,
+        };
+
+        const tl = gsap.timeline();
+        tl.fromTo(itemViewBackdrop, { opacity: 0 }, { opacity: 1, duration: 0.5, ease: 'power2.out' }, 0);
+        tl.add(() => fb.animateIn(), 0.1);
+        tl.fromTo(itemViewInfo, { x: 30, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'power2.out' }, 0.35);
+    }
+
     function openItemView(imgEl) {
         if (itemViewOpen) return;
         const itemId = parseInt(imgEl.dataset.itemId, 10);
         const item = items[itemId];
         if (!item) return;
+
+        if (item.manifest.isFlipbook) {
+            const r = imgEl.getBoundingClientRect();
+            imgEl.classList.add('is-hidden');
+            openFlipbookView(item.manifest,
+                { x: r.left, y: r.top, w: r.width, h: r.height },
+                { sourceEl: imgEl, fromList: false });
+            return;
+        }
 
         itemViewOpen = true;
         document.body.classList.add('item-view-open');
@@ -2857,6 +2995,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Open item view when originating from the list view (no canvas element)
     function openItemViewFromList(manifest, fromRect) {
         if (itemViewOpen) return;
+
+        if (manifest.isFlipbook) {
+            const origRect = fromRect || { x: window.innerWidth / 2, y: window.innerHeight / 2, w: 4, h: 4 };
+            openFlipbookView(manifest, origRect, { sourceEl: null, fromList: true });
+            return;
+        }
+
         itemViewOpen = true;
         document.body.classList.add('item-view-open');
 
@@ -2941,6 +3086,34 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cursorPillEl) cursorPillEl.classList.remove('visible');
 
         const st = itemViewState;
+
+        // Flipbook has no clone image — the book shrinks + fades in sync with the
+        // backdrop so the archive behind is revealed as it returns (rather than the
+        // book vanishing first, then the page coming back). Dispose three.js last.
+        if (st && st.isFlipbook) {
+            // Reveal the source tile up front so it's already there behind the
+            // backdrop as it clears — no empty gap during the return.
+            if (st.sourceEl) st.sourceEl.classList.remove('is-hidden');
+            if (st.fromList && listViewOpen) {
+                const rows = Array.from(archiveListInner.querySelectorAll('.archive-list-row'));
+                gsap.to(rows, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', stagger: { amount: 0.2 } });
+            }
+            const tl = gsap.timeline({
+                onComplete: () => {
+                    itemView.style.display = 'none';
+                    itemView.setAttribute('aria-hidden', 'true');
+                    st.flipbook.dispose();
+                    itemViewState = null;
+                    document.body.classList.remove('item-view-open');
+                    itemView.classList.remove('is-flipbook');
+                    if (typeof onDone === 'function') onDone();
+                },
+            });
+            tl.to(itemViewInfo, { x: 30, opacity: 0, duration: 0.3, ease: 'power2.in' }, 0);
+            tl.to(st.flipbook.el, { opacity: 0, scale: 0.6, duration: 0.5, ease: 'power2.inOut' }, 0);
+            tl.to(itemViewBackdrop, { opacity: 0, duration: 0.5, ease: 'power2.inOut' }, 0);
+            return;
+        }
         const clone = st.cloneImg;
         const target = st.origRect;
 
@@ -3044,6 +3217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let timelineObserver  = null;
     let timelineScrollDir = 'down';
     let timelineLastTop   = 0;
+    let timelineIntroActive = false;   // page-intro is playing; scroll reveal paused
 
     // Track scroll direction so animations come from above when scrolling up.
     timelineScroll.addEventListener('scroll', () => {
@@ -3068,7 +3242,7 @@ document.addEventListener('DOMContentLoaded', () => {
         entries.forEach(entry => {
             const year = entry.querySelector('.timeline-year');
             const para = entry.querySelector('.timeline-paragraph');
-            year.classList.remove('flash-in', 'flash-out', 'from-above', 'to-below');
+            year.classList.remove('flash-in', 'flash-out', 'from-above', 'to-below', 'is-shown');
             gsap.set(year, { clearProps: 'all' });
             gsap.set(para, { opacity: 0, y: 16, filter: 'blur(4px)', clearProps: 'scale' });
         });
@@ -3078,6 +3252,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // follows after a short delay (year first, then paragraph).
         // Direction of the flash depends on timelineScrollDir.
         timelineObserver = new IntersectionObserver((records) => {
+            // While the Flash intro plays it owns the first entry — don't let the
+            // observer double-animate it (or anything else) until the intro ends.
+            if (timelineIntroActive) return;
             for (const record of records) {
                 const entry = record.target;
                 const year  = entry.querySelector('.timeline-year');
@@ -3088,17 +3265,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     year.classList.remove('flash-out', 'to-below');
                     // from-above only when scrolling up
                     year.classList.toggle('from-above', goingUp);
-                    year.classList.add('flash-in');
+                    // is-shown tracks "currently revealed" independently of the
+                    // flash-in keyframe, so an intro-revealed year still flashes out.
+                    year.classList.add('flash-in', 'is-shown');
 
                     gsap.killTweensOf(para);
                     gsap.fromTo(para,
                         { opacity: 0, y: goingUp ? -16 : 16, filter: 'blur(4px)' },
                         { opacity: 1, y: 0, filter: 'blur(0px)',
-                          duration: 0.9, delay: 0.55,
+                          duration: 0.62, delay: 0.38,
                           ease: 'expo.out', overwrite: true });
                 } else {
-                    if (year.classList.contains('flash-in')) {
-                        year.classList.remove('flash-in', 'from-above');
+                    if (year.classList.contains('is-shown')) {
+                        year.classList.remove('flash-in', 'from-above', 'is-shown');
                         // to-below only when scrolling up (entry exits downward)
                         year.classList.toggle('to-below', goingUp);
                         year.classList.add('flash-out');
@@ -3115,6 +3294,48 @@ document.addEventListener('DOMContentLoaded', () => {
         });
 
         entries.forEach(e => timelineObserver.observe(e));
+
+        // Adobe-Flash-2000s page intro: the stage zooms in from a blurred
+        // over-scale, the nav snaps in with a springy overshoot, then the first
+        // year and phrase bloom in, staggered. The observer is paused until this
+        // finishes so it doesn't fight the intro on the first entry.
+        playTimelineIntro(entries[0]);
+    }
+
+    function playTimelineIntro(firstEntry) {
+        timelineIntroActive = true;
+        const nav  = timelineStage.querySelector('.timeline-nav');
+        const year = firstEntry ? firstEntry.querySelector('.timeline-year') : null;
+        const para = firstEntry ? firstEntry.querySelector('.timeline-paragraph') : null;
+
+        const tl = gsap.timeline({
+            onComplete: () => {
+                timelineIntroActive = false;
+                // Mark the first year revealed so it flashes out on scroll.
+                if (year) year.classList.add('is-shown');
+            }
+        });
+
+        // Whole page rushes in from an over-scaled blur — classic Flash vector zoom.
+        tl.fromTo(timelineStage,
+            { scale: 1.08, filter: 'blur(22px)' },
+            { scale: 1, filter: 'blur(0px)', duration: 0.8, ease: 'expo.out' }, 0);
+        // Nav snaps in from the left with a springy overshoot.
+        tl.fromTo(nav,
+            { opacity: 0, x: -26, filter: 'blur(8px)' },
+            { opacity: 1, x: 0, filter: 'blur(0px)', duration: 0.6, ease: 'back.out(2.2)' }, 0.1);
+        // The first year zooms toward the viewer and snaps into place.
+        if (year) {
+            tl.fromTo(year,
+                { opacity: 0, y: 0, scale: 2.1, filter: 'blur(20px)' },
+                { opacity: 1, scale: 1, filter: 'blur(0px)', duration: 0.75, ease: 'expo.out' }, 0.18);
+        }
+        // The phrase blooms in just after — staggered for the 2000s feel.
+        if (para) {
+            tl.fromTo(para,
+                { opacity: 0, y: 28, scale: 1.25, filter: 'blur(10px)' },
+                { opacity: 1, y: 0, scale: 1, filter: 'blur(0px)', duration: 0.7, ease: 'expo.out' }, 0.42);
+        }
     }
 
     function closeTimeline() {
@@ -3205,6 +3426,224 @@ document.addEventListener('DOMContentLoaded', () => {
         timelineClose.addEventListener('click', closeTimeline);
     }
 
+    // ===== ABOUT PAGE =====
+    // Click "about": the menu words glide to the centre of the screen, line by
+    // line — echoing the site's kinetic-typography intro — then transform into
+    // a short bio paragraph that assembles word by word, line by line. Driven
+    // with GSAP (timeline + labels + per-word stagger). No "about" title.
+    const aboutEl    = document.getElementById('about');
+    const aboutStage = document.getElementById('about-stage');
+    const aboutClose = document.getElementById('about-close');
+    const aboutNav   = aboutStage.querySelector('.about-nav');
+    const aboutLines = Array.from(aboutStage.querySelectorAll('.about-line'));
+    const aboutMenuSel = '.menu .menu-primary:not(.menu-primary-archive) .menu-item';
+    let aboutOpen = false;
+    let aboutTl = null;
+    let aboutSplitDone = false;
+    let aboutGhosts = [];
+
+    const aboutReduced = () =>
+        window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    // Wrap every bio word in its own span so GSAP can animate them one by one.
+    function aboutEnsureSplit() {
+        if (aboutSplitDone) return;
+        aboutLines.forEach(line => {
+            const words = line.textContent.trim().split(/\s+/);
+            line.textContent = '';
+            words.forEach((w, i) => {
+                const span = document.createElement('span');
+                span.className = 'about-word';
+                span.textContent = w;
+                line.appendChild(span);
+                if (i < words.length - 1) line.appendChild(document.createTextNode(' '));
+            });
+        });
+        aboutSplitDone = true;
+    }
+
+    const aboutWordsByLine = () =>
+        aboutLines.map(l => Array.from(l.querySelectorAll('.about-word')));
+
+    function openAbout() {
+        if (aboutOpen) return;
+        aboutOpen = true;
+        aboutEnsureSplit();
+        if (aboutTl) { aboutTl.kill(); aboutTl = null; }
+
+        const menuItems = Array.from(document.querySelectorAll(aboutMenuSel));
+        const rects = menuItems.map(el => el.getBoundingClientRect());
+
+        // Hide the live menu items instantly so the ghosts take over seamlessly.
+        menuItems.forEach(el => { el.style.visibility = 'hidden'; });
+
+        document.body.classList.add('about-open', 'page-open');
+        aboutStage.style.display = 'block';
+        aboutStage.removeAttribute('aria-hidden');
+        aboutStage.style.opacity = '1';
+
+        const allWords = aboutWordsByLine().flat();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const cx0 = vw / 2, cy0 = vh / 2;   // where the menu collapses
+
+        // Clear any leftover transforms so we can measure each word's natural
+        // (final) centre, then start it pulled toward the screen centre — so the
+        // paragraph emerges OUT OF the collapsed menu, not in from the top.
+        gsap.set(allWords, { clearProps: 'all' });
+        gsap.set(aboutNav, { autoAlpha: 0, x: -20, filter: 'blur(6px)' });
+
+        // Reduced motion: reveal the paragraph instantly, skip the fly-in.
+        if (aboutReduced()) {
+            gsap.set(aboutNav, { autoAlpha: 1, x: 0, filter: 'none' });
+            return;
+        }
+
+        const wordStart = allWords.map(w => {
+            const r = w.getBoundingClientRect();
+            return {
+                x: (cx0 - (r.left + r.width  / 2)) * 0.82,
+                y: (cy0 - (r.top  + r.height / 2)) * 0.82,
+            };
+        });
+        allWords.forEach((w, i) => {
+            gsap.set(w, { autoAlpha: 0, x: wordStart[i].x, y: wordStart[i].y, scale: 0.5, filter: 'blur(8px)' });
+        });
+
+        // Build the menu-word "ghosts" at the exact on-screen menu positions and
+        // pre-compute how far each must travel to land in a centred stack.
+        aboutGhosts.forEach(g => g.remove());
+        aboutGhosts = [];
+        const lineH = 22;
+        const totalH = (menuItems.length - 1) * lineH;
+        const dx = [], dy = [];
+        menuItems.forEach((el, i) => {
+            const r = rects[i];
+            const g = document.createElement('div');
+            g.className = 'about-ghost';
+            g.textContent = el.textContent;
+            g.style.left = r.left + 'px';
+            g.style.top  = r.top + 'px';
+            aboutStage.appendChild(g);
+            aboutGhosts.push(g);
+            dx[i] = cx0 - (r.left + r.width / 2);
+            dy[i] = (cy0 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
+        });
+
+        aboutTl = gsap.timeline({ defaults: { ease: 'expo.out' } });
+
+        // Phase 1 — the menu words glide to the centre, line by line.
+        aboutTl.to(aboutGhosts, {
+            x: i => dx[i],
+            y: i => dy[i],
+            duration: 0.65,
+            ease: 'expo.inOut',
+            stagger: 0.05,
+        }, 0);
+
+        // Phase 2 — direct morph: the ghosts dissolve at the centre at the very
+        // same instant the bio words bloom out of that same point, word by word.
+        // Both run at 'morph' (heavy overlap) so there is no gap between the menu
+        // vanishing and the paragraph appearing.
+        aboutTl.addLabel('morph', 0.55);
+        aboutTl.to(aboutGhosts, {
+            autoAlpha: 0, scale: 1.18, filter: 'blur(8px)',
+            duration: 0.34, ease: 'power2.in', stagger: 0.025,
+        }, 'morph');
+        aboutTl.to(allWords, {
+            autoAlpha: 1, x: 0, y: 0, scale: 1, filter: 'blur(0px)',
+            duration: 0.62, stagger: { each: 0.02, from: 'center' },
+        }, 'morph');
+
+        // Nav fades in once the text has assembled.
+        aboutTl.to(aboutNav, { autoAlpha: 1, x: 0, filter: 'blur(0px)', duration: 0.5 }, '>-0.1');
+    }
+
+    function closeAbout() {
+        if (!aboutOpen) return;
+        aboutOpen = false;
+        // Close can interrupt the open animation — kill it first.
+        if (aboutTl) { aboutTl.kill(); aboutTl = null; }
+
+        const allWords = aboutWordsByLine().flat();
+        const vw = window.innerWidth, vh = window.innerHeight;
+        const cx0 = vw / 2, cy0 = vh / 2;
+
+        // The reverse of opening: the paragraph collapses back toward the centre.
+        const wordEnd = allWords.map(w => {
+            const r = w.getBoundingClientRect();
+            return {
+                x: (cx0 - (r.left + r.width  / 2)) * 0.82,
+                y: (cy0 - (r.top  + r.height / 2)) * 0.82,
+            };
+        });
+
+        // Seamless hand-off: the ghosts have flown back onto the menu positions,
+        // so reveal the real menu items and drop the stage in the same frame.
+        const finish = () => {
+            document.querySelectorAll(aboutMenuSel).forEach(el => { el.style.visibility = ''; });
+            aboutStage.style.display = 'none';
+            aboutStage.style.opacity = '';
+            aboutStage.setAttribute('aria-hidden', 'true');
+            document.body.classList.remove('about-open', 'page-open');
+            aboutGhosts.forEach(g => g.remove());
+            aboutGhosts = [];
+        };
+
+        if (aboutReduced() || aboutGhosts.length === 0) { finish(); return; }
+
+        // Recompute the centre-stack offsets (the hidden menu items keep their
+        // layout) so the ghosts can re-form at the centre, then return home.
+        const menuItems = Array.from(document.querySelectorAll(aboutMenuSel));
+        const mRects = menuItems.map(el => el.getBoundingClientRect());
+        const lineH = 22, totalH = (aboutGhosts.length - 1) * lineH;
+        const cdx = [], cdy = [];
+        aboutGhosts.forEach((g, i) => {
+            const r = mRects[i] || mRects[0];
+            cdx[i] = cx0 - (r.left + r.width / 2);
+            cdy[i] = (cy0 - totalH / 2 + i * lineH) - (r.top + r.height / 2);
+        });
+        // Park the ghosts at the centre stack, hidden, ready to re-materialise —
+        // small + blurred so they visibly focus in (a morph, not a hard cut).
+        aboutGhosts.forEach((g, i) =>
+            gsap.set(g, { x: cdx[i], y: cdy[i], autoAlpha: 0, scale: 0.84, filter: 'blur(9px)' }));
+
+        const tl = gsap.timeline({ onComplete: finish });
+
+        // 1) Nav out + the paragraph collapses to the centre and disappears.
+        tl.to(aboutNav, { autoAlpha: 0, filter: 'blur(6px)', duration: 0.3, ease: 'power2.in' }, 0);
+        tl.to(allWords, {
+            x: i => wordEnd[i].x, y: i => wordEnd[i].y, scale: 0.5, autoAlpha: 0, filter: 'blur(8px)',
+            duration: 0.55, ease: 'power2.in', stagger: { each: 0.014, from: 'edges' },
+        }, 0);
+
+        // 2) As the paragraph finishes collapsing, the menu words grow/focus in
+        // out of that same centre cluster — overlapping the tail of the collapse
+        // (no empty pause) with a gentle opacity ramp (power2.out, not expo) so
+        // it morphs in smoothly instead of snapping.
+        tl.addLabel('reform', 0.42);
+        tl.to(aboutGhosts, {
+            autoAlpha: 1, scale: 1, filter: 'blur(0px)',
+            duration: 0.62, ease: 'power2.out', stagger: 0.07,
+        }, 'reform');
+
+        // 3) Then they fly from the centre back to their home positions on the
+        // left — the intro animation played in reverse.
+        tl.to(aboutGhosts, {
+            x: 0, y: 0,
+            duration: 0.9, ease: 'expo.inOut', stagger: 0.06,
+        }, 'reform+=0.62');
+    }
+
+    if (aboutEl) {
+        aboutEl.addEventListener('click', (e) => {
+            e.preventDefault();
+            openAbout();
+        });
+    }
+    if (aboutClose) {
+        aboutClose.addEventListener('click', closeAbout);
+    }
+
     // ===== MOBILE BURGER MENU =====
     const mobileTrigger    = document.getElementById('mobile-trigger');
     const mobileOverlay    = document.getElementById('mobile-overlay');
@@ -3212,11 +3651,96 @@ document.addEventListener('DOMContentLoaded', () => {
     const mobileNavArchive = document.getElementById('mobile-nav-archive');
     let mobileOverlayOpen  = false;
 
+    // Which non-archive page is open → the menu item to mark active + its close fn.
+    // Mirrors the desktop menu: current page shown active, back arrow to its left.
+    function currentMobilePage() {
+        const b = document.body.classList;
+        if (b.contains('timeline-open')) return { id: 'm-timeline', close: closeTimeline };
+        if (b.contains('about-open'))    return { id: 'm-about',    close: closeAbout };
+        if (b.contains('people-open'))   return { id: 'm-people',   close: closePeopleStage };
+        return null;
+    }
+
+    // Remove any injected active-page header, restoring the default nav order.
+    function clearMobileActiveState() {
+        mobileNavDefault.querySelectorAll('.mobile-nav-item-active')
+            .forEach(el => el.classList.remove('mobile-nav-item-active'));
+        const header = mobileNavDefault.querySelector('.mobile-nav-header');
+        if (header) {
+            const item = header.querySelector('.mobile-nav-item:not(.mobile-nav-back)');
+            if (item) mobileNavDefault.insertBefore(item, header);
+            header.remove();
+        }
+    }
+
+    // Wrap the active page's item in a [ ← label ] header row.
+    function applyMobileActiveState() {
+        clearMobileActiveState();
+        const page = currentMobilePage();
+        if (!page) return;
+        const item = document.getElementById(page.id);
+        if (!item) return;
+        item.classList.add('mobile-nav-item-active');
+
+        const header = document.createElement('div');
+        header.className = 'mobile-nav-header';
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'mobile-nav-item mobile-nav-back';
+        back.setAttribute('aria-label', 'back to home');
+        back.textContent = '←';
+        back.addEventListener('click', (e) => {
+            e.preventDefault();
+            closeMobileOverlay(() => setTimeout(() => page.close(), 50));
+        });
+
+        item.parentNode.insertBefore(header, item);
+        header.appendChild(back);
+        header.appendChild(item);
+    }
+
+    // Restore the archive nav to its canonical order (undo any header wrap).
+    function clearMobileArchiveHeader() {
+        mobileNavArchive.querySelectorAll('.mobile-nav-item-active')
+            .forEach(el => el.classList.remove('mobile-nav-item-active'));
+        const header = mobileNavArchive.querySelector('.mobile-nav-header');
+        if (!header) return;
+        const back   = document.getElementById('m-archive-back');
+        const all    = document.getElementById('m-archive-all');
+        const cats   = ['collections', 'advertising', 'editorials', 'ephemera']
+            .map(c => mobileNavArchive.querySelector(`.mobile-cat-item[data-cat="${c}"]`));
+        const search = document.getElementById('m-archive-search');
+        [back, all, ...cats, search].filter(Boolean)
+            .forEach(el => mobileNavArchive.appendChild(el));   // re-append moves them out of the header
+        header.remove();
+    }
+
+    // Archive nav: the back arrow sits beside the ACTIVE item (archive scope or
+    // the current category), mirroring the desktop archive menu.
+    function applyMobileArchiveActiveState() {
+        clearMobileArchiveHeader();
+        const back = document.getElementById('m-archive-back');
+        const activeItem = (currentCategory && currentCategory !== 'all')
+            ? mobileNavArchive.querySelector(`.mobile-cat-item[data-cat="${currentCategory}"]`)
+            : document.getElementById('m-archive-all');
+        if (!back || !activeItem) return;
+        back.classList.add('mobile-nav-back');
+        activeItem.classList.add('mobile-nav-item-active');
+
+        const header = document.createElement('div');
+        header.className = 'mobile-nav-header';
+        mobileNavArchive.insertBefore(header, activeItem);
+        header.appendChild(back);
+        header.appendChild(activeItem);
+    }
+
     function openMobileOverlay() {
         mobileOverlayOpen = true;
         mobileTrigger.setAttribute('aria-expanded', 'true');
         const activeNav   = archiveOpen ? mobileNavArchive : mobileNavDefault;
         const inactiveNav = archiveOpen ? mobileNavDefault : mobileNavArchive;
+        if (archiveOpen) applyMobileArchiveActiveState();
+        else             applyMobileActiveState();
         activeNav.style.display   = 'flex';
         inactiveNav.style.display = 'none';
 
@@ -3327,6 +3851,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const mSearch = document.getElementById('m-search');
     if (mSearch) mSearch.addEventListener('click', _mobileGo('search', 50));
 
+    const mAbout = document.getElementById('m-about');
+    if (mAbout) mAbout.addEventListener('click', _mobileGo('about', 50));
+
     const mArchiveBack = document.getElementById('m-archive-back');
     if (mArchiveBack) mArchiveBack.addEventListener('click', () => {
         closeMobileOverlay(() => setTimeout(() => document.getElementById('archive-back').click(), 50));
@@ -3348,4 +3875,156 @@ document.addEventListener('DOMContentLoaded', () => {
             }, 50));
         });
     });
+
+    // ===== HOME MENU ⇄ MONOGRAM — SVG SHAPE MORPH (mobile) =====
+    // The word menu (home) and the monogram trigger (page open) swap places.
+    // Entering a page morphs the monogram's two glyphs OUT OF a pair of thin
+    // horizontal bars (echoing the menu lines) via true form-to-form MorphSVG
+    // interpolation; returning home reverses it while the word menu re-forms.
+    (function initMenuMorph() {
+        const reduce = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+        const kPath = document.getElementById('mono-k');
+        const cPath = document.getElementById('mono-c');
+        const monoShapes = [kPath, cPath].filter(Boolean);
+
+        // Real glyph outlines (resting state) + collapsed "menu-line" seeds.
+        const realK = kPath ? kPath.getAttribute('d') : '';
+        const realC = cPath ? cPath.getAttribute('d') : '';
+        const seedK = 'M18.6 8.4 L31.05 8.4 L31.05 9.3 L18.6 9.3 Z';
+        const seedC = 'M0 8.4 L16.6 8.4 L16.6 9.3 L0 9.3 Z';
+
+        // MorphSVGPlugin is loaded from the CDN; register it if present, otherwise
+        // fall back to a plain fade/scale so the menu never breaks.
+        const hasMorph = typeof window !== 'undefined' && window.MorphSVGPlugin;
+        if (hasMorph) { try { gsap.registerPlugin(window.MorphSVGPlugin); } catch (_) {} }
+
+        const menuWords = () => defaultPrimary
+            ? Array.from(defaultPrimary.querySelectorAll('.menu-item')) : [];
+
+        // The real menu is display:none once a page opens, so we can't measure it
+        // from inside the morph — snapshot the word positions on press (layout is
+        // static, so a fresh snapshot on each menu press is enough).
+        let cachedRects = null;
+        function cacheMenuRects() {
+            const words = menuWords();
+            if (!words.length) return;
+            cachedRects = words.map(w => {
+                const r = w.getBoundingClientRect();
+                return { text: w.textContent, cx: r.left + r.width / 2, cy: r.top + r.height / 2 };
+            });
+        }
+        if (menu) menu.addEventListener('pointerdown', () => { if (isMobileView()) cacheMenuRects(); }, true);
+
+        function triggerCenter() {
+            const t = mobileTrigger.getBoundingClientRect();
+            return { x: t.left + t.width / 2, y: t.top + t.height / 2 };
+        }
+
+        // Resting state: the real, filled monogram.
+        function setMonoDrawn() {
+            if (kPath) gsap.set(kPath, { attr: { d: realK } });
+            if (cPath) gsap.set(cPath, { attr: { d: realC } });
+            gsap.set(monoShapes, { fillOpacity: 1 });
+        }
+
+        // The menu words (ghosts) collapse from their positions into the monogram —
+        // the same "fly to a point and dissolve" idea as the About transition.
+        function flyGhostsIntoMonogram() {
+            if (!cachedRects) return;
+            const c = triggerCenter();
+            cachedRects.forEach((it, i) => {
+                const g = document.createElement('span');
+                g.className = 'menu-morph-ghost';
+                g.textContent = it.text;
+                g.style.left = it.cx + 'px';
+                g.style.top  = it.cy + 'px';
+                document.body.appendChild(g);
+                gsap.set(g, { xPercent: -50, yPercent: -50 });
+                gsap.to(g, {
+                    x: c.x - it.cx, y: c.y - it.cy,
+                    scale: 0.15, opacity: 0, filter: 'blur(3px)',
+                    duration: 0.5, ease: 'power2.in', delay: i * 0.03,
+                    onComplete: () => g.remove(),
+                });
+            });
+        }
+
+        // home → page: the menu collapses into the monogram, which forms out of the
+        // two bars via true form-to-form MorphSVG interpolation.
+        function morphMonogramIn() {
+            gsap.killTweensOf(monoShapes);
+            gsap.killTweensOf(mobileTrigger);
+            mobileTrigger.classList.remove('morphing-out');
+            gsap.set(monoShapes, { fillOpacity: 1 });
+            if (reduce()) { setMonoDrawn(); gsap.set(mobileTrigger, { clearProps: 'all' }); return; }
+            if (hasMorph) {
+                if (kPath) gsap.set(kPath, { morphSVG: seedK });
+                if (cPath) gsap.set(cPath, { morphSVG: seedC });
+                if (kPath) gsap.to(kPath, { morphSVG: realK, duration: 0.6, ease: 'power2.inOut' });
+                if (cPath) gsap.to(cPath, { morphSVG: realC, duration: 0.6, ease: 'power2.inOut', delay: 0.06 });
+            } else { setMonoDrawn(); }
+            gsap.fromTo(mobileTrigger, { opacity: 0, scale: 0.7, y: 8 },
+                { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'back.out(2)', clearProps: 'transform' });
+            flyGhostsIntoMonogram();
+        }
+
+        // page → home: the monogram collapses back into bars and fades out.
+        function morphMonogramOut(done) {
+            gsap.killTweensOf(monoShapes);
+            gsap.killTweensOf(mobileTrigger);
+            if (reduce()) { if (done) done(); return; }
+            if (hasMorph) {
+                if (kPath) gsap.to(kPath, { morphSVG: seedK, duration: 0.38, ease: 'power2.inOut' });
+                if (cPath) gsap.to(cPath, { morphSVG: seedC, duration: 0.38, ease: 'power2.inOut' });
+            }
+            gsap.to(mobileTrigger, { opacity: 0, scale: 0.7, y: 8, duration: 0.42, ease: 'power2.in',
+                onComplete: () => {
+                    setMonoDrawn();
+                    gsap.set(mobileTrigger, { clearProps: 'opacity,transform' });
+                    if (done) done();
+                } });
+        }
+
+        // page → home: the real menu words bloom OUT of the monogram to their spots.
+        function morphMenuOut() {
+            const words = menuWords();
+            if (!words.length) return;
+            gsap.killTweensOf(words);
+            if (reduce()) { gsap.set(words, { clearProps: 'all' }); return; }
+            // If the words aren't measurable yet (e.g. the menu is still in
+            // archive-active state on archive close), skip the fly-out.
+            const r0 = words[0].getBoundingClientRect();
+            if (!r0.width || !r0.height) { gsap.set(words, { clearProps: 'all' }); return; }
+            const c = triggerCenter();
+            words.forEach((w, i) => {
+                const r = w.getBoundingClientRect();
+                const dx = c.x - (r.left + r.width / 2);
+                const dy = c.y - (r.top + r.height / 2);
+                gsap.fromTo(w,
+                    { x: dx, y: dy, scale: 0.2, opacity: 0, filter: 'blur(4px)' },
+                    { x: 0, y: 0, scale: 1, opacity: 1, filter: 'blur(0px)',
+                      duration: 0.55, ease: 'expo.out', delay: i * 0.04,
+                      onComplete: () => gsap.set(w, { clearProps: 'transform,filter,opacity' }) });
+            });
+        }
+
+        let lastPageOpen = document.body.classList.contains('page-open');
+        // Booted straight into a page (deep-link): show the monogram already drawn.
+        if (lastPageOpen && isMobileView()) setMonoDrawn();
+
+        new MutationObserver(() => {
+            const open = document.body.classList.contains('page-open');
+            if (open === lastPageOpen) return;
+            lastPageOpen = open;
+            if (!isMobileView()) return;
+            if (open) {
+                morphMonogramIn();
+            } else {
+                mobileTrigger.classList.add('morphing-out');
+                morphMonogramOut(() => mobileTrigger.classList.remove('morphing-out'));
+                morphMenuOut();
+            }
+        }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    })();
 });

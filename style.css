@@ -215,6 +215,10 @@ body {
     color: #424242;
 }
 
+#about:hover {
+    color: #424242;
+}
+
 /* ===== PEOPLE PAGE TRANSITION ===== */
 #people-stage {
     position: fixed;
@@ -984,6 +988,61 @@ body.item-view-open .menu-archive-back {
     cursor: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='28' height='28' viewBox='0 0 28 28'><polygon points='9,6 22,14 9,22' fill='white'/></svg>") 14 14, pointer;
 }
 
+/* ===== FLIPBOOK (EPHEMERA zine) ===== */
+.flipbook-root {
+    position: absolute;
+    inset: 0;
+    pointer-events: auto;
+}
+
+.flipbook-canvas {
+    position: absolute;
+    inset: 0;
+}
+/* three.js sizes the drawing buffer with setPixelRatio but not the element's CSS
+   box (setSize(..., false)); force the canvas to fill its container so it doesn't
+   render at devicePixelRatio× the viewport (which pushed it off-screen on mobile). */
+.flipbook-canvas canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+.flipbook-canvas canvas:active { cursor: grabbing; }
+
+/* Bottom control bar: ‹  page counter  › — centred under the book */
+.flipbook-bar {
+    position: absolute;
+    left: 50%;
+    bottom: 26px;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    z-index: 2;
+}
+
+.flipbook-arrow {
+    font-family: 'Klein', sans-serif;
+    font-size: 22px;
+    line-height: 1;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0 4px;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.flipbook-arrow:hover { color: #424242; }
+
+.flipbook-counter {
+    min-width: 96px;
+    text-align: center;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    letter-spacing: 0.5px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+}
+
+
 /* ===== TIMELINE PAGE ===== */
 
 /* Hover state for the timeline menu item */
@@ -1061,32 +1120,46 @@ body.item-view-open .menu-archive-back {
     display: none;
 }
 
-/* Each entry = one viewport. Year + paragraph centered.
+/* Each entry = one viewport. The phrase is centred in the viewport; the year
+   is pinned to the right margin (see .timeline-year-col).
    scroll-snap-align: center snaps the entry centre to the viewport centre. */
 .timeline-entry {
+    position: relative;
     height: 100vh;
     scroll-snap-align: center;
     scroll-snap-stop: always;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     text-align: center;
-    gap: 36px;
     padding: 0 48px;
 }
 
-/* The year — large, 2000s soft type. Starts invisible
-   and is animated in when its entry enters the viewport.
+/* Right-margin, vertically-centred anchor for the year. Centring lives here
+   (flex), leaving the year's own transform free for the flash animation. */
+.timeline-year-col {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 36px;
+    display: flex;
+    align-items: center;
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* The year — standard size/font, same treatment as the other page labels.
+   Starts invisible and is animated in when its entry enters the viewport.
    Clickable: zooms into the archive page filtered to that year. */
 .timeline-year {
+    pointer-events: auto;
     font-family: 'Klein', sans-serif;
     font-weight: 350;
-    font-size: clamp(72px, 14vw, 220px);
-    line-height: 0.9;
-    letter-spacing: -0.06em;
+    font-size: 14px;
+    line-height: 12px;
+    letter-spacing: -0.35px;
     text-transform: uppercase;
-    color: rgba(40, 40, 40, 0.85);
+    color: #424242;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     opacity: 0;
@@ -1149,6 +1222,126 @@ body.item-view-open .menu-archive-back {
 
 /* Hide the regular .menu while the timeline page is open. */
 body.timeline-open .menu {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* ===== ABOUT PAGE ===== */
+#about-stage {
+    position: fixed;
+    inset: 0;
+    background: #ffffff;
+    z-index: 16;
+    display: none;
+    opacity: 0;
+    transition: opacity 600ms ease-in-out;
+    overflow: hidden;
+}
+
+/* Same fixed nav as the other pages: back arrow + title. GSAP reveals it
+   after the text has assembled; the vertical centring translateY(-50%) is
+   kept and GSAP animates opacity/filter on top of it. */
+.about-nav {
+    position: absolute;
+    top: 50%;
+    left: 36px;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    z-index: 3;
+    opacity: 0;
+}
+
+.about-back-btn {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+
+.about-back-btn:hover { color: #424242; }
+
+.about-nav-title {
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: -0.35px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+    line-height: 12px;
+}
+
+/* Centred column that holds the bio paragraph once it has assembled. */
+#about-content {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 48px;
+    pointer-events: none;
+    z-index: 2;
+}
+
+#about-body {
+    max-width: 560px;
+}
+
+.about-line {
+    margin: 0 0 16px;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 16px;
+    line-height: 1.45;
+    letter-spacing: -0.2px;
+    color: #424242;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+.about-line:last-child { margin-bottom: 0; }
+
+/* Each bio word animates individually (kinetic typography, intro-style),
+   so they are inline-blocks GSAP can transform without reflowing the line. */
+.about-word {
+    display: inline-block;
+    will-change: opacity, transform, filter;
+}
+
+/* Menu-word "ghosts": clones of the nav items that fly from the menu to the
+   centre, then dissolve into the paragraph. Styled exactly like .menu-item. */
+.about-ghost {
+    position: absolute;
+    margin: 0;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    letter-spacing: 0;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #bbbdc0;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transform-origin: 50% 50%;
+    pointer-events: none;
+    z-index: 4;
+}
+
+/* Hide the regular .menu while the about page is open. */
+body.about-open .menu {
     opacity: 0;
     pointer-events: none;
 }
@@ -1280,11 +1473,19 @@ body.timeline-open .menu {
     width: 28px;
     height: auto;
     display: block;
+    overflow: visible;
+}
+
+.mono-shape {
+    fill: #1a1919;
+    fill-rule: evenodd;
 }
 
 #mobile-overlay {
     position: fixed;
-    bottom: 70px;
+    /* Trigger sits at bottom:16px with 10px top-padding + 28px logo = its top edge
+       is 54px from the viewport bottom; +6px gap → overlay bottom = 60px. */
+    bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
@@ -1324,20 +1525,143 @@ body.timeline-open .menu {
 .mobile-nav-item:hover,
 .mobile-nav-item:active { color: #424242; }
 
+/* Active-page row inside the monogram menu: the label stays centred in the
+   column (aligned with the other items); the back arrow hangs to its LEFT as an
+   overhang so it never shifts the block off-centre. */
+.mobile-nav-header {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+}
+
+.mobile-nav-back {
+    position: absolute;
+    right: 100%;
+    margin-right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.mobile-nav-back:hover,
+.mobile-nav-back:active { color: #424242; }
+
+/* Current page shows as active (dark) in the menu, like the desktop menu. */
+.mobile-nav-item.mobile-nav-item-active { color: #424242; }
+
+/* Ghost menu words used by the home-menu ⇄ monogram morph (about-style). */
+.menu-morph-ghost {
+    position: fixed;
+    font-family: 'Klein', sans-serif;
+    font-weight: 350;
+    font-size: 12px;
+    line-height: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0px;
+    color: #bbbdc0;
+    -webkit-font-smoothing: antialiased;
+    pointer-events: none;
+    z-index: 65;
+    will-change: transform, opacity, filter;
+}
+
+/* Gallery prev/next arrows flanking the "01/02" counter in item view.
+   Hidden on desktop (which uses the cursor pill); shown on mobile. */
+.item-view-counter-wrap {
+    display: none;
+    flex-direction: row;
+    align-items: center;
+    gap: 12px;
+}
+.item-view-counter-arrow {
+    font-family: 'Klein', sans-serif;
+    font-size: 16px;
+    line-height: 12px;
+    color: #bbbdc0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+    transition: color 200ms ease-out;
+}
+.item-view-counter-arrow:hover,
+.item-view-counter-arrow:active { color: #424242; }
+
 /* ===== MOBILE ===== */
 @media (max-width: 600px) {
     /* Home: show desktop menu, hide trigger.
        Page open: hide menu, show trigger. */
     body.page-open .menu          { display: none !important; }
     body.page-open #mobile-trigger { display: block; }
+    /* Keep the monogram visible while it morphs out on the way back home. */
+    #mobile-trigger.morphing-out  { display: block; }
 
     .skip-intro-btn { bottom: 16px; }
     .menu           { left: 16px; }
     .people-nav     { left: 16px; }
     .timeline-nav   { left: 16px; }
+    .about-nav      { left: 16px; }
+
+    /* Timeline year: centred horizontally and pinned to the top margin. */
+    .timeline-year-col {
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: auto;
+        height: auto;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 16px;
+    }
+
+    /* Back lives in the monogram menu now — drop the standalone page navs. */
+    body.about-open .about-nav { display: none; }
+    #people-stage .people-nav { display: none; }
 
     /* Item view: single column — image (centered) on top, credits underneath. */
     body.item-view-open .menu { display: none; }
+    /* No "ck" monogram menu on item-view screens (single image / video / flipbook). */
+    body.item-view-open #mobile-trigger { display: none !important; }
+
+    /* People list: pinned to the 16px right margin like the rest of mobile. */
+    .people-list { padding-right: 16px; }
+
+    /* Timeline: no standalone "← timeline" nav — back lives in the monogram menu. */
+    body.timeline-open .timeline-nav { display: none; }
+
+    /* Timeline entries match the VISIBLE viewport (not 100vh, which overflows the
+       fixed stage on mobile and pushed the top-aligned year off-screen). */
+    .timeline-entry { height: 100%; }
+
+    /* Flipbook (ephemera): the book fills almost the full width (the flipbook.js
+       fit margin drops to ~1.08 on mobile). The canvas height is derived from the
+       width (≈ book height + counter zone) so book + page counter stay tight, with
+       the credits — and the back arrow beside the title — directly underneath. */
+    #item-view.is-flipbook .flipbook-canvas {
+        top: 9vh;
+        bottom: auto;
+        height: calc(62vw + 48px);
+    }
+    #item-view.is-flipbook #item-view-info {
+        top: calc(9vh + 62vw + 60px);
+        max-height: 26vh;
+    }
+    #item-view.is-flipbook .item-view-back {
+        top: calc(9vh + 62vw + 60px);
+        left: 16px;
+    }
 
     #item-view-info {
         top: var(--iv-info-top, 60%);
@@ -1372,12 +1696,15 @@ body.timeline-open .menu {
     /* Counter shows on mobile, in the credits block, in place of the number line */
     .item-view-numbers { justify-content: flex-start; }
     .item-view-counter { display: block; }
+    .item-view-counter-wrap { display: flex; }
 
+    /* Back arrow sits inline to the LEFT of the item title (top of the credits). */
     .item-view-back {
-        top: 16px;
+        top: var(--iv-info-top, 60%);
         left: 16px;
         transform: none;
     }
+    body.item-view-open .item-view-title { padding-left: 22px; }
 
     #list-view-btn { right: 16px; }
 
