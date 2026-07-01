@@ -372,7 +372,8 @@
             renderer.setSize(w, h, false);
             camera.aspect = w / h;
             const fovV = THREE.MathUtils.degToRad(camera.fov);
-            const margin = 1.34;
+            // Tighter fit on mobile so the book reaches close to the page margins.
+            const margin = (window.innerWidth <= 600) ? 1.08 : 1.34;
             const distH = (PAGE_H * margin / 2) / Math.tan(fovV / 2);
             const spreadW = PAGE_W * 2 * margin;
             const distW = (spreadW / 2) / (Math.tan(fovV / 2) * camera.aspect);

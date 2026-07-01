@@ -1645,23 +1645,23 @@ body.about-open .menu {
        fixed stage on mobile and pushed the top-aligned year off-screen). */
     .timeline-entry { height: 100%; }
 
-    /* Flipbook (ephemera): compact, vertically-centred block — book, page counter
-       and credits kept close together and centred. */
+    /* Flipbook (ephemera): the book fills almost the full width (the flipbook.js
+       fit margin drops to ~1.08 on mobile). The canvas height is derived from the
+       width (≈ book height + counter zone) so book + page counter stay tight, with
+       the credits — and the back arrow beside the title — directly underneath. */
     #item-view.is-flipbook .flipbook-canvas {
-        top: 20vh;
+        top: 9vh;
         bottom: auto;
-        height: 34vh;
+        height: calc(62vw + 48px);
     }
     #item-view.is-flipbook #item-view-info {
-        top: 55vh;
-        left: 0;
-        right: 0;
-        align-items: center;
-        text-align: center;
-        max-height: 30vh;
+        top: calc(9vh + 62vw + 60px);
+        max-height: 26vh;
     }
-    #item-view.is-flipbook .item-view-title { padding-left: 0; }
-    #item-view.is-flipbook .item-view-back { top: 20vh; left: 16px; }
+    #item-view.is-flipbook .item-view-back {
+        top: calc(9vh + 62vw + 60px);
+        left: 16px;
+    }
 
     #item-view-info {
         top: var(--iv-info-top, 60%);
