@@ -13,9 +13,12 @@ non‑obvious constraints learned while building it.
 - **fileKey:** `g8gtmWJT99AGciedmvyguc`
 - **URL:** https://www.figma.com/design/g8gtmWJT99AGciedmvyguc/CALVIN-KLEIN
 - **Pages:**
-  - **Design_System** (`408:165`) — the six 1:1 screen frames, now assembled
-    from component **instances**; the Archive (Infinite) frame also holds an
-    `Archive Canvas` with the masonry images.
+  - **Design_System** (`408:165`) — ten 1:1 screen frames. The first six are
+    assembled from component **instances**; the Archive (Infinite) frame also
+    holds an `Archive Canvas` with the masonry images. The four newest frames
+    (People, People — Kate Moss, Timeline, About) are hand‑built but now wired
+    to the design‑system: text styles applied, fills bound to the color
+    variables, and spacing snapped to the token scale + bound to spacing vars.
   - **Components** (`422:95`) — all atom + composite components.
   - **Foundations** (`463:106`) — Color palette, Type scale, Spacing scale.
   - `Demos`, `old` — legacy, ignore.
@@ -36,7 +39,7 @@ A local install does **not** reach this session.
 **Stand‑in:** everything is built in **Inter Regular**, set to the *exact* Klein
 metrics (size / line‑height / letter‑spacing / case) so a later swap is 1:1.
 
-**To go live in Klein:** edit the font family of the five `Klein/…` **text
+**To go live in Klein:** edit the font family of the three `Klein/…` **text
 styles** (Inter → Klein, style **Book**). Every atom, composite and screen
 updates at once. The two real options to make Klein loadable for a fully
 editable build are: (A) upload Klein as a Figma **org/shared font**, or (B) run
@@ -69,13 +72,16 @@ canvas gap 72, menu left 36, etc.).
 
 ## 4. Text styles (Inter stand‑in @ Klein metrics)
 
+Consolidated to **three** styles (was five). The old Label/Value/Cell trio
+differed only by line‑height — merged into one **Text** style (we do not
+differentiate by line‑height). The old Icon style folded into Text; the old
+intro "Title (≈12.3)" was repurposed as the 14px heading.
+
 | style name | spec | used by |
 |---|---|---|
-| Klein/Label · Upper 12 (lh12) | 12 / lh 12 / ls 0 / UPPER | menu items, labels, back text |
-| Klein/Value · Upper 12 (lh14) | 12 / lh 14 / UPPER | sidebar values |
-| Klein/Cell · Upper 12 (auto) | 12 / auto / UPPER | table cells, text buttons |
-| Klein/Icon · 12 (lh12) | 12 / lh 12 / original case | arrows (←) |
-| Klein/Title · Upper (≈12.3) | intro word size / UPPER | intro kinetic word |
+| Klein/Text · Upper 12 | 12 / lh 12 / ls 0 / UPPER | menu items, labels, sidebar values, table cells, text buttons, back text, people names |
+| Klein/Title · Upper 14 | 14 / lh 12 / ls −0.35 / UPPER | timeline/about nav titles, timeline year, intro kinetic word |
+| Klein/Body · 16 | 16 / lh 145% / ls −0.2 / original case | About & Timeline body paragraphs |
 
 ---
 
@@ -125,6 +131,16 @@ with editable text — never hundreds of variants.
 | 03 Archive (List) | `408:467` | Nav `408:4769` = **Menu (Archive)**; Table `408:472` = **Header Row** + data rows (raw text = the DB); INFINITE VIEW (Button/Text) |
 | 03 Item View | `410:4793` | Nav `410:4801` = **Menu (Archive)**; sidebar `410:4832` = **Item / Details**; LIST VIEW + Back Arrow |
 | 04 Search | `410:4869` | Nav `410:4879` menu item "search"; **Search / Bar** |
+| 05 People | `592:361` | right‑aligned people‑names list (Text · Upper 12, `text/muted`); nav links; `← PEOPLE` back |
+| 05 People — Kate Moss | `592:541` | person page over the (dark) `ink/black` bg image; credits in `text/on-dark`; `VIEW WORKS`; `← PEOPLE` back |
+| 06 Timeline | `592:761` | centred Body · 16 caption; `Title · Upper 14` nav‑title + year ("1992"); `← TIMELINE` back |
+| 07 About | `592:819` | centred Body · 16 bio paragraph (per‑word nodes); `Title · Upper 14` nav‑title; `← ABOUT` back |
+
+The four newest frames (People…About) are hand‑built (not component instances)
+but are wired to the tokens: **Klein/Text · Upper 12 / Title · Upper 14 / Body ·
+16** by role, fills bound to the color variables (`text/muted`, `text/active`,
+`text/on-dark`, `bg/white`, `ink/black`), and every auto‑layout gap/padding
+snapped to the nearest spacing token and bound to its `space/*` variable.
 
 The list‑view **data rows remain raw text** on purpose — they represent the
 archive database (`archive_index.csv`), not design‑system content.
@@ -180,7 +196,7 @@ site); the agent then masonry‑arranges them into `Archive Canvas`.
    → single example + editable text prop. Keep semantic, role‑based names.
 5. Validate with base64 screenshots after each step.
 6. Images: ask the user to drop them in, then masonry‑arrange (see §7).
-7. To go live in Klein: swap the five `Klein/…` text styles to Klein Book (§2).
+7. To go live in Klein: swap the three `Klein/…` text styles to Klein Book (§2).
 
 > Node IDs above are stable references but **re‑verify** with a read‑only
 > `use_figma` (`figma.root.children`, `getLocalTextStylesAsync`,
