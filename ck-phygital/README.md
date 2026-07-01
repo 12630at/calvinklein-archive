@@ -52,9 +52,9 @@ lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
 
 | File | Ruolo |
 |---|---|
-| `assets/blur_print_1999_ss_adv_print_jeans_001.jpg` | print **sfocato** — ciò che si stampa/inquadra |
-| `assets/blur_print_1999_ss_adv_print_jeans_001.mind` | target MindAR (compilato dallo sfocato) |
-| `assets/print_1999_ss_adv_print_jeans_001.jpg` | print **nitido** rivelato nel mondo 360 |
+| `assets/blur_*.webp` · `assets/blur_print_1999_ss_adv_print_jeans_001.jpg` | print **sfocati** — ciò che si stampa/inquadra (3 print riconosciuti) |
+| `assets/campaigns.mind` | target MindAR **multi-target** (indice 0=1999 jeans, 1=1996 fragrance, 2=2004 jeans) compilato dai blur |
+| `assets/print_1999_ss_adv_print_jeans_001.jpg` · `../assets/index/**` | print **nitidi** rivelati nel mondo 360 (uno per target, vedi `TARGETS` in `camera.html`) |
 | `../archive_index.csv` · `../archive_dims.js` | sorgente delle campagne casuali che fluttuano nel 360 (caricati da `camera.html`) |
 | `../assets/index/**` | immagini delle campagne nel mondo 360 (tap → item view dell'archivio) |
 | `assets/ck-logo.svg` · `fonts/Klein-*.woff2` | logo + font dal repo |
@@ -62,10 +62,14 @@ lenta **auto-rotazione** per mostrarlo (il giroscopio non c'è su desktop).
 | `fonts/Klein-Book.woff2` | font della **CTA 2D** (Klein, peso Book) |
 | `vendor/three-addons/{loaders/FontLoader.js,geometries/TextGeometry.js}` · `vendor/three-addons/fonts/klein.typeface.json` | non più usati dalla CTA (ora 2D); lasciati per riferimento |
 
-## Ricompilare il target (solo se cambia il print)
+## Ricompilare il target (solo se cambiano i print)
 
-Compilatore: https://hiukim.github.io/mind-ar-js-doc/tools/compile → caricare lo
-**sfocato** → salvare il `.mind` come `blur_print_<nome>.mind`.
+`campaigns.mind` è **multi-target**: contiene i 3 blur compilati insieme, **nell'ordine**
+usato da `TARGETS` in `camera.html` (0=1999 jeans, 1=1996 fragrance, 2=2004 jeans). Per
+aggiungere/cambiare un print, caricare i blur **nello stesso ordine** su
+https://hiukim.github.io/mind-ar-js-doc/tools/compile e risalvare `assets/campaigns.mind`,
+poi aggiornare la `reveal` corrispondente in `TARGETS`. (Il vecchio
+`blur_print_1999_ss_adv_print_jeans_001.mind` single-target non è più usato.)
 
 ## Config
 

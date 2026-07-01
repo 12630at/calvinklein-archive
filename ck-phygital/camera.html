@@ -167,8 +167,13 @@
     import { MindARThree } from './vendor/mindar-image-three.prod.js';
 
     const ARCHIVE_URL = "../index.html?archive=1";
-    const MIND_URL    = "assets/blur_print_1999_ss_adv_print_jeans_001.mind";
-    const SHARP_IMG   = "assets/print_1999_ss_adv_print_jeans_001.jpg";
+    const MIND_URL    = "assets/campaigns.mind";   // 3 target compilati dai blur: vedi TARGETS (stesso ordine)
+    // indice target nel .mind -> foto nitida svelata nel mondo 360
+    const TARGETS = [
+      { reveal: "assets/print_1999_ss_adv_print_jeans_001.jpg" },                                  // 0 · 1999 jeans
+      { reveal: "../assets/index/adv/print/1996/1996_fw_adv_print_fragrance_obsession_001.webp" },  // 1 · 1996 fragrance
+      { reveal: "../assets/index/adv/print/2004/2004_fw_adv_print_jeans_004.jpg" },                 // 2 · 2004 jeans
+    ];
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
     const ARCHIVE_BASE = "../assets/index";
@@ -219,7 +224,7 @@
     // ---------- stato mondo 360 ----------
     let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'burst' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
-    let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false;
+    let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false, activeTarget = 0;
     let worldT0 = 0, burstT0 = 0, glowT0 = 0, previewMode = false;
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
@@ -304,6 +309,28 @@
       return dirs;
     }
 
+    // incornicia la foto nitida in un riquadro ~1.7x1.25 mantenendo l'aspect del print
+    function sizeFor(aspect) {
+      const MAXW = 1.7, MAXH = 1.25;
+      let w = MAXW, h = MAXW / aspect;
+      if (h > MAXH) { h = MAXH; w = MAXH * aspect; }
+      return [w, h];
+    }
+
+    // imposta la foto rivelata per indice target: texture deblur + dimensioni foto/glow
+    function setReveal(index) {
+      const t = TARGETS[index] || TARGETS[0];
+      new THREE.TextureLoader().load(t.reveal, (tex) => {
+        tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true;
+        tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
+        tex.needsUpdate = true;
+        revealMat.uniforms.map.value = tex;
+        const im = tex.image, [w, h] = sizeFor((im && im.width && im.height) ? im.width / im.height : 1.6);
+        photoMesh.geometry.dispose(); photoMesh.geometry = new THREE.PlaneGeometry(w, h);
+        glowMesh.geometry.dispose(); glowMesh.geometry = new THREE.PlaneGeometry(w, h);
+      });
+    }
+
     // costruisce scena 360, foto reveal, campagne attorno e CTA 3D — sul renderer dato
     async function buildWorld(rnd) {
       renderer = rnd;
@@ -317,12 +344,10 @@
       centerGroup = new THREE.Group();
       worldScene.add(centerGroup);
 
-      // --- foto rivelata (planare, stabile) con deblur shader ---
-      const tex = new THREE.TextureLoader().load(SHARP_IMG);
-      tex.minFilter = THREE.LinearMipmapLinearFilter; tex.magFilter = THREE.LinearFilter; tex.generateMipmaps = true;
-      tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
+      // --- foto rivelata (planare, stabile) con deblur shader; la texture la imposta setReveal() ---
+      const blankTex = new THREE.DataTexture(new Uint8Array([255,255,255,255]), 1, 1); blankTex.needsUpdate = true;
       revealMat = new THREE.ShaderMaterial({
-        uniforms: { map:{value:tex}, uBias:{value:4.5} },
+        uniforms: { map:{value:blankTex}, uBias:{value:4.5} },
         vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
         fragmentShader: `uniform sampler2D map; uniform float uBias; varying vec2 vUv;
           void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin,1.0);} `,
@@ -338,6 +363,8 @@
           blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
       glowMesh.position.set(0, 0, -D_PHOTO); glowMesh.renderOrder = 50; glowMesh.visible = false;
       worldScene.add(glowMesh);
+
+      setReveal(activeTarget);                        // default 1999 (desktop/preview e primo frame)
 
       // --- campagne d'archivio: distribuzione uniforme sul 360, fluttuanti e cliccabili ---
       const pool = await loadCampaignPool();
@@ -518,13 +545,16 @@
         uiScanning: 'no', uiLoading: 'no', uiError: 'no',
       });
       scanScene = mindar.scene; scanCam = mindar.camera;
-      const anchor = mindar.addAnchor(0);
-      anchor.onTargetFound = () => {
-        if (phase !== 'scan') return;
-        phase = 'recognized';                 // blocca ri-trigger durante l'attesa
-        if (navigator.vibrate) navigator.vibrate(30);
-        setTimeout(() => { if (phase === 'recognized') startGlow(); }, RECOG_DELAY);
-      };
+      TARGETS.forEach((_, i) => {              // un anchor per target: si riconosce un print alla volta
+        const anchor = mindar.addAnchor(i);
+        anchor.onTargetFound = () => {
+          if (phase !== 'scan') return;
+          phase = 'recognized';               // blocca ri-trigger durante l'attesa
+          activeTarget = i; setReveal(i);      // svela la foto nitida del print inquadrato
+          if (navigator.vibrate) navigator.vibrate(30);
+          setTimeout(() => { if (phase === 'recognized') startGlow(); }, RECOG_DELAY);
+        };
+      });
       await buildWorld(mindar.renderer);
       startLoop();
       await mindar.start();
