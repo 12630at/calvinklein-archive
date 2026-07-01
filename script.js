@@ -3678,12 +3678,35 @@ document.addEventListener('DOMContentLoaded', () => {
         header.appendChild(item);
     }
 
+    // Archive nav: wrap [ ← archive ] into a centred header (once) and mark the
+    // active scope/category so it mirrors the desktop archive menu.
+    function applyMobileArchiveActiveState() {
+        mobileNavArchive.querySelectorAll('.mobile-nav-item-active')
+            .forEach(el => el.classList.remove('mobile-nav-item-active'));
+        const back = document.getElementById('m-archive-back');
+        const all  = document.getElementById('m-archive-all');
+        if (back && all && !mobileNavArchive.querySelector('.mobile-nav-header')) {
+            const header = document.createElement('div');
+            header.className = 'mobile-nav-header';
+            all.parentNode.insertBefore(header, back);
+            header.appendChild(back);
+            header.appendChild(all);
+        }
+        if (currentCategory && currentCategory !== 'all') {
+            const cat = mobileNavArchive.querySelector(`.mobile-cat-item[data-cat="${currentCategory}"]`);
+            if (cat) cat.classList.add('mobile-nav-item-active');
+        } else if (all) {
+            all.classList.add('mobile-nav-item-active');
+        }
+    }
+
     function openMobileOverlay() {
         mobileOverlayOpen = true;
         mobileTrigger.setAttribute('aria-expanded', 'true');
         const activeNav   = archiveOpen ? mobileNavArchive : mobileNavDefault;
         const inactiveNav = archiveOpen ? mobileNavDefault : mobileNavArchive;
-        if (!archiveOpen) applyMobileActiveState();
+        if (archiveOpen) applyMobileArchiveActiveState();
+        else             applyMobileActiveState();
         activeNav.style.display   = 'flex';
         inactiveNav.style.display = 'none';
 
@@ -3819,50 +3842,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // ===== HOME MENU ⇄ MONOGRAM — SVG PATH MORPH (mobile) =====
+    // ===== HOME MENU ⇄ MONOGRAM — SVG SHAPE MORPH (mobile) =====
     // The word menu (home) and the monogram trigger (page open) swap places.
-    // Entering a page draws the monogram's paths ON; returning home draws them
-    // OFF while the word menu re-forms. Pure GSAP on the inlined SVG paths.
+    // Entering a page morphs the monogram's two glyphs OUT OF a pair of thin
+    // horizontal bars (echoing the menu lines) via true form-to-form MorphSVG
+    // interpolation; returning home reverses it while the word menu re-forms.
     (function initMenuMorph() {
-        const monoShapes = Array.from(mobileTrigger.querySelectorAll('.mono-shape'));
-        const STROKE = 1;   // draw-on stroke width (non-scaling → screen px)
         const reduce = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-        const lengths = () => monoShapes.map(p => {
-            try { return p.getTotalLength(); } catch (_) { return 0; }
-        });
+        const kPath = document.getElementById('mono-k');
+        const cPath = document.getElementById('mono-c');
+        const monoShapes = [kPath, cPath].filter(Boolean);
 
-        // Fully-formed, filled monogram (no stroke) — the resting state.
+        // Real glyph outlines (resting state) + collapsed "menu-line" seeds.
+        const realK = kPath ? kPath.getAttribute('d') : '';
+        const realC = cPath ? cPath.getAttribute('d') : '';
+        const seedK = 'M18.6 8.4 L31.05 8.4 L31.05 9.3 L18.6 9.3 Z';
+        const seedC = 'M0 8.4 L16.6 8.4 L16.6 9.3 L0 9.3 Z';
+
+        // MorphSVGPlugin is loaded from the CDN; register it if present, otherwise
+        // fall back to a plain fade/scale so the menu never breaks.
+        const hasMorph = typeof window !== 'undefined' && window.MorphSVGPlugin;
+        if (hasMorph) { try { gsap.registerPlugin(window.MorphSVGPlugin); } catch (_) {} }
+
+        // Resting state: the real, filled monogram.
         function setMonoDrawn() {
-            gsap.set(monoShapes, { strokeDashoffset: 0, strokeWidth: 0, fillOpacity: 1 });
+            if (kPath) gsap.set(kPath, { attr: { d: realK } });
+            if (cPath) gsap.set(cPath, { attr: { d: realC } });
+            gsap.set(monoShapes, { fillOpacity: 1 });
         }
 
-        // home → page: the paths draw themselves on, then the fill blooms in.
+        // home → page: bars morph into the C and K, trigger springs in.
         function morphMonogramIn() {
             gsap.killTweensOf(monoShapes);
             gsap.killTweensOf(mobileTrigger);
             mobileTrigger.classList.remove('morphing-out');
-            if (reduce()) { gsap.set(mobileTrigger, { clearProps: 'all' }); setMonoDrawn(); return; }
-            const L = lengths();
-            monoShapes.forEach((p, i) => {
-                gsap.set(p, { strokeDasharray: L[i], strokeDashoffset: L[i], strokeWidth: STROKE, fillOpacity: 0 });
-            });
+            gsap.set(monoShapes, { fillOpacity: 1 });
+            if (reduce() || !hasMorph) {
+                setMonoDrawn();
+                gsap.fromTo(mobileTrigger, { opacity: 0, scale: 0.7, y: 8 },
+                    { opacity: 1, scale: 1, y: 0, duration: reduce() ? 0 : 0.45, ease: 'back.out(2)', clearProps: 'transform' });
+                return;
+            }
+            if (kPath) gsap.set(kPath, { morphSVG: seedK });
+            if (cPath) gsap.set(cPath, { morphSVG: seedC });
             gsap.fromTo(mobileTrigger, { opacity: 0, scale: 0.7, y: 8 },
                 { opacity: 1, scale: 1, y: 0, duration: 0.5, ease: 'back.out(2)', clearProps: 'transform' });
-            gsap.to(monoShapes, { strokeDashoffset: 0, duration: 0.6, ease: 'power2.inOut', stagger: 0.12 });
-            gsap.to(monoShapes, { fillOpacity: 1, duration: 0.4, delay: 0.34, ease: 'power1.out',
-                onComplete: () => gsap.set(monoShapes, { strokeWidth: 0 }) });
+            if (kPath) gsap.to(kPath, { morphSVG: realK, duration: 0.6, ease: 'power2.inOut' });
+            if (cPath) gsap.to(cPath, { morphSVG: realC, duration: 0.6, ease: 'power2.inOut', delay: 0.06 });
         }
 
-        // page → home: fill fades, paths draw OFF, then the trigger collapses.
+        // page → home: the glyphs collapse back into bars, then the trigger fades.
         function morphMonogramOut(done) {
             gsap.killTweensOf(monoShapes);
             gsap.killTweensOf(mobileTrigger);
-            if (reduce()) { if (done) done(); return; }
-            const L = lengths();
-            monoShapes.forEach((p, i) => { gsap.set(p, { strokeDasharray: L[i], strokeWidth: STROKE }); });
-            gsap.to(monoShapes, { fillOpacity: 0, duration: 0.22, ease: 'power1.in' });
-            gsap.to(monoShapes, { strokeDashoffset: (i) => L[i], duration: 0.4, ease: 'power2.inOut', stagger: 0.08 });
+            if (reduce() || !hasMorph) { if (done) done(); return; }
+            if (kPath) gsap.to(kPath, { morphSVG: seedK, duration: 0.38, ease: 'power2.inOut' });
+            if (cPath) gsap.to(cPath, { morphSVG: seedC, duration: 0.38, ease: 'power2.inOut' });
             gsap.to(mobileTrigger, { opacity: 0, scale: 0.7, y: 8, duration: 0.42, ease: 'power2.in',
                 onComplete: () => {
                     setMonoDrawn();

@@ -999,7 +999,10 @@ body.item-view-open .menu-archive-back {
     position: absolute;
     inset: 0;
 }
-.flipbook-canvas canvas { display: block; cursor: grab; }
+/* three.js sizes the drawing buffer with setPixelRatio but not the element's CSS
+   box (setSize(..., false)); force the canvas to fill its container so it doesn't
+   render at devicePixelRatio× the viewport (which pushed it off-screen on mobile). */
+.flipbook-canvas canvas { display: block; width: 100%; height: 100%; cursor: grab; }
 .flipbook-canvas canvas:active { cursor: grabbing; }
 
 /* Bottom control bar: ‹  page counter  › — centred under the book */
@@ -1475,17 +1478,14 @@ body.about-open .menu {
 
 .mono-shape {
     fill: #1a1919;
-    stroke: #1a1919;
-    stroke-width: 0;
-    /* keep stroke width constant regardless of the 28px downscale */
-    vector-effect: non-scaling-stroke;
+    fill-rule: evenodd;
 }
 
 #mobile-overlay {
     position: fixed;
     /* Trigger sits at bottom:16px with 10px top-padding + 28px logo = its top edge
-       is 54px from the viewport bottom; +12px gap → overlay bottom = 66px. */
-    bottom: 66px;
+       is 54px from the viewport bottom; +6px gap → overlay bottom = 60px. */
+    bottom: 60px;
     left: 50%;
     transform: translateX(-50%);
     background: transparent;
@@ -1525,16 +1525,23 @@ body.about-open .menu {
 .mobile-nav-item:hover,
 .mobile-nav-item:active { color: #424242; }
 
-/* Active-page row inside the monogram menu: back arrow to the LEFT of the
-   current page label, mirroring the desktop archive header. */
+/* Active-page row inside the monogram menu: the label stays centred in the
+   column (aligned with the other items); the back arrow hangs to its LEFT as an
+   overhang so it never shifts the block off-centre. */
 .mobile-nav-header {
+    position: relative;
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 8px;
+    justify-content: center;
 }
 
 .mobile-nav-back {
+    position: absolute;
+    right: 100%;
+    margin-right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
     font-family: 'Klein', sans-serif;
     font-weight: 350;
     font-size: 12px;
@@ -1590,7 +1597,22 @@ body.about-open .menu {
     .people-nav     { left: 16px; }
     .timeline-nav   { left: 16px; }
     .about-nav      { left: 16px; }
-    .timeline-year-col { right: 16px; }
+
+    /* Timeline year: centred horizontally and pinned to the top margin. */
+    .timeline-year-col {
+        left: 0;
+        right: 0;
+        top: 0;
+        bottom: auto;
+        height: auto;
+        justify-content: center;
+        align-items: flex-start;
+        padding-top: 16px;
+    }
+
+    /* Back lives in the monogram menu now — drop the standalone page navs. */
+    body.about-open .about-nav { display: none; }
+    #people-stage .people-nav { display: none; }
 
     /* Item view: single column — image (centered) on top, credits underneath. */
     body.item-view-open .menu { display: none; }
