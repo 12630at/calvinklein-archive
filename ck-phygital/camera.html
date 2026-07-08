@@ -225,7 +225,9 @@
     // ---------- stato mondo 360 ----------
     let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'flash' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
-    let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false, activeTarget = 0;
+    let centerGroup, photoMesh, revealMat, ctaShown = false, activeTarget = 0;
+    const anchorGlows = [];            // rim glow per target, agganciato all'anchor MindAR (trackato)
+    let activeGlow = null;             // rim del target correntemente riconosciuto
     let worldT0 = 0, flashT0 = 0, glowT0 = 0, previewMode = false;
     const ctaAnchorV = new THREE.Vector3();   // punto sotto la foto -> ancora la CTA 2D
     const campMats = [];      // materiali campagne (per il fade-in)
@@ -281,18 +283,15 @@
     }
 
     // texture "cornice" luminosa: un rim bianco che segue esattamente i margini della foto,
-    // trasparente al centro -> il glow è un bordo nitido, non un alone diffuso
-    function makeEdgeGlowTex() {
-      const s = 512, c = document.createElement('canvas'); c.width = c.height = s;
-      const g = c.getContext('2d');
-      const inset = s * 0.05;                       // il rim sta appena dentro i margini
-      const rw = s - inset * 2;
+    // trasparente al centro. Il canvas assume l'aspect del target -> rim uniforme sui 4 lati.
+    function makeEdgeGlowTex(aspect = 1) {
+      const W = 512, H = Math.max(8, Math.round(W / aspect));
+      const c = document.createElement('canvas'); c.width = W; c.height = H;
+      const g = c.getContext('2d'), u = Math.min(W, H), inset = u * 0.05;
       g.strokeStyle = '#fff'; g.lineJoin = 'miter';
-      // 1) alone morbido attorno al bordo
-      g.shadowColor = 'rgba(255,255,255,0.95)'; g.shadowBlur = s * 0.075;
-      g.lineWidth = s * 0.018; g.strokeRect(inset, inset, rw, rw);
-      // 2) rim nitido e luminoso sopra l'alone
-      g.shadowBlur = s * 0.025; g.lineWidth = s * 0.008; g.strokeRect(inset, inset, rw, rw);
+      g.shadowColor = 'rgba(255,255,255,0.95)';
+      g.shadowBlur = u * 0.075; g.lineWidth = u * 0.018; g.strokeRect(inset, inset, W - inset * 2, H - inset * 2);  // alone
+      g.shadowBlur = u * 0.025; g.lineWidth = u * 0.008; g.strokeRect(inset, inset, W - inset * 2, H - inset * 2);  // rim nitido
       const t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
       return t;
     }
@@ -324,9 +323,13 @@
         tex.anisotropy = renderer.capabilities.getMaxAnisotropy ? renderer.capabilities.getMaxAnisotropy() : 1;
         tex.needsUpdate = true;
         revealMat.uniforms.map.value = tex;
-        const im = tex.image, [w, h] = sizeFor((im && im.width && im.height) ? im.width / im.height : 1.6);
+        const im = tex.image, aspect = (im && im.width && im.height) ? im.width / im.height : 1.6;
+        const [w, h] = sizeFor(aspect);
         photoMesh.geometry.dispose(); photoMesh.geometry = new THREE.PlaneGeometry(w, h);
-        glowMesh.geometry.dispose(); glowMesh.geometry = new THREE.PlaneGeometry(w, h);
+        const g = anchorGlows[index];                 // il rim ricopre esattamente il print trackato: plane (1, 1/aspect)
+        if (g) { g.scale.set(1, 1 / aspect, 1);
+          if (g.material.map) g.material.map.dispose();
+          g.material.map = makeEdgeGlowTex(aspect); g.material.needsUpdate = true; }
       });
     }
 
@@ -356,13 +359,7 @@
       photoMesh.visible = false;                     // appare dopo il flash
       centerGroup.add(photoMesh);
 
-      // glow 3D dai bordi della foto che si proietta verso la camera (transizione)
-      glowMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625),
-        new THREE.MeshBasicMaterial({ map: makeEdgeGlowTex(), transparent:true, opacity:0,
-          blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
-      glowMesh.position.set(0, 0, -D_PHOTO); glowMesh.renderOrder = 50; glowMesh.visible = false;
-      worldScene.add(glowMesh);
-
+      // (il glow non è più nel mondo 3D: è un rim agganciato all'anchor MindAR, vedi startAR)
       setReveal(activeTarget);                        // default 1999 (desktop/preview e primo frame)
 
       // --- campagne d'archivio: distribuzione uniforme sul 360, fluttuanti e cliccabili ---
@@ -466,8 +463,7 @@
       if (navigator.vibrate) navigator.vibrate(30);
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
-      document.body.classList.add('revealed');
-      if (glowMesh) { glowMesh.visible = true; glowMesh.position.z = -D_PHOTO; glowMesh.scale.setScalar(1); }
+      document.body.classList.add('revealed');    // il rim (activeGlow) si accende nel loop, agganciato al print
     }
     // 2) i bordi accesi vengono "assorbiti" da un lampo bianco che porta al mondo 3D
     function startFlash() {
@@ -481,7 +477,7 @@
       if (!photoMesh || !centerGroup) return;
       const h = (photoMesh.geometry.parameters && photoMesh.geometry.parameters.height) || PHOTO_W * 0.625;
       centerGroup.updateMatrixWorld();
-      ctaAnchorV.set(0, -h / 2 - 0.16, -D_PHOTO).applyMatrix4(centerGroup.matrixWorld).project(worldCam);
+      ctaAnchorV.set(0, -h / 2 - 0.04, -D_PHOTO).applyMatrix4(centerGroup.matrixWorld).project(worldCam);
       const onScreen = ctaAnchorV.z < 1 && Math.abs(ctaAnchorV.x) < 1.15 && Math.abs(ctaAnchorV.y) < 1.3;
       if (!onScreen) { ui.cta.style.visibility = 'hidden'; return; }
       const r = stage.getBoundingClientRect();
@@ -495,7 +491,7 @@
       phase = 'world';
       worldT0 = performance.now();
       worldScene.background = new THREE.Color(0xffffff);
-      if (glowMesh) glowMesh.visible = false;
+      if (activeGlow) activeGlow.material.opacity = 0;
       if (photoMesh) photoMesh.visible = true;
       const vid = $('ar').querySelector('video');
       if (vid) vid.style.display = 'none';
@@ -532,18 +528,14 @@
           renderer.render(worldScene, worldCam);
         } else if (phase === 'glow') {
           const gt = now - glowT0, e = easeOutCubic(clamp01(gt / GLOW_MS));
-          glowMesh.material.opacity = e * (0.9 + 0.1 * Math.sin(gt * 0.02)); // i bordi si accendono e "respirano"
-          glowMesh.position.z = -D_PHOTO;                                    // resta sui bordi, non proietta
-          glowMesh.scale.setScalar(1);
-          updateLook();
-          renderer.render(worldScene, worldCam);                            // bg trasparente -> camera dietro + bordi accesi
+          if (activeGlow) activeGlow.material.opacity = e * (0.9 + 0.1 * Math.sin(gt * 0.02)); // il rim si accende sul print
+          renderer.render(scanScene, scanCam);                             // camera + rim agganciato al print trackato
           if (gt >= GLOW_MS) startFlash();
         } else if (phase === 'flash') {
           const ft = now - flashT0, e = clamp01(ft / FLASH_MS);
-          glowMesh.material.opacity = clamp01(1.15 - e * 1.15);             // il rim cede al lampo
+          if (activeGlow) activeGlow.material.opacity = clamp01(1.15 - e * 1.15);  // il rim cede al lampo
           ui.whiteout.style.opacity = String(easeOutCubic(e));             // lampo bianco che copre la camera
-          updateLook();
-          renderer.render(worldScene, worldCam);
+          renderer.render(scanScene, scanCam);
           if (ft >= FLASH_MS) enterWorld();                                // al culmine del lampo -> mondo 3D bianco
         } else if (scanScene) {
           renderer.render(scanScene, scanCam);                     // scan: feed visibile
@@ -561,10 +553,17 @@
       scanScene = mindar.scene; scanCam = mindar.camera;
       TARGETS.forEach((_, i) => {              // un anchor per target: si riconosce un print alla volta
         const anchor = mindar.addAnchor(i);
+        // rim glow agganciato all'anchor: MindAR lo posiziona esattamente sul print trackato
+        const glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+          new THREE.MeshBasicMaterial({ map: makeEdgeGlowTex(1), transparent:true, opacity:0,
+            blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
+        glow.renderOrder = 50;
+        anchor.group.add(glow);
+        anchorGlows[i] = glow;
         anchor.onTargetFound = () => {
           if (phase !== 'scan') return;
           phase = 'recognized';               // blocca ri-trigger durante l'attesa
-          activeTarget = i; setReveal(i);      // svela la foto nitida del print inquadrato
+          activeTarget = i; activeGlow = anchorGlows[i]; setReveal(i);   // svela la foto + prepara il rim del print
           if (navigator.vibrate) navigator.vibrate(30);
           setTimeout(() => { if (phase === 'recognized') startGlow(); }, RECOG_DELAY);
         };
