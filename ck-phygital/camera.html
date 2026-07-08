@@ -185,8 +185,8 @@
     const D_PHOTO     = 3.2;    // distanza della foto rivelata
     const PHOTO_W     = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
     const RECOG_DELAY = 500;    // breve attesa dopo il riconoscimento, prima della sovraesposizione
-    const OVEREXP_MS  = 1400;   // sovraesposizione graduale fino al bianco, poi transizione al mondo 3D
-    const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
+    const OVEREXP_MS  = 1100;   // sovraesposizione fino al bianco (accelerando) -> in pari col reveal del 3D
+    const DEBLUR_MS   = 1200;   // deblur della foto nel mondo bianco (reveal, decelerando)
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
 
@@ -491,8 +491,8 @@
         if (phase === 'world') {
           const wt = now - worldT0;
           revealMat.uniforms.uBias.value = 4.5 * (1 - easeOutCubic(clamp01(wt / DEBLUR_MS)));  // deblur
-          const cf = easeOutCubic(clamp01(wt / 900));
-          for (const m of campMats) m.opacity = cf * 0.95;                                      // campagne fade-in
+          const cf = easeOutCubic(clamp01(wt / 1200));
+          for (const m of campMats) m.opacity = cf * 0.95;                                      // campagne fade-in (in pari col deblur)
           const ts = now * 0.001;
           if (centerGroup) {                                                                   // foto + CTA fluttuano insieme
             centerGroup.position.set(Math.cos(ts * 0.42) * 0.03, Math.sin(ts * 0.55) * 0.05, 0);
@@ -512,7 +512,7 @@
           renderer.render(worldScene, worldCam);
         } else if (phase === 'overexpose') {
           const ot = now - overexpT0, e = clamp01(ot / OVEREXP_MS);
-          ui.whiteout.style.opacity = String(Math.pow(e, 1.6));            // sovraesposizione graduale -> bianco pieno
+          ui.whiteout.style.opacity = String(Math.pow(e, 1.4));            // sovraesposizione: accelera verso il bianco
           renderer.render(scanScene, scanCam);                            // il feed camera si brucia verso il bianco
           if (ot >= OVEREXP_MS) enterWorld();                             // al bianco pieno -> transizione al mondo 3D
         } else if (scanScene) {
