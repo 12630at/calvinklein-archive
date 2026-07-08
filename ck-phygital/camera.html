@@ -187,7 +187,7 @@
     const RECOG_DELAY = 2000;   // attesa dopo il riconoscimento (2s), prima che i bordi inizino a brillare
     const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima del flash
     const FLASH_MS    = 260;    // lampo bianco che porta al mondo 3D (transizione reale -> virtuale)
-    const GLOW_MARGIN = 1.35;   // il glow eccede i margini del print -> alone morbido dentro e fuori il bordo
+    const GLOW_MARGIN = 1.6;    // il glow eccede i margini del print -> alone morbido dentro e fuori il bordo
     const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
@@ -213,15 +213,22 @@
     // fotocamera ad alta risoluzione per lo scan del target
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-      navigator.mediaDevices.getUserMedia = (c) => {
+      navigator.mediaDevices.getUserMedia = async (c) => {
         if (c && c.video === true) c.video = {};
         if (c && c.video && typeof c.video === 'object') {
-          c.video.width  = { ideal: 3840 };           // chiedi la massima risoluzione della camera (no cap)
+          c.video.width  = { ideal: 3840 };           // punta al massimo della camera
           c.video.height = { ideal: 2160 };
           c.video.frameRate = { ideal: 30 };
-          c.video.resizeMode = 'none';                 // niente downscale lato browser
         }
-        return orig(c);
+        const stream = await orig(c);
+        try {                                          // forza la camera alla sua massima risoluzione REALE
+          const track = stream.getVideoTracks()[0];
+          const caps = track && track.getCapabilities ? track.getCapabilities() : null;
+          if (caps && caps.width && caps.height) {
+            await track.applyConstraints({ width: { ideal: caps.width.max }, height: { ideal: caps.height.max } });
+          }
+        } catch (e) {}
+        return stream;
       };
     }
 
@@ -285,23 +292,21 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    // glow morbido "reale": molti passaggi additivi da largo/tenue a stretto -> alone sfumato,
-    // niente outline rigido. Il canvas ha l'aspect del target; il picco luminoso è sul margine del
-    // print e c'è spazio extra (margin) perché l'alone sconfini dentro e fuori il bordo.
+    // glow morbido "reale", come una shadow luminosa: si disegna SOLO l'ombra sfocata del bordo
+    // (lo stroke reale è spostato fuori dal canvas) -> alone diffuso attorno al print, senza linea
+    // dura né outline della forma. Il canvas ha l'aspect del target; il margin lascia spazio all'alone.
     function makeEdgeGlowTex(aspect = 1, margin = GLOW_MARGIN) {
       const W = 512, H = Math.max(8, Math.round(W / aspect));
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       const g = c.getContext('2d');
       const fx = W * (margin - 1) / (2 * margin), fy = H * (margin - 1) / (2 * margin);  // rettangolo del print nel canvas
-      const rw = W - 2 * fx, rh = H - 2 * fy, u = Math.min(rw, rh);
-      g.globalCompositeOperation = 'lighter';       // i passaggi si sommano -> falloff continuo, sfumato
+      const rw = W - 2 * fx, rh = H - 2 * fy, mr = Math.min(fx, fy), off = W * 8;
+      g.globalCompositeOperation = 'lighter';       // i passaggi si sommano -> alone continuo
+      g.shadowColor = 'rgba(255,255,255,0.9)'; g.shadowOffsetX = off;   // solo l'OMBRA sfocata cade sul canvas
       g.strokeStyle = '#fff'; g.lineJoin = 'round';
-      const N = 22, maxLW = u * 0.22;
-      for (let i = 0; i < N; i++) {
-        const t = i / (N - 1);                      // 0 = alone largo e tenue · 1 = nucleo stretto e intenso
-        g.globalAlpha = 0.04 + 0.10 * t;
-        g.lineWidth = maxLW * (1 - t) + u * 0.02;
-        g.strokeRect(fx, fy, rw, rh);
+      for (const k of [1.0, 0.6, 0.33]) {           // tre raggi di blur -> falloff morbido e realistico
+        g.shadowBlur = mr * 0.85 * k; g.lineWidth = Math.max(2, mr * 0.06);
+        g.strokeRect(fx - off, fy, rw, rh);
       }
       const tx = new THREE.CanvasTexture(c); tx.minFilter = THREE.LinearFilter; tx.needsUpdate = true;
       return tx;
