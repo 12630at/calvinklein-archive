@@ -170,10 +170,10 @@
     const ARCHIVE_URL = "../index.html?archive=1";
     const MIND_URL    = "assets/campaigns.mind";   // 3 target compilati dai blur: vedi TARGETS (stesso ordine)
     // indice target nel .mind -> foto nitida svelata nel mondo 360
-    const TARGETS = [
-      { reveal: "assets/print_1999_ss_adv_print_jeans_001.jpg" },                                  // 0 · 1999 jeans
-      { reveal: "../assets/index/adv/print/1996/1996_fw_adv_print_fragrance_obsession_001.webp" },  // 1 · 1996 fragrance
-      { reveal: "../assets/index/adv/print/2004/2004_fw_adv_print_jeans_004.jpg" },                 // 2 · 2004 jeans
+    const TARGETS = [   // blur = target trackato (allinea il glow) · reveal = foto nitida nel mondo 3D
+      { blur: "assets/blur_1999_ss_adv_print_jeans_001.webp",               reveal: "assets/print_1999_ss_adv_print_jeans_001.jpg" },                                 // 0 · 1999 jeans
+      { blur: "assets/blur_1996_fw_adv_print_fragrance_obsession_001.webp", reveal: "../assets/index/adv/print/1996/1996_fw_adv_print_fragrance_obsession_001.webp" }, // 1 · 1996 fragrance
+      { blur: "assets/blur_2004_fw_adv_print_jeans_004.webp",               reveal: "../assets/index/adv/print/2004/2004_fw_adv_print_jeans_004.jpg" },                // 2 · 2004 jeans
     ];
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
@@ -187,6 +187,7 @@
     const RECOG_DELAY = 2000;   // attesa dopo il riconoscimento (2s), prima che i bordi inizino a brillare
     const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima del flash
     const FLASH_MS    = 260;    // lampo bianco che porta al mondo 3D (transizione reale -> virtuale)
+    const GLOW_MARGIN = 1.35;   // il glow eccede i margini del print -> alone morbido dentro e fuori il bordo
     const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
@@ -213,10 +214,12 @@
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       const orig = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
       navigator.mediaDevices.getUserMedia = (c) => {
+        if (c && c.video === true) c.video = {};
         if (c && c.video && typeof c.video === 'object') {
-          c.video.width = { ideal: 1920, max: 1920 };
-          c.video.height = { ideal: 1080, max: 1080 };
+          c.video.width  = { ideal: 3840 };           // chiedi la massima risoluzione della camera (no cap)
+          c.video.height = { ideal: 2160 };
           c.video.frameRate = { ideal: 30 };
+          c.video.resizeMode = 'none';                 // niente downscale lato browser
         }
         return orig(c);
       };
@@ -282,18 +285,26 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    // texture "cornice" luminosa: un rim bianco che segue esattamente i margini della foto,
-    // trasparente al centro. Il canvas assume l'aspect del target -> rim uniforme sui 4 lati.
-    function makeEdgeGlowTex(aspect = 1) {
+    // glow morbido "reale": molti passaggi additivi da largo/tenue a stretto -> alone sfumato,
+    // niente outline rigido. Il canvas ha l'aspect del target; il picco luminoso è sul margine del
+    // print e c'è spazio extra (margin) perché l'alone sconfini dentro e fuori il bordo.
+    function makeEdgeGlowTex(aspect = 1, margin = GLOW_MARGIN) {
       const W = 512, H = Math.max(8, Math.round(W / aspect));
       const c = document.createElement('canvas'); c.width = W; c.height = H;
-      const g = c.getContext('2d'), u = Math.min(W, H), inset = u * 0.05;
-      g.strokeStyle = '#fff'; g.lineJoin = 'miter';
-      g.shadowColor = 'rgba(255,255,255,0.95)';
-      g.shadowBlur = u * 0.075; g.lineWidth = u * 0.018; g.strokeRect(inset, inset, W - inset * 2, H - inset * 2);  // alone
-      g.shadowBlur = u * 0.025; g.lineWidth = u * 0.008; g.strokeRect(inset, inset, W - inset * 2, H - inset * 2);  // rim nitido
-      const t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
-      return t;
+      const g = c.getContext('2d');
+      const fx = W * (margin - 1) / (2 * margin), fy = H * (margin - 1) / (2 * margin);  // rettangolo del print nel canvas
+      const rw = W - 2 * fx, rh = H - 2 * fy, u = Math.min(rw, rh);
+      g.globalCompositeOperation = 'lighter';       // i passaggi si sommano -> falloff continuo, sfumato
+      g.strokeStyle = '#fff'; g.lineJoin = 'round';
+      const N = 22, maxLW = u * 0.22;
+      for (let i = 0; i < N; i++) {
+        const t = i / (N - 1);                      // 0 = alone largo e tenue · 1 = nucleo stretto e intenso
+        g.globalAlpha = 0.04 + 0.10 * t;
+        g.lineWidth = maxLW * (1 - t) + u * 0.02;
+        g.strokeRect(fx, fy, rw, rh);
+      }
+      const tx = new THREE.CanvasTexture(c); tx.minFilter = THREE.LinearFilter; tx.needsUpdate = true;
+      return tx;
     }
 
     // direzioni uniformi sulla sfera (Fibonacci) -> spaziatura regolare, niente sovrapposizioni
@@ -326,10 +337,6 @@
         const im = tex.image, aspect = (im && im.width && im.height) ? im.width / im.height : 1.6;
         const [w, h] = sizeFor(aspect);
         photoMesh.geometry.dispose(); photoMesh.geometry = new THREE.PlaneGeometry(w, h);
-        const g = anchorGlows[index];                 // il rim ricopre esattamente il print trackato: plane (1, 1/aspect)
-        if (g) { g.scale.set(1, 1 / aspect, 1);
-          if (g.material.map) g.material.map.dispose();
-          g.material.map = makeEdgeGlowTex(aspect); g.material.needsUpdate = true; }
       });
     }
 
@@ -557,9 +564,18 @@
         const glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
           new THREE.MeshBasicMaterial({ map: makeEdgeGlowTex(1), transparent:true, opacity:0,
             blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
-        glow.renderOrder = 50;
+        glow.renderOrder = 50; glow.scale.set(GLOW_MARGIN, GLOW_MARGIN, 1);
         anchor.group.add(glow);
         anchorGlows[i] = glow;
+        // dimensiona il glow sull'aspect REALE del target trackato (immagine blur) -> allineamento preciso
+        const bimg = new Image();
+        bimg.onload = () => {
+          const a = bimg.naturalWidth / bimg.naturalHeight;
+          glow.scale.set(GLOW_MARGIN, GLOW_MARGIN / a, 1);   // plane (margin, margin/aspect) -> copre il print + alone
+          if (glow.material.map) glow.material.map.dispose();
+          glow.material.map = makeEdgeGlowTex(a); glow.material.needsUpdate = true;
+        };
+        bimg.src = TARGETS[i].blur;
         anchor.onTargetFound = () => {
           if (phase !== 'scan') return;
           phase = 'recognized';               // blocca ri-trigger durante l'attesa
