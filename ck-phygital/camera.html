@@ -170,7 +170,7 @@
     const ARCHIVE_URL = "../index.html?archive=1";
     const MIND_URL    = "assets/campaigns.mind";   // 3 target compilati dai blur: vedi TARGETS (stesso ordine)
     // indice target nel .mind -> foto nitida svelata nel mondo 360
-    const TARGETS = [   // blur = target trackato (allinea il glow) · reveal = foto nitida nel mondo 3D
+    const TARGETS = [   // blur = print fisico riconosciuto · reveal = foto nitida svelata nel mondo 3D
       { blur: "assets/blur_1999_ss_adv_print_jeans_001.webp",               reveal: "assets/print_1999_ss_adv_print_jeans_001.jpg" },                                 // 0 · 1999 jeans
       { blur: "assets/blur_1996_fw_adv_print_fragrance_obsession_001.webp", reveal: "../assets/index/adv/print/1996/1996_fw_adv_print_fragrance_obsession_001.webp" }, // 1 · 1996 fragrance
       { blur: "assets/blur_2004_fw_adv_print_jeans_004.webp",               reveal: "../assets/index/adv/print/2004/2004_fw_adv_print_jeans_004.jpg" },                // 2 · 2004 jeans
@@ -184,10 +184,8 @@
 
     const D_PHOTO     = 3.2;    // distanza della foto rivelata
     const PHOTO_W     = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
-    const RECOG_DELAY = 500;    // breve attesa dopo il riconoscimento, prima che il glow inizi
-    const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima del flash
-    const FLASH_MS    = 260;    // lampo bianco che porta al mondo 3D (transizione reale -> virtuale)
-    const GLOW_MARGIN = 2.0;    // il piano del glow eccede il print -> spazio per un alone ampio e morbido
+    const RECOG_DELAY = 500;    // breve attesa dopo il riconoscimento, prima della sovraesposizione
+    const OVEREXP_MS  = 1400;   // sovraesposizione graduale fino al bianco, poi transizione al mondo 3D
     const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
@@ -235,12 +233,10 @@
     }
 
     // ---------- stato mondo 360 ----------
-    let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'flash' | 'world'
+    let phase = 'scan';               // 'scan' | 'recognized' | 'overexpose' | 'world'
     let renderer, worldScene, worldCam, scanScene = null, mindar = null;
     let centerGroup, photoMesh, revealMat, ctaShown = false, activeTarget = 0;
-    const anchorGlows = [];            // rim glow per target, agganciato all'anchor MindAR (trackato)
-    let activeGlow = null;             // rim del target correntemente riconosciuto
-    let worldT0 = 0, flashT0 = 0, glowT0 = 0, previewMode = false;
+    let worldT0 = 0, overexpT0 = 0, previewMode = false;
     const ctaAnchorV = new THREE.Vector3();   // punto sotto la foto -> ancora la CTA 2D
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
@@ -294,31 +290,6 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    // glow morbido "reale" come una shadow luminosa, SENZA banding: falloff analitico (distanza dal
-    // bordo del print, SDF) calcolato per-pixel in ImageData + dithering. Fuori dal print morbido e
-    // ampio, dentro più stretto -> alone diffuso attorno alla foto, niente outline della forma.
-    function makeEdgeGlowTex(aspect = 1, margin = GLOW_MARGIN) {
-      const W = 512, H = Math.max(8, Math.round(W / aspect));
-      const c = document.createElement('canvas'); c.width = W; c.height = H;
-      const g = c.getContext('2d');
-      const L = W * (margin - 1) / (2 * margin), T = H * (margin - 1) / (2 * margin), R = W - L, B = H - T;
-      const mr = Math.min(L, T), sOut = mr * 0.62, sIn = mr * 0.30, floor = 0.10, PEAK = 0.75;
-      const img = g.createImageData(W, H), d = img.data;
-      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
-        const dx = Math.max(L - x, x - R, 0), dy = Math.max(T - y, y - B, 0);
-        const sd = (dx > 0 || dy > 0) ? Math.hypot(dx, dy) : -Math.min(x - L, R - x, y - T, B - y);  // dist. dal bordo
-        const sg = sd >= 0 ? sOut : sIn;              // fuori morbido, dentro stretto (come una shadow)
-        let a = Math.exp(-(sd * sd) / (2 * sg * sg));
-        a = (a - floor) / (1 - floor);                // taglia la coda -> 0 ai bordi della texture (no clip)
-        a += (Math.random() - 0.5) * 0.03;            // dithering -> nessun banding
-        a = Math.max(0, Math.min(1, a)) * PEAK;
-        const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = a * 255;
-      }
-      g.putImageData(img, 0, 0);
-      const tx = new THREE.CanvasTexture(c); tx.minFilter = THREE.LinearFilter; tx.needsUpdate = true;
-      return tx;
-    }
-
     // direzioni uniformi sulla sfera (Fibonacci) -> spaziatura regolare, niente sovrapposizioni
     function fibDirs(n) {
       const dirs = [], phi = Math.PI * (3 - Math.sqrt(5));
@@ -338,7 +309,7 @@
       return [w, h];
     }
 
-    // imposta la foto rivelata per indice target: texture deblur + dimensioni foto/glow
+    // imposta la foto rivelata per indice target: texture deblur + dimensioni foto
     function setReveal(index) {
       const t = TARGETS[index] || TARGETS[0];
       new THREE.TextureLoader().load(t.reveal, (tex) => {
@@ -356,7 +327,7 @@
     async function buildWorld(rnd) {
       renderer = rnd;
       worldScene = new THREE.Scene();
-      worldScene.background = null;                  // trasparente durante glow/flash (si vede la camera)
+      worldScene.background = null;                  // trasparente durante la sovraesposizione (si vede la camera)
       worldCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
       worldScene.add(new THREE.AmbientLight(0xffffff, 0.95));
       const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); worldScene.add(dl);
@@ -375,10 +346,9 @@
       });
       photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
       photoMesh.position.set(0, 0, -D_PHOTO);
-      photoMesh.visible = false;                     // appare dopo il flash
+      photoMesh.visible = false;                     // appare nel mondo 3D dopo la sovraesposizione
       centerGroup.add(photoMesh);
 
-      // (il glow non è più nel mondo 3D: è un rim agganciato all'anchor MindAR, vedi startAR)
       setReveal(activeTarget);                        // default 1999 (desktop/preview e primo frame)
 
       // --- campagne d'archivio: distribuzione uniforme sul 360, fluttuanti e cliccabili ---
@@ -475,20 +445,15 @@
     }
 
     // ---------- transizioni ----------
-    // 1) i bordi della foto iniziano a brillare (sopra il feed camera), poi la transizione
-    function startGlow() {
-      phase = 'glow';
-      glowT0 = performance.now();
+    // sovraesposizione: dopo il riconoscimento la scena si "brucia" gradualmente verso il bianco,
+    // poi si stacca dal tracking ed entra nel mondo 3D bianco.
+    function startOverexpose() {
+      phase = 'overexpose';
+      overexpT0 = performance.now();
       if (navigator.vibrate) navigator.vibrate(30);
       ui.hint.classList.add('hide');
       ui.ig.classList.add('dim');
-      document.body.classList.add('revealed');    // il rim (activeGlow) si accende nel loop, agganciato al print
-    }
-    // 2) i bordi accesi vengono "assorbiti" da un lampo bianco che porta al mondo 3D
-    function startFlash() {
-      phase = 'flash';
-      flashT0 = performance.now();
-      if (navigator.vibrate) navigator.vibrate([40, 30, 60]);
+      document.body.classList.add('revealed');
     }
 
     // ancora la CTA 2D appena sotto la foto rivelata (proiezione 3D -> schermo)
@@ -510,7 +475,6 @@
       phase = 'world';
       worldT0 = performance.now();
       worldScene.background = new THREE.Color(0xffffff);
-      if (activeGlow) activeGlow.material.opacity = 0;
       if (photoMesh) photoMesh.visible = true;
       const vid = $('ar').querySelector('video');
       if (vid) vid.style.display = 'none';
@@ -546,17 +510,11 @@
           if (ctaShown) positionCTA();                   // la CTA resta ancorata sotto la foto
           updateLook();
           renderer.render(worldScene, worldCam);
-        } else if (phase === 'glow') {
-          const gt = now - glowT0, e = easeOutCubic(clamp01(gt / GLOW_MS));
-          if (activeGlow) activeGlow.material.opacity = e * (0.9 + 0.1 * Math.sin(gt * 0.02)); // il rim si accende sul print
-          renderer.render(scanScene, scanCam);                             // camera + rim agganciato al print trackato
-          if (gt >= GLOW_MS) startFlash();
-        } else if (phase === 'flash') {
-          const ft = now - flashT0, e = clamp01(ft / FLASH_MS);
-          if (activeGlow) activeGlow.material.opacity = clamp01(1.15 - e * 1.15);  // il rim cede al lampo
-          ui.whiteout.style.opacity = String(easeOutCubic(e));             // lampo bianco che copre la camera
-          renderer.render(scanScene, scanCam);
-          if (ft >= FLASH_MS) enterWorld();                                // al culmine del lampo -> mondo 3D bianco
+        } else if (phase === 'overexpose') {
+          const ot = now - overexpT0, e = clamp01(ot / OVEREXP_MS);
+          ui.whiteout.style.opacity = String(Math.pow(e, 1.6));            // sovraesposizione graduale -> bianco pieno
+          renderer.render(scanScene, scanCam);                            // il feed camera si brucia verso il bianco
+          if (ot >= OVEREXP_MS) enterWorld();                             // al bianco pieno -> transizione al mondo 3D
         } else if (scanScene) {
           renderer.render(scanScene, scanCam);                     // scan: feed visibile
         }
@@ -573,28 +531,12 @@
       scanScene = mindar.scene; scanCam = mindar.camera;
       TARGETS.forEach((_, i) => {              // un anchor per target: si riconosce un print alla volta
         const anchor = mindar.addAnchor(i);
-        // rim glow agganciato all'anchor: MindAR lo posiziona esattamente sul print trackato
-        const glow = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-          new THREE.MeshBasicMaterial({ map: makeEdgeGlowTex(1), transparent:true, opacity:0,
-            blending: THREE.AdditiveBlending, depthTest:false, depthWrite:false }));
-        glow.renderOrder = 50; glow.scale.set(GLOW_MARGIN, GLOW_MARGIN, 1);
-        anchor.group.add(glow);
-        anchorGlows[i] = glow;
-        // dimensiona il glow sull'aspect REALE del target trackato (immagine blur) -> allineamento preciso
-        const bimg = new Image();
-        bimg.onload = () => {
-          const a = bimg.naturalWidth / bimg.naturalHeight;
-          glow.scale.set(GLOW_MARGIN, GLOW_MARGIN / a, 1);   // plane (margin, margin/aspect) -> copre il print + alone
-          if (glow.material.map) glow.material.map.dispose();
-          glow.material.map = makeEdgeGlowTex(a); glow.material.needsUpdate = true;
-        };
-        bimg.src = TARGETS[i].blur;
         anchor.onTargetFound = () => {
           if (phase !== 'scan') return;
           phase = 'recognized';               // blocca ri-trigger durante l'attesa
-          activeTarget = i; activeGlow = anchorGlows[i]; setReveal(i);   // svela la foto + prepara il rim del print
+          activeTarget = i; setReveal(i);      // prepara la foto nitida da svelare nel mondo 3D
           if (navigator.vibrate) navigator.vibrate(30);
-          setTimeout(() => { if (phase === 'recognized') startGlow(); }, RECOG_DELAY);
+          setTimeout(() => { if (phase === 'recognized') startOverexpose(); }, RECOG_DELAY);
         };
       });
       await buildWorld(mindar.renderer);
