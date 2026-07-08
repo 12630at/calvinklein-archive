@@ -97,6 +97,7 @@
       transform:translateX(-50%) translateY(14px); opacity:0; pointer-events:none;
       transition:opacity .8s ease, transform .8s ease;
       font-family:"Klein",sans-serif; font-weight:400; font-size:15px; letter-spacing:0; text-transform:uppercase;
+      white-space:nowrap;                                        /* CTA sempre su un solo rigo */
       color:#111; background:transparent; border:none; border-radius:30px; padding:14px 26px;
       cursor:pointer; }
     .cta2d.show { opacity:1; pointer-events:auto; transform:translateX(-50%) translateY(0); }
@@ -184,8 +185,8 @@
     const D_PHOTO     = 3.2;    // distanza della foto rivelata
     const PHOTO_W     = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
     const RECOG_DELAY = 2000;   // attesa dopo il riconoscimento (2s), prima che i bordi inizino a brillare
-    const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima della transizione
-    const BURST_MS    = 900;    // glow 3D che si proietta dai bordi della foto verso la camera
+    const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima del flash
+    const FLASH_MS    = 260;    // lampo bianco che porta al mondo 3D (transizione reale -> virtuale)
     const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
@@ -222,10 +223,11 @@
     }
 
     // ---------- stato mondo 360 ----------
-    let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'burst' | 'world'
+    let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'flash' | 'world'
     let renderer, worldScene, worldCam, scanScene = null;
     let centerGroup, photoMesh, glowMesh, revealMat, ctaShown = false, activeTarget = 0;
-    let worldT0 = 0, burstT0 = 0, glowT0 = 0, previewMode = false;
+    let worldT0 = 0, flashT0 = 0, glowT0 = 0, previewMode = false;
+    const ctaAnchorV = new THREE.Vector3();   // punto sotto la foto -> ancora la CTA 2D
     const campMats = [];      // materiali campagne (per il fade-in)
     const campMeshes = [];    // mesh campagne (float + click -> item view)
 
@@ -278,24 +280,21 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    // texture "cornice" luminosa: bagliore solo dai bordi, trasparente al centro
-    // -> il glow si origina dai margini della foto (non un flash generale)
+    // texture "cornice" luminosa: un rim bianco che segue esattamente i margini della foto,
+    // trasparente al centro -> il glow è un bordo nitido, non un alone diffuso
     function makeEdgeGlowTex() {
-      const s = 256, c = document.createElement('canvas'); c.width = c.height = s;
+      const s = 512, c = document.createElement('canvas'); c.width = c.height = s;
       const g = c.getContext('2d');
-      const band = s * 0.42;                       // quanto rientra il bagliore dai bordi
-      g.globalCompositeOperation = 'lighter';      // i quattro lati si sommano negli angoli
-      const edge = (x0, y0, x1, y1) => {
-        const grd = g.createLinearGradient(x0, y0, x1, y1);
-        grd.addColorStop(0, 'rgba(255,255,255,1)');
-        grd.addColorStop(1, 'rgba(255,255,255,0)');
-        return grd;
-      };
-      g.fillStyle = edge(0, 0, 0, band);           g.fillRect(0, 0, s, band);          // alto
-      g.fillStyle = edge(0, s, 0, s - band);       g.fillRect(0, s - band, s, band);   // basso
-      g.fillStyle = edge(0, 0, band, 0);           g.fillRect(0, 0, band, s);          // sinistra
-      g.fillStyle = edge(s, 0, s - band, 0);       g.fillRect(s - band, 0, band, s);   // destra
-      return new THREE.CanvasTexture(c);
+      const inset = s * 0.05;                       // il rim sta appena dentro i margini
+      const rw = s - inset * 2;
+      g.strokeStyle = '#fff'; g.lineJoin = 'miter';
+      // 1) alone morbido attorno al bordo
+      g.shadowColor = 'rgba(255,255,255,0.95)'; g.shadowBlur = s * 0.075;
+      g.lineWidth = s * 0.018; g.strokeRect(inset, inset, rw, rw);
+      // 2) rim nitido e luminoso sopra l'alone
+      g.shadowBlur = s * 0.025; g.lineWidth = s * 0.008; g.strokeRect(inset, inset, rw, rw);
+      const t = new THREE.CanvasTexture(c); t.minFilter = THREE.LinearFilter; t.needsUpdate = true;
+      return t;
     }
 
     // direzioni uniformi sulla sfera (Fibonacci) -> spaziatura regolare, niente sovrapposizioni
@@ -335,7 +334,7 @@
     async function buildWorld(rnd) {
       renderer = rnd;
       worldScene = new THREE.Scene();
-      worldScene.background = null;                  // trasparente durante il burst (si vede la camera)
+      worldScene.background = null;                  // trasparente durante glow/flash (si vede la camera)
       worldCam = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
       worldScene.add(new THREE.AmbientLight(0xffffff, 0.95));
       const dl = new THREE.DirectionalLight(0xffffff, 0.75); dl.position.set(0.4, 1, 1.4); worldScene.add(dl);
@@ -350,11 +349,11 @@
         uniforms: { map:{value:blankTex}, uBias:{value:4.5} },
         vertexShader: `varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);} `,
         fragmentShader: `uniform sampler2D map; uniform float uBias; varying vec2 vUv;
-          void main(){ vec4 c=texture2D(map,vUv,uBias); vec3 lin=pow(c.rgb,vec3(2.2)); gl_FragColor=vec4(lin,1.0);} `,
+          void main(){ gl_FragColor = vec4(texture2D(map,vUv,uBias).rgb, 1.0); } `,   // niente gamma: colori originali, non scuriti
       });
       photoMesh = new THREE.Mesh(new THREE.PlaneGeometry(PHOTO_W, PHOTO_W * 0.625), revealMat);
       photoMesh.position.set(0, 0, -D_PHOTO);
-      photoMesh.visible = false;                     // appare dopo il burst
+      photoMesh.visible = false;                     // appare dopo il flash
       centerGroup.add(photoMesh);
 
       // glow 3D dai bordi della foto che si proietta verso la camera (transizione)
@@ -470,13 +469,29 @@
       document.body.classList.add('revealed');
       if (glowMesh) { glowMesh.visible = true; glowMesh.position.z = -D_PHOTO; glowMesh.scale.setScalar(1); }
     }
-    // 2) il bagliore si proietta dai bordi verso la camera e sfuma nel mondo bianco
-    function startBurst() {
-      phase = 'burst';
-      burstT0 = performance.now();
-      if (navigator.vibrate) navigator.vibrate(60);
+    // 2) i bordi accesi vengono "assorbiti" da un lampo bianco che porta al mondo 3D
+    function startFlash() {
+      phase = 'flash';
+      flashT0 = performance.now();
+      if (navigator.vibrate) navigator.vibrate([40, 30, 60]);
     }
-    function enterWorld() {                // dal bagliore al mondo 3D bianco
+
+    // ancora la CTA 2D appena sotto la foto rivelata (proiezione 3D -> schermo)
+    function positionCTA() {
+      if (!photoMesh || !centerGroup) return;
+      const h = (photoMesh.geometry.parameters && photoMesh.geometry.parameters.height) || PHOTO_W * 0.625;
+      centerGroup.updateMatrixWorld();
+      ctaAnchorV.set(0, -h / 2 - 0.16, -D_PHOTO).applyMatrix4(centerGroup.matrixWorld).project(worldCam);
+      const onScreen = ctaAnchorV.z < 1 && Math.abs(ctaAnchorV.x) < 1.15 && Math.abs(ctaAnchorV.y) < 1.3;
+      if (!onScreen) { ui.cta.style.visibility = 'hidden'; return; }
+      const r = stage.getBoundingClientRect();
+      ui.cta.style.visibility = 'visible';
+      ui.cta.style.bottom = 'auto';
+      ui.cta.style.left = ((ctaAnchorV.x * 0.5 + 0.5) * r.width) + 'px';
+      ui.cta.style.top  = ((-ctaAnchorV.y * 0.5 + 0.5) * r.height) + 'px';
+    }
+
+    function enterWorld() {                // dal lampo al mondo 3D bianco
       phase = 'world';
       worldT0 = performance.now();
       worldScene.background = new THREE.Color(0xffffff);
@@ -512,25 +527,24 @@
           if (!ctaShown && wt > DEBLUR_MS + CTA_GAP) {   // riemerge la CTA 2D (font Klein Book)
             ctaShown = true; ui.cta.classList.add('show');
           }
+          if (ctaShown) positionCTA();                   // la CTA resta ancorata sotto la foto
           updateLook();
           renderer.render(worldScene, worldCam);
         } else if (phase === 'glow') {
           const gt = now - glowT0, e = easeOutCubic(clamp01(gt / GLOW_MS));
           glowMesh.material.opacity = e * (0.9 + 0.1 * Math.sin(gt * 0.02)); // i bordi si accendono e "respirano"
-          glowMesh.position.z = -D_PHOTO;                                    // resta sui bordi, non proietta ancora
+          glowMesh.position.z = -D_PHOTO;                                    // resta sui bordi, non proietta
           glowMesh.scale.setScalar(1);
           updateLook();
           renderer.render(worldScene, worldCam);                            // bg trasparente -> camera dietro + bordi accesi
-          if (gt >= GLOW_MS) startBurst();
-        } else if (phase === 'burst') {
-          const bt = now - burstT0, e = easeOutCubic(clamp01(bt / BURST_MS));
-          glowMesh.material.opacity = e < 0.55 ? 1 : clamp01((1 - e) / 0.45); // resta acceso, poi cede al whiteout
-          glowMesh.position.z = -D_PHOTO + (D_PHOTO - 0.25) * e;          // i bordi si proiettano verso la camera
-          glowMesh.scale.setScalar(1 + e * 1.6);                         // si espande dai margini (niente whiteout)
-          ui.whiteout.style.opacity = String(clamp01((e - 0.55) / 0.45)); // ultima parte: l'ambiente sfuma verso il mondo bianco
+          if (gt >= GLOW_MS) startFlash();
+        } else if (phase === 'flash') {
+          const ft = now - flashT0, e = clamp01(ft / FLASH_MS);
+          glowMesh.material.opacity = clamp01(1.15 - e * 1.15);             // il rim cede al lampo
+          ui.whiteout.style.opacity = String(easeOutCubic(e));             // lampo bianco che copre la camera
           updateLook();
-          renderer.render(worldScene, worldCam);                   // bg trasparente -> camera dietro + glow
-          if (bt >= BURST_MS) enterWorld();
+          renderer.render(worldScene, worldCam);
+          if (ft >= FLASH_MS) enterWorld();                                // al culmine del lampo -> mondo 3D bianco
         } else if (scanScene) {
           renderer.render(scanScene, scanCam);                     // scan: feed visibile
         }
