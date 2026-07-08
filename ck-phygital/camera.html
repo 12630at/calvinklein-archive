@@ -178,16 +178,16 @@
 
     // le campagne d'archivio fluttuanti vengono pescate a caso da archive_index.csv
     const ARCHIVE_BASE = "../assets/index";
-    const N_CAMPAIGNS  = 150;    // quante foto sparse nel mondo 360 (più campagne)
+    const N_CAMPAIGNS  = 110;    // quante foto sparse nel mondo 360 (bilanciato per non laggare su mobile)
     const CAMP_R       = 7.5;    // raggio (shell unica -> distribuzione uniforme, niente sovrapposizioni)
-    const TEX_MAX      = 448;    // lato massimo texture campagna (memoria GPU su mobile)
+    const TEX_MAX      = 384;    // lato massimo texture campagna (memoria GPU su mobile)
 
     const D_PHOTO     = 3.2;    // distanza della foto rivelata
     const PHOTO_W     = 1.7;    // larghezza foto (aspect 1.6:1 -> h=1.0625)
-    const RECOG_DELAY = 2000;   // attesa dopo il riconoscimento (2s), prima che i bordi inizino a brillare
+    const RECOG_DELAY = 500;    // breve attesa dopo il riconoscimento, prima che il glow inizi
     const GLOW_MS     = 900;    // i bordi della foto si accendono (build-up) prima del flash
     const FLASH_MS    = 260;    // lampo bianco che porta al mondo 3D (transizione reale -> virtuale)
-    const GLOW_MARGIN = 1.6;    // il glow eccede i margini del print -> alone morbido dentro e fuori il bordo
+    const GLOW_MARGIN = 2.0;    // il piano del glow eccede il print -> spazio per un alone ampio e morbido
     const DEBLUR_MS   = 1150;   // deblur della foto nel mondo bianco
     const CTA_GAP     = 1500;   // attesa dopo il reveal, prima della CTA 2D
     const GYRO_SMOOTH = 0.22;   // smoothing del giroscopio (slerp): più alto = più reattivo, più basso = più morbido
@@ -216,16 +216,18 @@
       navigator.mediaDevices.getUserMedia = async (c) => {
         if (c && c.video === true) c.video = {};
         if (c && c.video && typeof c.video === 'object') {
-          c.video.width  = { ideal: 3840 };           // punta al massimo della camera
-          c.video.height = { ideal: 2160 };
+          c.video.width  = { ideal: 1920 };
+          c.video.height = { ideal: 1080 };
           c.video.frameRate = { ideal: 30 };
         }
         const stream = await orig(c);
-        try {                                          // forza la camera alla sua massima risoluzione REALE
-          const track = stream.getVideoTracks()[0];
+        try {                                          // forza la camera al suo massimo fino a Full HD
+          const track = stream.getVideoTracks()[0];    // (oltre i 1080p MindAR rallenta il riconoscimento e lagga)
           const caps = track && track.getCapabilities ? track.getCapabilities() : null;
           if (caps && caps.width && caps.height) {
-            await track.applyConstraints({ width: { ideal: caps.width.max }, height: { ideal: caps.height.max } });
+            await track.applyConstraints({
+              width:  { ideal: Math.min(caps.width.max, 1920) },
+              height: { ideal: Math.min(caps.height.max, 1080) } });
           }
         } catch (e) {}
         return stream;
@@ -234,7 +236,7 @@
 
     // ---------- stato mondo 360 ----------
     let phase = 'scan';               // 'scan' | 'recognized' | 'glow' | 'flash' | 'world'
-    let renderer, worldScene, worldCam, scanScene = null;
+    let renderer, worldScene, worldCam, scanScene = null, mindar = null;
     let centerGroup, photoMesh, revealMat, ctaShown = false, activeTarget = 0;
     const anchorGlows = [];            // rim glow per target, agganciato all'anchor MindAR (trackato)
     let activeGlow = null;             // rim del target correntemente riconosciuto
@@ -292,22 +294,27 @@
       } catch (e) { console.error('campaign pool error:', e); return []; }
     }
 
-    // glow morbido "reale", come una shadow luminosa: si disegna SOLO l'ombra sfocata del bordo
-    // (lo stroke reale è spostato fuori dal canvas) -> alone diffuso attorno al print, senza linea
-    // dura né outline della forma. Il canvas ha l'aspect del target; il margin lascia spazio all'alone.
+    // glow morbido "reale" come una shadow luminosa, SENZA banding: falloff analitico (distanza dal
+    // bordo del print, SDF) calcolato per-pixel in ImageData + dithering. Fuori dal print morbido e
+    // ampio, dentro più stretto -> alone diffuso attorno alla foto, niente outline della forma.
     function makeEdgeGlowTex(aspect = 1, margin = GLOW_MARGIN) {
       const W = 512, H = Math.max(8, Math.round(W / aspect));
       const c = document.createElement('canvas'); c.width = W; c.height = H;
       const g = c.getContext('2d');
-      const fx = W * (margin - 1) / (2 * margin), fy = H * (margin - 1) / (2 * margin);  // rettangolo del print nel canvas
-      const rw = W - 2 * fx, rh = H - 2 * fy, mr = Math.min(fx, fy), off = W * 8;
-      g.globalCompositeOperation = 'lighter';       // i passaggi si sommano -> alone continuo
-      g.shadowColor = 'rgba(255,255,255,0.9)'; g.shadowOffsetX = off;   // solo l'OMBRA sfocata cade sul canvas
-      g.strokeStyle = '#fff'; g.lineJoin = 'round';
-      for (const k of [1.0, 0.6, 0.33]) {           // tre raggi di blur -> falloff morbido e realistico
-        g.shadowBlur = mr * 0.85 * k; g.lineWidth = Math.max(2, mr * 0.06);
-        g.strokeRect(fx - off, fy, rw, rh);
+      const L = W * (margin - 1) / (2 * margin), T = H * (margin - 1) / (2 * margin), R = W - L, B = H - T;
+      const mr = Math.min(L, T), sOut = mr * 0.62, sIn = mr * 0.30, floor = 0.10, PEAK = 0.75;
+      const img = g.createImageData(W, H), d = img.data;
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+        const dx = Math.max(L - x, x - R, 0), dy = Math.max(T - y, y - B, 0);
+        const sd = (dx > 0 || dy > 0) ? Math.hypot(dx, dy) : -Math.min(x - L, R - x, y - T, B - y);  // dist. dal bordo
+        const sg = sd >= 0 ? sOut : sIn;              // fuori morbido, dentro stretto (come una shadow)
+        let a = Math.exp(-(sd * sd) / (2 * sg * sg));
+        a = (a - floor) / (1 - floor);                // taglia la coda -> 0 ai bordi della texture (no clip)
+        a += (Math.random() - 0.5) * 0.03;            // dithering -> nessun banding
+        a = Math.max(0, Math.min(1, a)) * PEAK;
+        const i = (y * W + x) * 4; d[i] = d[i + 1] = d[i + 2] = 255; d[i + 3] = a * 255;
       }
+      g.putImageData(img, 0, 0);
       const tx = new THREE.CanvasTexture(c); tx.minFilter = THREE.LinearFilter; tx.needsUpdate = true;
       return tx;
     }
@@ -507,6 +514,7 @@
       if (photoMesh) photoMesh.visible = true;
       const vid = $('ar').querySelector('video');
       if (vid) vid.style.display = 'none';
+      try { if (mindar) mindar.stop(); } catch (e) {}   // ferma tracking+camera: libera CPU/GPU -> mondo 3D fluido
       ui.whiteout.style.opacity = '1';     // sicurezza: fondo bianco
       fitRenderer();
       setTimeout(() => { ui.lookhint.classList.add('show');
@@ -558,7 +566,7 @@
 
     // ---------- avvio ----------
     async function startAR() {
-      const mindar = new MindARThree({
+      mindar = new MindARThree({
         container: $('ar'), imageTargetSrc: MIND_URL,
         uiScanning: 'no', uiLoading: 'no', uiError: 'no',
       });
