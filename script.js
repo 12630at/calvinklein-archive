@@ -728,9 +728,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function closePersonPage() {
         if (!currentPerson) return;
+        // Reached via search → the ← people back returns to the search, not the
+        // people list (which isn't the context the user actually came from).
+        if (personFromSearch) { returnFromPersonToSearch(); return; }
         gsap.to(personStage, {
             opacity: 0, duration: 0.45, ease: 'power2.in',
             onComplete: teardownPersonStage,
+        });
+    }
+
+    // ← people back when the person page was opened FROM a search → Adobe-Flash zoom
+    // the page away and reopen an empty search bar (skip the people list underneath).
+    function returnFromPersonToSearch() {
+        gsap.to(personStage, {
+            scale: 1.14, opacity: 0, filter: 'blur(20px)',
+            duration: 0.45, ease: 'power3.in', transformOrigin: 'center center',
+            onComplete: () => {
+                teardownPersonStage();   // also clears personFromSearch
+                const peopleStage = document.getElementById('people-stage');
+                peopleStage.style.display = 'none';
+                peopleStage.setAttribute('aria-hidden', 'true');
+                document.getElementById('people-content')?.classList.remove('visible');
+                document.body.classList.remove('people-open', 'page-open');
+                openSearchInstant();
+            },
         });
     }
 
@@ -823,29 +844,6 @@ document.addEventListener('DOMContentLoaded', () => {
             gsap.fromTo(personStage,
                 { scale: 1.14, filter: 'blur(20px)', opacity: 0 },
                 { scale: 1, filter: 'blur(0px)', opacity: 1, duration: 0.6, ease: 'expo.out' });
-        });
-        return tl;
-    }
-
-    // Back from a person-scoped archive that was opened FROM a search → Adobe-Flash
-    // zoom the archive away and reopen an empty search bar (skip the person page).
-    function returnToSearchFromWorks() {
-        const tl = gsap.timeline();
-        tl.to(archiveStage, {
-            scale: 1.18, opacity: 0, filter: 'blur(22px)',
-            duration: 0.45, ease: 'power3.in', transformOrigin: 'center center',
-        });
-        tl.add(() => {
-            forceCloseArchiveInstant();
-            gsap.set(archiveStage, { clearProps: 'transform,filter,opacity' });
-            // Hide the people stage left underneath by the search→person flow
-            const peopleStage = document.getElementById('people-stage');
-            peopleStage.style.display = 'none';
-            peopleStage.setAttribute('aria-hidden', 'true');
-            document.getElementById('people-content')?.classList.remove('visible');
-            document.body.classList.remove('people-open', 'page-open');
-            personFromSearch = false;
-            openSearchInstant();
         });
         return tl;
     }
@@ -2138,7 +2136,7 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveBackBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (archiveCtxStack.length)  archiveBackStep();
-        else if (archiveScopePerson) { personFromSearch ? returnToSearchFromWorks() : returnToPersonFromWorks(); }
+        else if (archiveScopePerson) returnToPersonFromWorks();
         else                         closeArchive();
     });
     archiveShowAll.addEventListener('click', (e) => { e.preventDefault(); setCategory('all'); });
@@ -3256,7 +3254,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemViewOpen)            { closeItemView(); }
         else if (currentPerson)      { closePersonPage(); }
         else if (archiveCtxStack.length) { archiveBackStep(); }
-        else if (archiveScopePerson) { personFromSearch ? returnToSearchFromWorks() : returnToPersonFromWorks(); }
+        else if (archiveScopePerson) { returnToPersonFromWorks(); }
         else if (archiveOpen)        { closeArchive(); }
     });
 
