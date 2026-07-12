@@ -738,18 +738,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // ← people back when the person page was opened FROM a search → Adobe-Flash zoom
-    // the page away and reopen an empty search bar (skip the people list underneath).
+    // the page away and reopen the search over the still-open archive underneath
+    // (the previous position), skipping the people list that was placed beneath.
     function returnFromPersonToSearch() {
         gsap.to(personStage, {
             scale: 1.14, opacity: 0, filter: 'blur(20px)',
             duration: 0.45, ease: 'power3.in', transformOrigin: 'center center',
             onComplete: () => {
                 teardownPersonStage();   // also clears personFromSearch
+                // Hide only the people list; keep the archive open underneath so the
+                // reopened search overlays it exactly as when it was first opened.
                 const peopleStage = document.getElementById('people-stage');
                 peopleStage.style.display = 'none';
                 peopleStage.setAttribute('aria-hidden', 'true');
                 document.getElementById('people-content')?.classList.remove('visible');
-                document.body.classList.remove('people-open', 'page-open');
+                document.body.classList.remove('people-open');
                 openSearchInstant();
             },
         });
@@ -1155,11 +1158,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Present the settled search UI (empty bar) instantly — no fall/slide animation.
-    // Used when the archive back button returns straight to the search.
+    // Used when returning to the search over an open archive. When the archive is
+    // open the search opens as an overlay on top of it (like the normal in-archive
+    // search), using the archive menu's own search label as the anchor.
     function openSearchInstant() {
         if (searchActive) return;
         searchActive = true;
-        _st = searchEl;
+        _st = archiveOpen ? document.getElementById('archive-search') : searchEl;
 
         const PAD_V  = 5;
         const HALF_W = Math.round(window.innerWidth / 2);
@@ -1174,7 +1179,7 @@ document.addEventListener('DOMContentLoaded', () => {
         searchPanel.style.transition = 'none';
         searchPanel.style.transform  = 'translateX(0)';
 
-        searchStage.style.zIndex = '';
+        searchStage.style.zIndex = archiveOpen ? '13' : '';
         searchStage.removeAttribute('aria-hidden');
         searchStage.style.display = 'block';
 
