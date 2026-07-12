@@ -645,6 +645,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const personMetaEl  = document.getElementById('person-meta');
     const personInfo    = document.getElementById('person-info');
     let   currentPerson = null;
+    // True when the current person page was reached FROM a search (not the people
+    // list). Lets the VIEW WORKS back button return to the search, not the page.
+    let   personFromSearch = false;
 
     function buildPersonMeta(rows) {
         personMetaEl.innerHTML = '';
@@ -689,6 +692,7 @@ document.addEventListener('DOMContentLoaded', () => {
     function openPersonPage(name, sourceEl) {
         if (currentPerson) return;
         if (!setPersonContent(name)) return;
+        personFromSearch = false;   // set true by reverseSearchAndGoToPerson
 
         const tl = gsap.timeline();
         if (sourceEl) {
@@ -719,6 +723,7 @@ document.addEventListener('DOMContentLoaded', () => {
         gsap.set(personStage, { clearProps: 'transform,filter,opacity' });
         try { personBg.pause(); } catch (_) {}
         currentPerson = null;
+        personFromSearch = false;
     }
 
     function closePersonPage() {
@@ -818,6 +823,29 @@ document.addEventListener('DOMContentLoaded', () => {
             gsap.fromTo(personStage,
                 { scale: 1.14, filter: 'blur(20px)', opacity: 0 },
                 { scale: 1, filter: 'blur(0px)', opacity: 1, duration: 0.6, ease: 'expo.out' });
+        });
+        return tl;
+    }
+
+    // Back from a person-scoped archive that was opened FROM a search → Adobe-Flash
+    // zoom the archive away and reopen an empty search bar (skip the person page).
+    function returnToSearchFromWorks() {
+        const tl = gsap.timeline();
+        tl.to(archiveStage, {
+            scale: 1.18, opacity: 0, filter: 'blur(22px)',
+            duration: 0.45, ease: 'power3.in', transformOrigin: 'center center',
+        });
+        tl.add(() => {
+            forceCloseArchiveInstant();
+            gsap.set(archiveStage, { clearProps: 'transform,filter,opacity' });
+            // Hide the people stage left underneath by the search→person flow
+            const peopleStage = document.getElementById('people-stage');
+            peopleStage.style.display = 'none';
+            peopleStage.setAttribute('aria-hidden', 'true');
+            document.getElementById('people-content')?.classList.remove('visible');
+            document.body.classList.remove('people-open', 'page-open');
+            personFromSearch = false;
+            openSearchInstant();
         });
         return tl;
     }
@@ -1030,6 +1058,7 @@ document.addEventListener('DOMContentLoaded', () => {
         reverseSearch(() => {
             showPeopleStageInstant();
             openPersonPage(name);
+            personFromSearch = true;   // VIEW WORKS back returns to search
         });
     }
 
@@ -1125,6 +1154,38 @@ document.addEventListener('DOMContentLoaded', () => {
         showResults('');
 
         requestAnimationFrame(() => input.focus());
+    }
+
+    // Present the settled search UI (empty bar) instantly — no fall/slide animation.
+    // Used when the archive back button returns straight to the search.
+    function openSearchInstant() {
+        if (searchActive) return;
+        searchActive = true;
+        _st = searchEl;
+
+        const PAD_V  = 5;
+        const HALF_W = Math.round(window.innerWidth / 2);
+        const rect   = _st.getBoundingClientRect();
+
+        _searchBarH = rect.height + PAD_V * 2;
+        searchPanel.style.top        = `${rect.top - PAD_V}px`;
+        searchPanel.style.left       = '0';
+        searchPanel.style.width      = `${HALF_W}px`;
+        searchPanel.style.height     = `${_searchBarH}px`;
+        searchPanel.style.bottom     = 'auto';
+        searchPanel.style.transition = 'none';
+        searchPanel.style.transform  = 'translateX(0)';
+
+        searchStage.style.zIndex = '';
+        searchStage.removeAttribute('aria-hidden');
+        searchStage.style.display = 'block';
+
+        menu.classList.add('search-active');
+
+        gsap.set(searchBackdrop, { opacity: 1 });
+        searchBackdrop.style.pointerEvents = 'auto';
+
+        activateSearchInput(rect);
     }
 
     // --- Main animation ---
@@ -2077,7 +2138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     archiveBackBtn.addEventListener('click', (e) => {
         e.preventDefault();
         if (archiveCtxStack.length)  archiveBackStep();
-        else if (archiveScopePerson) returnToPersonFromWorks();
+        else if (archiveScopePerson) { personFromSearch ? returnToSearchFromWorks() : returnToPersonFromWorks(); }
         else                         closeArchive();
     });
     archiveShowAll.addEventListener('click', (e) => { e.preventDefault(); setCategory('all'); });
@@ -3195,7 +3256,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (itemViewOpen)            { closeItemView(); }
         else if (currentPerson)      { closePersonPage(); }
         else if (archiveCtxStack.length) { archiveBackStep(); }
-        else if (archiveScopePerson) { returnToPersonFromWorks(); }
+        else if (archiveScopePerson) { personFromSearch ? returnToSearchFromWorks() : returnToPersonFromWorks(); }
         else if (archiveOpen)        { closeArchive(); }
     });
 
