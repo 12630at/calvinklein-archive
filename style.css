@@ -607,6 +607,7 @@ body {
 .menu-item-archive-active {
     color: #bbbdc0;
     cursor: pointer;
+    white-space: nowrap;
 }
 
 .menu-item-archive-active:hover,
