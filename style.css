@@ -1707,7 +1707,8 @@ body.about-open .menu {
     }
     body.item-view-open .item-view-title { padding-left: 22px; }
 
-    #list-view-btn { right: 16px; }
+    /* The list/infinite toggle now lives in the monogram menu on mobile. */
+    #list-view-btn { display: none; }
 
     /* List view: keep only #, Campaign, Year, Category on mobile */
     #archive-list { padding: 0 16px 80px 16px; }

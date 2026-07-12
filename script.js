@@ -3739,7 +3739,11 @@ document.addEventListener('DOMContentLoaded', () => {
         mobileTrigger.setAttribute('aria-expanded', 'true');
         const activeNav   = archiveOpen ? mobileNavArchive : mobileNavDefault;
         const inactiveNav = archiveOpen ? mobileNavDefault : mobileNavArchive;
-        if (archiveOpen) applyMobileArchiveActiveState();
+        if (archiveOpen) {
+            applyMobileArchiveActiveState();
+            const listToggle = document.getElementById('m-list-toggle');
+            if (listToggle) listToggle.textContent = listViewOpen ? 'Infinite View' : 'List View';
+        }
         else             applyMobileActiveState();
         activeNav.style.display   = 'flex';
         inactiveNav.style.display = 'none';
@@ -3864,6 +3868,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const mArchiveSearch = document.getElementById('m-archive-search');
     if (mArchiveSearch) mArchiveSearch.addEventListener('click', _mobileGo('archive-search', 50));
+
+    const mListToggle = document.getElementById('m-list-toggle');
+    if (mListToggle) mListToggle.addEventListener('click', _mobileGo('list-view-btn', 50));
 
     document.querySelectorAll('.mobile-cat-item').forEach(el => {
         el.addEventListener('click', (e) => {
