@@ -1710,11 +1710,19 @@ body.about-open .menu {
     /* The list/infinite toggle now lives in the monogram menu on mobile. */
     #list-view-btn { display: none; }
 
-    /* List view: keep only #, Campaign, Year, Category on mobile.
-       Four equal columns with centred content so the table reads as a
-       horizontally-centred block (no right padding to skew the centring). */
+    /* List view: keep only #, Campaign, Year, Category on mobile. */
     #archive-list { padding: 0 16px 80px 16px; }
 
+    /* Cap the table to a 300px block and centre it with margin:auto, with
+       proportional column widths so it also shrinks (and stays centred) on
+       narrow screens. Without this, table-layout:fixed spreads four equal
+       columns across the full width and the sparse leftmost (#) column pushes
+       all the visible text off to the right. */
+    .archive-list-table { width: min(300px, 100%); margin: 0 auto; }
+    .archive-list-thead th.th-num      { width: 12%; }
+    .archive-list-thead th.th-campaign { width: 35%; }
+    .archive-list-thead th.th-year     { width: 16%; }
+    .archive-list-thead th.th-cat      { width: 37%; }
     .archive-list-thead th { padding-top: 16px; padding-right: 0; text-align: center; }
     .archive-list-row td   { padding-right: 0; text-align: center; }
 
