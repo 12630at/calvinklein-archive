@@ -1710,11 +1710,13 @@ body.about-open .menu {
     /* The list/infinite toggle now lives in the monogram menu on mobile. */
     #list-view-btn { display: none; }
 
-    /* List view: keep only #, Campaign, Year, Category on mobile */
+    /* List view: keep only #, Campaign, Year, Category on mobile.
+       Four equal columns with centred content so the table reads as a
+       horizontally-centred block (no right padding to skew the centring). */
     #archive-list { padding: 0 16px 80px 16px; }
 
-    .archive-list-thead th { padding-top: 16px; padding-right: 12px; }
-    .archive-list-row td   { padding-right: 12px; }
+    .archive-list-thead th { padding-top: 16px; padding-right: 0; text-align: center; }
+    .archive-list-row td   { padding-right: 0; text-align: center; }
 
     .archive-list-row td.col-season,
     .archive-list-row td.col-sub,
